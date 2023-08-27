@@ -83,9 +83,7 @@ This section provides an overview of the main smart contracts in this repository
 [Repeat this section for each core smart contract.]
 
 ## Usage
-
-Explain how developers and users can interact with your core smart contracts. Provide code examples and API usage instructions.
-
+- To be written
 ## Contributing
 
 We welcome contributions from the community! To contribute to our core smart contracts, please follow the guidelines outlined in [CONTRIBUTING.md](CONTRIBUTING.md).
