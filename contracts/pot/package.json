@@ -8,6 +8,7 @@
   "license": "MIT",
   "scripts": {
     "build": "./scripts/build.sh",
-    "dev:deploy": "yarn build && rm -rf neardev && (near dev-deploy || exit 0)"
+    "dev:deploy": "yarn build && (near dev-deploy || exit 0)",
+    "dev:deploy:new": "rm -rf neardev && yarn dev:deploy"
   }
 }

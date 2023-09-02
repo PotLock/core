@@ -1,13 +1,24 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, UnorderedSet};
-use near_sdk::{near_bindgen, AccountId, Promise};
-use std::collections::HashMap;
+use near_sdk::json_types::{Base64VecU8, U128, U64};
+use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::{
+    env, ext_contract, log, near_bindgen, require, AccountId, BorshStorageKey, Gas, Promise,
+    PromiseError,
+};
 
 type TimestampMs = u64;
-type MilestoneId = u64;
-type ProjectId = u64;
+type ProjectId = u64; // TODO: change to AccountId?
+type ApplicationId = u64;
 type DonationId = u64;
 type PayoutId = u64;
+
+pub mod donations;
+pub mod external;
+pub mod sbt;
+pub use crate::donations::*;
+pub use crate::external::*;
+pub use crate::sbt::*;
 
 /// Pot Contract (funding round)
 #[near_bindgen]
@@ -38,9 +49,9 @@ pub struct Contract {
     pub milestone_threshold: U64, // TODO: is this practical to implement?
     pub basis_points_paid_upfront: u32, // TODO: what does this mean? how will it be paid upfront if there are no donations yet?
     /// SBTs required to submit an application
-    pub application_requirements: UnorderedSet<SBTRequirement>,
+    pub application_requirement: Option<SBTRequirement>,
     /// SBTs required to donate to a project
-    pub donation_requirements: UnorderedSet<SBTRequirement>,
+    pub donation_requirement: Option<SBTRequirement>,
     // payment_per_milestone: u32,
     pub patron_referral_fee_basis_points: u32,
     /// Max amount that can be paid to an account that referred a Patron
@@ -52,9 +63,9 @@ pub struct Contract {
     /// Amount of matching funds available
     pub matching_pool_balance: U128,
 
-    // PROJECT MAPPINGS
+    // PROJECT MAPPINGS // TODO: update this
     /// All project records
-    pub projects_by_id: LookupMap<ProjectId, Project>,
+    // pub projects_by_id: LookupMap<ProjectId, Project>,
     /// IDs of all projects
     pub project_ids: UnorderedSet<ProjectId>,
     /// IDs of projects that have been approved
@@ -63,18 +74,6 @@ pub struct Contract {
     pub rejected_project_ids: UnorderedSet<ProjectId>,
     /// IDs of projects that are pending approval
     pub pending_project_ids: UnorderedSet<ProjectId>,
-
-    // MILESTONE MAPPINGS
-    /// All milestone records
-    pub milestones_by_id: LookupMap<MilestoneId, Milestone>,
-    /// IDs of milestones for a given project
-    pub milestone_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<MilestoneId>>,
-
-    // REVIEW MAPPINGS
-    /// All review records
-    pub reviews_by_id: LookupMap<ReviewId, Review>,
-    /// IDs of reviews made on a given milestone
-    pub reviews_by_milestone_id: LookupMap<MilestoneId, UnorderedSet<Review>>,
 
     // DONATION MAPPINGS
     /// All donation records
@@ -95,7 +94,8 @@ pub struct Contract {
 
 // PAYOUTS
 
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
 pub struct Payout {
     /// Unique identifier for the payout
     pub id: PayoutId,
@@ -110,7 +110,8 @@ pub struct Payout {
 // DONATIONS
 
 /// Could be an end-user donation (must include a project_id in this case) or a matching pool donation (may include a referrer_id in this case)
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
 pub struct Donation {
     /// Unique identifier for the donation
     pub id: DonationId,
@@ -130,7 +131,8 @@ pub struct Donation {
 
 // PROJECTS
 
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
 pub enum ProjectStatus {
     Pending,
     Accepted,
@@ -138,14 +140,11 @@ pub enum ProjectStatus {
     InReview,
 }
 
-#[derive(BorshDeserialize, BorshSerialize)]
-pub struct Project {
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct Application {
     /// Unique identifier for the application, increments from 1
-    pub id: ProjectId,
-    /// Title of the project
-    pub project_title: String,
-    /// Detailed text explaining the purpose of the project
-    pub project_text: String,
+    pub id: ApplicationId,
     /// ID of the individual or group that submitted the application. TODO: MUST be on the Potlock Registry (registry.potluck.[NETWORK])
     pub creator_id: AccountId,
     /// Name of the individual or group that submitted the application
@@ -163,65 +162,94 @@ pub struct Project {
     pub updated_at: Option<TimestampMs>,
 }
 
-// MILESTONES
-
-#[derive(BorshDeserialize, BorshSerialize)]
-pub enum MilestoneStatus {
-    NotStarted,
-    InProgress,
-    Submitted,
-    Approved,
-    Rejected,
-    InReview,
-}
-
-#[derive(BorshDeserialize, BorshSerialize)]
-pub struct Milestone {
-    /// Unique identifier for the milestone, increments from 1
-    pub id: String,
-    /// Milestone title
-    pub title: String,
-    /// Detailed description of the milestone
-    pub description: String,
-    /// Amount of funds required for the milestone
-    pub payout_amount: U128,
-    /// Timestamp when the milestone is due
-    pub due_at: Option<TimestampMs>,
-    /// Status of the milestone (NotStarted, InProgress, Submitted, Approved, Rejected, InReview)
-    pub status: MilestoneStatus,
-    /// Timestamp when the milestone was submitted
-    pub submitted_at: Option<TimestampMs>,
-    /// Timestamp when the milestone was paid
-    pub paid_at: Option<TimestampMs>,
-}
-
-// REVIEWS
-
-#[derive(BorshDeserialize, BorshSerialize)]
-pub enum ReviewStatus {
-    Open,
-    Resolved,
-}
-
-// A Review is a comment or change request on a Milestone
-#[derive(BorshDeserialize, BorshSerialize)]
-pub struct Review {
-    pub milestone_id: Option<MilestoneId>,
-    pub comment: String,
-    pub status: ReviewStatus,
-    pub updated_at: TimestampMs,
-}
-
 // REQUIREMENTS
 
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
 pub struct SBTRequirement {
-    issuer_address: AccountId,
-    class_id: String, // TODO: is this the right type?
+    registry_id: AccountId,
+    issuer_id: AccountId,
+    class_id: u64,
+}
+
+#[derive(BorshSerialize, BorshStorageKey)]
+pub enum StorageKey {
+    ProjectIds,
+    ApprovedProjectIds,
+    RejectedProjectIds,
+    PendingProjectIds,
+    DonationsById,
+    DonationIdsByProjectId,
+    DonationIdsByDonorId,
+    UserDonationIdsByProjectId,
+    PatronDonationIds,
+    PayoutsById,
+    PayoutIdsByProjectId,
+    ApplicationRequirements,
+    DonationRequirements,
 }
 
 #[near_bindgen]
-impl Pot {
+impl Contract {
+    #[init]
+    pub fn new(
+        chef_id: AccountId,
+        round_name: String,
+        round_description: String,
+        start_time: TimestampMs,
+        end_time: TimestampMs,
+        application_start_ms: TimestampMs,
+        application_end_ms: TimestampMs,
+        max_projects: u32,
+        base_currency: AccountId,
+        created_by: AccountId,
+        milestone_threshold: U64,
+        basis_points_paid_upfront: u32,
+        application_requirement: Option<SBTRequirement>,
+        donation_requirement: Option<SBTRequirement>,
+        // application_requirements: UnorderedSet<SBTRequirement>,
+        // donation_requirements: UnorderedSet<SBTRequirement>,
+        patron_referral_fee_basis_points: u32,
+        max_patron_referral_fee: U128,
+        round_manager_fee_basis_points: u32,
+        protocol_fee_basis_points: u32,
+        matching_pool_balance: U128,
+    ) -> Self {
+        assert!(!env::state_exists(), "Already initialized");
+        Self {
+            chef_id,
+            round_name,
+            round_description,
+            start_time,
+            end_time,
+            application_start_ms,
+            application_end_ms,
+            max_projects,
+            base_currency,
+            created_by,
+            milestone_threshold,
+            basis_points_paid_upfront,
+            application_requirement,
+            donation_requirement,
+            patron_referral_fee_basis_points,
+            max_patron_referral_fee,
+            round_manager_fee_basis_points,
+            protocol_fee_basis_points,
+            matching_pool_balance,
+            project_ids: UnorderedSet::new(StorageKey::ProjectIds),
+            approved_project_ids: UnorderedSet::new(StorageKey::ApprovedProjectIds),
+            rejected_project_ids: UnorderedSet::new(StorageKey::RejectedProjectIds),
+            pending_project_ids: UnorderedSet::new(StorageKey::PendingProjectIds),
+            donations_by_id: LookupMap::new(StorageKey::DonationsById),
+            donation_ids_by_project_id: LookupMap::new(StorageKey::DonationIdsByProjectId),
+            donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
+            user_donation_ids_by_project_id: LookupMap::new(StorageKey::UserDonationIdsByProjectId),
+            patron_donation_ids: UnorderedSet::new(StorageKey::PatronDonationIds),
+            payout_ids_by_project_id: LookupMap::new(StorageKey::PayoutsById),
+            payouts_by_id: LookupMap::new(StorageKey::PayoutsById),
+        }
+    }
+
     pub fn add_donation(&mut self, donation: Donation, application_id: AccountId) {
         // TODO: Implementation
     }
@@ -255,4 +283,42 @@ impl Pot {
     }
 
     // ...etc
+}
+
+// TODO: not sure why this is necessary
+impl Default for Contract {
+    fn default() -> Self {
+        Self {
+            chef_id: AccountId::new_unchecked("".to_string()),
+            round_name: "".to_string(),
+            round_description: "".to_string(),
+            start_time: 0,
+            end_time: 0,
+            application_start_ms: 0,
+            application_end_ms: 0,
+            max_projects: 0,
+            base_currency: AccountId::new_unchecked("".to_string()),
+            created_by: AccountId::new_unchecked("".to_string()),
+            milestone_threshold: U64(0),
+            basis_points_paid_upfront: 0,
+            application_requirement: None,
+            donation_requirement: None,
+            patron_referral_fee_basis_points: 0,
+            max_patron_referral_fee: U128(0),
+            round_manager_fee_basis_points: 0,
+            protocol_fee_basis_points: 0,
+            matching_pool_balance: U128(0),
+            project_ids: UnorderedSet::new(StorageKey::ProjectIds),
+            approved_project_ids: UnorderedSet::new(StorageKey::ApprovedProjectIds),
+            rejected_project_ids: UnorderedSet::new(StorageKey::RejectedProjectIds),
+            pending_project_ids: UnorderedSet::new(StorageKey::PendingProjectIds),
+            donations_by_id: LookupMap::new(StorageKey::DonationsById),
+            donation_ids_by_project_id: LookupMap::new(StorageKey::DonationIdsByProjectId),
+            donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
+            user_donation_ids_by_project_id: LookupMap::new(StorageKey::UserDonationIdsByProjectId),
+            patron_donation_ids: UnorderedSet::new(StorageKey::PatronDonationIds),
+            payout_ids_by_project_id: LookupMap::new(StorageKey::PayoutsById),
+            payouts_by_id: LookupMap::new(StorageKey::PayoutsById),
+        }
+    }
 }
