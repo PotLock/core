@@ -10,14 +10,16 @@ use near_sdk::{
 type TimestampMs = u64;
 type ProjectId = u64; // TODO: change to AccountId?
 type ApplicationId = u64;
-type DonationId = u64;
+type DonationId = u64; // TODO: change to Sring formatted as `"application_id:donation_id"`
 type PayoutId = u64;
 
 pub mod donations;
 pub mod external;
+pub mod internal;
 pub mod sbt;
 pub use crate::donations::*;
 pub use crate::external::*;
+pub use crate::internal::*;
 pub use crate::sbt::*;
 
 /// Pot Contract (funding round)
@@ -80,10 +82,9 @@ pub struct Contract {
     pub donations_by_id: LookupMap<DonationId, Donation>,
     /// IDs of donations made to a given project
     pub donation_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<DonationId>>,
-    /// IDs of donations made by a given donor
+    /// IDs of donations made by a given donor (user)
     pub donation_ids_by_donor_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
-    /// IDs of end-user donations (aka not matching pool donations)
-    pub user_donation_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<DonationId>>,
+    // TODO: add records for matching pool donations
     /// IDs of matching pool donations
     pub patron_donation_ids: UnorderedSet<DonationId>,
 
@@ -105,28 +106,6 @@ pub struct Payout {
     pub amount: U128,
     /// Timestamp when the payout was made
     pub paid_at: TimestampMs,
-}
-
-// DONATIONS
-
-/// Could be an end-user donation (must include a project_id in this case) or a matching pool donation (may include a referrer_id in this case)
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[serde(crate = "near_sdk::serde")]
-pub struct Donation {
-    /// Unique identifier for the donation
-    pub id: DonationId,
-    /// ID of the donor               
-    pub donor_id: AccountId,
-    /// Amount donated         
-    pub amount: U128,
-    /// Optional message from the donor          
-    pub message: Option<String>,
-    /// Timestamp when the donation was made
-    pub donated_at: TimestampMs,
-    /// ID of the project receiving the donation        
-    pub project_id: Option<ProjectId>,
-    /// Referrer ID
-    pub referrer_id: Option<AccountId>,
 }
 
 // PROJECTS
@@ -180,8 +159,9 @@ pub enum StorageKey {
     PendingProjectIds,
     DonationsById,
     DonationIdsByProjectId,
+    DonationIdsByProjectIdInner { project_id: ProjectId },
     DonationIdsByDonorId,
-    UserDonationIdsByProjectId,
+    DonationIdsByDonorIdInner { donor_id: AccountId },
     PatronDonationIds,
     PayoutsById,
     PayoutIdsByProjectId,
@@ -243,7 +223,6 @@ impl Contract {
             donations_by_id: LookupMap::new(StorageKey::DonationsById),
             donation_ids_by_project_id: LookupMap::new(StorageKey::DonationIdsByProjectId),
             donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
-            user_donation_ids_by_project_id: LookupMap::new(StorageKey::UserDonationIdsByProjectId),
             patron_donation_ids: UnorderedSet::new(StorageKey::PatronDonationIds),
             payout_ids_by_project_id: LookupMap::new(StorageKey::PayoutsById),
             payouts_by_id: LookupMap::new(StorageKey::PayoutsById),
@@ -315,7 +294,6 @@ impl Default for Contract {
             donations_by_id: LookupMap::new(StorageKey::DonationsById),
             donation_ids_by_project_id: LookupMap::new(StorageKey::DonationIdsByProjectId),
             donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
-            user_donation_ids_by_project_id: LookupMap::new(StorageKey::UserDonationIdsByProjectId),
             patron_donation_ids: UnorderedSet::new(StorageKey::PatronDonationIds),
             payout_ids_by_project_id: LookupMap::new(StorageKey::PayoutsById),
             payouts_by_id: LookupMap::new(StorageKey::PayoutsById),

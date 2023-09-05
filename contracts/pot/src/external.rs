@@ -1,6 +1,7 @@
 use crate::*;
 
 pub const TGAS: u64 = 1_000_000_000_000;
+pub const XXC_GAS: u64 = TGAS * 5;
 pub const NO_DEPOSIT: u128 = 0;
 pub const XCC_SUCCESS: u64 = 1;
 
