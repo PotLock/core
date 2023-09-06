@@ -11,15 +11,18 @@ type TimestampMs = u64;
 type ProjectId = u64; // TODO: change to AccountId?
 type ApplicationId = u64;
 type DonationId = u64; // TODO: change to Sring formatted as `"application_id:donation_id"`
-type PayoutId = u64;
 
+pub mod constants;
 pub mod donations;
 pub mod external;
 pub mod internal;
+pub mod payouts;
 pub mod sbt;
+pub use crate::constants::*;
 pub use crate::donations::*;
 pub use crate::external::*;
 pub use crate::internal::*;
+pub use crate::payouts::*;
 pub use crate::sbt::*;
 
 /// Pot Contract (funding round)
@@ -33,13 +36,13 @@ pub struct Contract {
     pub round_name: String,
     /// Friendly & descriptive round description
     pub round_description: String,
-    /// Timestamp when the round starts
+    /// MS Timestamp when the round starts
     pub start_time: TimestampMs,
-    /// Timestamp when the round ends
+    /// MS Timestamp when the round ends
     pub end_time: TimestampMs,
-    /// Timestamp when applications can be submitted from
+    /// MS Timestamp when applications can be submitted from
     pub application_start_ms: TimestampMs,
-    /// Timestamp when applications can be submitted until
+    /// MS Timestamp when applications can be submitted until
     pub application_end_ms: TimestampMs,
     /// Maximum number of projects that can be approved for the round
     pub max_projects: u32,
@@ -64,6 +67,12 @@ pub struct Contract {
     pub protocol_fee_basis_points: u32, // e.g. 700 (7%)
     /// Amount of matching funds available
     pub matching_pool_balance: U128,
+    /// Amount of donated funds available
+    pub donations_balance: U128,
+    /// Cooldown period starts when Chef sets payouts
+    pub cooldown_end_ms: Option<TimestampMs>,
+    /// Have all projects been paid out?
+    pub paid_out: bool,
 
     // PROJECT MAPPINGS // TODO: update this
     /// All project records
@@ -91,21 +100,6 @@ pub struct Contract {
     // PAYOUT MAPPINGS
     pub payouts_by_id: LookupMap<PayoutId, Payout>,
     pub payout_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<PayoutId>>,
-}
-
-// PAYOUTS
-
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[serde(crate = "near_sdk::serde")]
-pub struct Payout {
-    /// Unique identifier for the payout
-    pub id: PayoutId,
-    /// ID of the project receiving the payout
-    pub project_id: ProjectId,
-    /// Amount paid out
-    pub amount: U128,
-    /// Timestamp when the payout was made
-    pub paid_at: TimestampMs,
 }
 
 // PROJECTS
@@ -165,6 +159,7 @@ pub enum StorageKey {
     PatronDonationIds,
     PayoutsById,
     PayoutIdsByProjectId,
+    PayoutIdsByProjectIdInner { project_id: ProjectId },
     ApplicationRequirements,
     DonationRequirements,
 }
@@ -193,7 +188,6 @@ impl Contract {
         max_patron_referral_fee: U128,
         round_manager_fee_basis_points: u32,
         protocol_fee_basis_points: u32,
-        matching_pool_balance: U128,
     ) -> Self {
         assert!(!env::state_exists(), "Already initialized");
         Self {
@@ -215,7 +209,10 @@ impl Contract {
             max_patron_referral_fee,
             round_manager_fee_basis_points,
             protocol_fee_basis_points,
-            matching_pool_balance,
+            matching_pool_balance: U128(0),
+            donations_balance: U128(0),
+            cooldown_end_ms: None,
+            paid_out: false,
             project_ids: UnorderedSet::new(StorageKey::ProjectIds),
             approved_project_ids: UnorderedSet::new(StorageKey::ApprovedProjectIds),
             rejected_project_ids: UnorderedSet::new(StorageKey::RejectedProjectIds),
@@ -287,6 +284,9 @@ impl Default for Contract {
             round_manager_fee_basis_points: 0,
             protocol_fee_basis_points: 0,
             matching_pool_balance: U128(0),
+            donations_balance: U128(0),
+            cooldown_end_ms: None,
+            paid_out: false,
             project_ids: UnorderedSet::new(StorageKey::ProjectIds),
             approved_project_ids: UnorderedSet::new(StorageKey::ApprovedProjectIds),
             rejected_project_ids: UnorderedSet::new(StorageKey::RejectedProjectIds),
