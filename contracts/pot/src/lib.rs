@@ -8,7 +8,7 @@ use near_sdk::{
 };
 
 type TimestampMs = u64;
-type ProjectId = u64; // TODO: change to AccountId?
+type ProjectId = AccountId;
 type ApplicationId = u64;
 type DonationId = u64; // TODO: change to Sring formatted as `"application_id:donation_id"`
 
@@ -66,9 +66,9 @@ pub struct Contract {
     /// Protocol fee
     pub protocol_fee_basis_points: u32, // e.g. 700 (7%)
     /// Amount of matching funds available
-    pub matching_pool_balance: U128,
+    pub total_matching_pool_funds: U128,
     /// Amount of donated funds available
-    pub donations_balance: U128,
+    pub total_donations_funds: U128,
     /// Cooldown period starts when Chef sets payouts
     pub cooldown_end_ms: Option<TimestampMs>,
     /// Have all projects been paid out?
@@ -87,6 +87,7 @@ pub struct Contract {
     pub pending_project_ids: UnorderedSet<ProjectId>,
 
     // DONATION MAPPINGS
+    // TODO: consider changing some of these to UnorderedMaps
     /// All donation records
     pub donations_by_id: LookupMap<DonationId, Donation>,
     /// IDs of donations made to a given project
@@ -209,8 +210,8 @@ impl Contract {
             max_patron_referral_fee,
             round_manager_fee_basis_points,
             protocol_fee_basis_points,
-            matching_pool_balance: U128(0),
-            donations_balance: U128(0),
+            total_matching_pool_funds: U128(0),
+            total_donations_funds: U128(0),
             cooldown_end_ms: None,
             paid_out: false,
             project_ids: UnorderedSet::new(StorageKey::ProjectIds),
@@ -283,8 +284,8 @@ impl Default for Contract {
             max_patron_referral_fee: U128(0),
             round_manager_fee_basis_points: 0,
             protocol_fee_basis_points: 0,
-            matching_pool_balance: U128(0),
-            donations_balance: U128(0),
+            total_matching_pool_funds: U128(0),
+            total_donations_funds: U128(0),
             cooldown_end_ms: None,
             paid_out: false,
             project_ids: UnorderedSet::new(StorageKey::ProjectIds),

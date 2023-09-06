@@ -48,12 +48,12 @@ impl Contract {
         // get down to business
         let mut running_total: u128 = 0;
         let balance_available = self
-            .matching_pool_balance
+            .total_matching_pool_funds
             .0
-            .checked_add(self.donations_balance.0)
+            .checked_add(self.total_donations_funds.0)
             .expect(&format!(
                 "Overflow occurred when calculating balance available ({} + {})",
-                self.matching_pool_balance.0, self.donations_balance.0,
+                self.total_matching_pool_funds.0, self.total_donations_funds.0,
             ));
         // for each payout:
         for payout in payouts.iter() {
@@ -98,6 +98,44 @@ impl Contract {
                 .insert(&payout.project_id, &payout_ids_for_project);
             self.payouts_by_id.insert(&payout_id, &payout);
         }
+    }
+
+    pub fn chef_process_payouts(&mut self) {
+        self.assert_chef();
+        // verify that the round has closed
+        self.assert_round_closed();
+        // verify that payouts have not already been processed
+        assert!(
+            self.paid_out == false,
+            "Payouts have already been processed"
+        );
+        // verify that the cooldown period has passed
+        self.assert_cooldown_period_complete();
+        // pay out each project
+        // for each approved project...
+        for approved_project_id in self.approved_project_ids.iter() {
+            // ...if there are payouts for the project...
+            if let Some(payout_ids_for_project) =
+                self.payout_ids_by_project_id.get(&approved_project_id)
+            {
+                // TODO: handle milestones (for now just paying out all payouts)
+                for payout_id in payout_ids_for_project.iter() {
+                    let mut payout = self.payouts_by_id.get(&payout_id).expect("no payout");
+                    if payout.paid_at.is_none() {
+                        // ...transfer funds...
+                        Promise::new(payout.project_id.clone()).transfer(payout.amount.0);
+                        // ...and update payout to indicate that funds have been transferred
+                        // TODO: handle via Promise callback?
+                        payout.paid_at = Some(env::block_timestamp_ms());
+                        self.payouts_by_id.insert(&payout_id, &payout);
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn get_payouts(&self) {
+        // TODO: implement
     }
     // get_payouts
     // challenge_payouts (callable by anyone on ReFi Council)
