@@ -1,5 +1,5 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{LookupMap, UnorderedSet};
+use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet};
 use near_sdk::json_types::{Base64VecU8, U128, U64};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
@@ -89,7 +89,7 @@ pub struct Contract {
     // DONATION MAPPINGS
     // TODO: consider changing some of these to UnorderedMaps
     /// All donation records
-    pub donations_by_id: LookupMap<DonationId, Donation>,
+    pub donations_by_id: UnorderedMap<DonationId, Donation>, // can iterate over this to get all donations
     /// IDs of donations made to a given project
     pub donation_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<DonationId>>,
     /// IDs of donations made by a given donor (user)
@@ -99,7 +99,7 @@ pub struct Contract {
     pub patron_donation_ids: UnorderedSet<DonationId>,
 
     // PAYOUT MAPPINGS
-    pub payouts_by_id: LookupMap<PayoutId, Payout>,
+    pub payouts_by_id: UnorderedMap<PayoutId, Payout>, // can iterate over this to get all payouts
     pub payout_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<PayoutId>>,
 }
 
@@ -218,12 +218,12 @@ impl Contract {
             approved_project_ids: UnorderedSet::new(StorageKey::ApprovedProjectIds),
             rejected_project_ids: UnorderedSet::new(StorageKey::RejectedProjectIds),
             pending_project_ids: UnorderedSet::new(StorageKey::PendingProjectIds),
-            donations_by_id: LookupMap::new(StorageKey::DonationsById),
+            donations_by_id: UnorderedMap::new(StorageKey::DonationsById),
             donation_ids_by_project_id: LookupMap::new(StorageKey::DonationIdsByProjectId),
             donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
             patron_donation_ids: UnorderedSet::new(StorageKey::PatronDonationIds),
             payout_ids_by_project_id: LookupMap::new(StorageKey::PayoutsById),
-            payouts_by_id: LookupMap::new(StorageKey::PayoutsById),
+            payouts_by_id: UnorderedMap::new(StorageKey::PayoutsById),
         }
     }
 
@@ -292,12 +292,12 @@ impl Default for Contract {
             approved_project_ids: UnorderedSet::new(StorageKey::ApprovedProjectIds),
             rejected_project_ids: UnorderedSet::new(StorageKey::RejectedProjectIds),
             pending_project_ids: UnorderedSet::new(StorageKey::PendingProjectIds),
-            donations_by_id: LookupMap::new(StorageKey::DonationsById),
+            donations_by_id: UnorderedMap::new(StorageKey::DonationsById),
             donation_ids_by_project_id: LookupMap::new(StorageKey::DonationIdsByProjectId),
             donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
             patron_donation_ids: UnorderedSet::new(StorageKey::PatronDonationIds),
             payout_ids_by_project_id: LookupMap::new(StorageKey::PayoutsById),
-            payouts_by_id: LookupMap::new(StorageKey::PayoutsById),
+            payouts_by_id: UnorderedMap::new(StorageKey::PayoutsById),
         }
     }
 }

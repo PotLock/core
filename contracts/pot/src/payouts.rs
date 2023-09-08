@@ -123,6 +123,7 @@ impl Contract {
                     let mut payout = self.payouts_by_id.get(&payout_id).expect("no payout");
                     if payout.paid_at.is_none() {
                         // ...transfer funds...
+                        // TODO: what happens if this fails?
                         Promise::new(payout.project_id.clone()).transfer(payout.amount.0);
                         // ...and update payout to indicate that funds have been transferred
                         // TODO: handle via Promise callback?
@@ -134,9 +135,10 @@ impl Contract {
         }
     }
 
-    pub fn get_payouts(&self) {
-        // TODO: implement
+    pub fn get_payouts(&self) -> Vec<Payout> {
+        // could add pagination but not necessary initially
+        self.payouts_by_id.values().collect()
     }
-    // get_payouts
+
     // challenge_payouts (callable by anyone on ReFi Council)
 }
