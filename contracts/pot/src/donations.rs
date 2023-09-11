@@ -14,7 +14,7 @@ pub struct Donation {
     /// Timestamp when the donation was made
     pub donated_at: TimestampMs,
     /// ID of the project receiving the donation        
-    pub project_id: ProjectId, // TODO: change to application_id
+    pub application_id: ApplicationId,
     /// Referrer ID
     pub referrer_id: Option<AccountId>,
 }
@@ -30,14 +30,14 @@ impl Contract {
     }
 
     #[payable]
-    pub fn donate(&mut self, project_id: ProjectId, message: Option<String>) -> Promise {
+    pub fn donate(&mut self, application_id: ApplicationId, message: Option<String>) -> Promise {
         // TODO: add referrer_id
-        self.assert_caller_can_donate(project_id, message)
+        self.assert_caller_can_donate(application_id, message)
     }
 
     pub(crate) fn assert_caller_can_donate(
         &mut self,
-        project_id: ProjectId,
+        application_id: ApplicationId,
         message: Option<String>,
     ) -> Promise {
         // TODO: verify that the project exists & donation window is open
@@ -53,23 +53,23 @@ impl Contract {
             promise.then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(Gas(XXC_GAS))
-                    .assert_can_donate_callback(project_id, message),
+                    .assert_can_donate_callback(application_id, message),
             )
         } else {
             // no donation requirement. always allow
             Self::ext(env::current_account_id())
                 .with_static_gas(Gas(XXC_GAS))
-                .always_allow_callback(project_id, message)
+                .always_allow_callback(application_id, message)
         }
     }
 
     pub(crate) fn handle_donation(
         &mut self,
-        project_id: ProjectId,
+        application_id: ApplicationId,
         message: Option<String>,
     ) -> Donation {
         let donation_count_for_project = if let Some(donation_ids_by_project_set) =
-            self.donation_ids_by_project_id.get(&project_id)
+            self.donation_ids_by_application_id.get(&application_id)
         {
             donation_ids_by_project_set.len()
         } else {
@@ -81,7 +81,7 @@ impl Contract {
             amount: U128::from(env::attached_deposit()),
             message,
             donated_at: env::block_timestamp(),
-            project_id,
+            application_id,
             referrer_id: None,
         };
         self.insert_donation_record(&donation);
@@ -92,26 +92,22 @@ impl Contract {
 
     pub(crate) fn insert_donation_record(&mut self, donation: &Donation) {
         self.donations_by_id.insert(&donation.id, &donation);
-        self.add_donation_for_project(&donation);
-        self.add_donation_for_donor(&donation);
-    }
-
-    pub(crate) fn add_donation_for_project(&mut self, donation: &Donation) {
-        let mut donation_ids_by_project_set = if let Some(donation_ids_by_project_set) =
-            self.donation_ids_by_project_id.get(&donation.project_id)
+        // add to donations-by-application mapping
+        let mut donation_ids_by_application_set = if let Some(donation_ids_by_application_set) =
+            self.donation_ids_by_application_id
+                .get(&donation.application_id)
         {
-            donation_ids_by_project_set
+            donation_ids_by_application_set
         } else {
-            UnorderedSet::new(StorageKey::DonationIdsByProjectIdInner {
-                project_id: donation.project_id,
+            UnorderedSet::new(StorageKey::DonationIdsByApplicationIdInner {
+                application_id: donation.application_id.clone(),
             })
         };
-        donation_ids_by_project_set.insert(&donation.id);
-        self.donation_ids_by_project_id
-            .insert(&donation.project_id, &donation_ids_by_project_set);
-    }
-
-    pub(crate) fn add_donation_for_donor(&mut self, donation: &Donation) {
+        donation_ids_by_application_set.insert(&donation.id);
+        self.donation_ids_by_application_id
+            .insert(&donation.application_id, &donation_ids_by_application_set);
+        // add to donations-by-donor mapping
+        // self.add_donation_for_donor(&donation);
         let mut donation_ids_by_donor_set = if let Some(donation_ids_by_donor_set) =
             self.donation_ids_by_donor_id.get(&donation.donor_id)
         {
@@ -122,8 +118,8 @@ impl Contract {
             })
         };
         donation_ids_by_donor_set.insert(&donation.id);
-        self.donation_ids_by_project_id
-            .insert(&donation.project_id, &donation_ids_by_donor_set);
+        self.donation_ids_by_donor_id
+            .insert(&donation.donor_id, &donation_ids_by_donor_set);
     }
 
     // CALLBACKS
@@ -131,16 +127,16 @@ impl Contract {
     #[private]
     pub fn always_allow_callback(
         &mut self,
-        project_id: ProjectId,
+        application_id: ApplicationId,
         message: Option<String>,
     ) -> Donation {
-        self.handle_donation(project_id, message)
+        self.handle_donation(application_id, message)
     }
 
     #[private] // Public - but only callable by env::current_account_id()
     pub fn assert_can_donate_callback(
         &mut self,
-        project_id: ProjectId,
+        application_id: ApplicationId,
         message: Option<String>,
         #[callback_result] call_result: Result<SbtTokensByOwnerResult, PromiseError>,
     ) -> Donation {
@@ -151,7 +147,7 @@ impl Contract {
         let tokens: Vec<(AccountId, Vec<OwnedToken>)> = call_result.unwrap();
         if tokens.len() > 0 {
             // user holds the required SBT(s)
-            self.handle_donation(project_id, message)
+            self.handle_donation(application_id, message)
         } else {
             env::panic_str("You don't have the required SBTs in order to donate.");
             // TODO: add details of required SBTs to error string
