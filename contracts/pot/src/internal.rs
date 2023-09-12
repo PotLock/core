@@ -11,18 +11,20 @@ impl Contract {
 
     pub(crate) fn assert_round_closed(&self) {
         assert!(
-            env::block_timestamp_ms() >= self.end_time,
+            env::block_timestamp_ms() >= self.round_end_time,
             "Round is still open"
         );
     }
 
-    pub(crate) fn assert_round_open(&self) {
-        assert!(env::block_timestamp_ms() < self.end_time, "Round is closed");
-    }
-
     pub(crate) fn assert_approved_application(&self, application_id: &ApplicationId) {
-        let application_exists = self.approved_application_ids.contains(application_id);
-        assert!(application_exists, "Application does not exist");
+        let application = self
+            .applications_by_id
+            .get(application_id)
+            .expect("Application does not exist");
+        assert!(
+            application.status == ApplicationStatus::Approved,
+            "Application is not approved"
+        );
     }
 
     pub(crate) fn assert_cooldown_period_complete(&self) {
@@ -33,12 +35,20 @@ impl Contract {
         );
     }
 
-    pub(crate) fn assert_application_period_open(&self) {
+    pub(crate) fn is_application_period_open(&self) -> bool {
         let block_timestamp_ms = env::block_timestamp_ms();
+        block_timestamp_ms >= self.application_start_ms
+            && block_timestamp_ms < self.application_end_ms
+    }
+
+    pub(crate) fn assert_application_period_open(&self) {
         assert!(
-            block_timestamp_ms >= self.application_start_ms
-                && block_timestamp_ms < self.application_end_ms,
-            "Application period is closed"
+            self.is_application_period_open(),
+            "Application period is not open"
         );
+    }
+
+    pub(crate) fn assert_round_active(&self) {
+        assert!(self.is_round_active(), "Round is not active");
     }
 }

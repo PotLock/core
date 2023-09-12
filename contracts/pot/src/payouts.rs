@@ -37,16 +37,14 @@ impl Contract {
             "Payouts have already been processed"
         );
         // clear any existing payouts (in case this is a reset, e.g. fixing an error)
-        for approved_application_id in self.approved_application_ids.iter() {
-            if let Some(payout_ids_for_project) = self
-                .payout_ids_by_application_id
-                .get(&approved_application_id)
+        for application_id in self.application_ids.iter() {
+            if let Some(payout_ids_for_application) =
+                self.payout_ids_by_application_id.get(&application_id)
             {
-                for payout_id in payout_ids_for_project.iter() {
+                for payout_id in payout_ids_for_application.iter() {
                     self.payouts_by_id.remove(&payout_id);
                 }
-                self.payout_ids_by_application_id
-                    .remove(&approved_application_id);
+                self.payout_ids_by_application_id.remove(&application_id);
             }
         }
         // get down to business
@@ -121,11 +119,11 @@ impl Contract {
         self.assert_cooldown_period_complete();
         // pay out each project
         // for each approved project...
-        for approved_application_id in self.approved_application_ids.iter() {
+        for application_id in self.application_ids.iter() {
+            self.assert_approved_application(&application_id);
             // ...if there are payouts for the project...
-            if let Some(payout_ids_for_project) = self
-                .payout_ids_by_application_id
-                .get(&approved_application_id)
+            if let Some(payout_ids_for_project) =
+                self.payout_ids_by_application_id.get(&application_id)
             {
                 // TODO: handle milestones (for now just paying out all payouts)
                 for payout_id in payout_ids_for_project.iter() {

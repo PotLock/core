@@ -13,6 +13,7 @@ type ApplicationId = u64;
 type DonationId = u64; // TODO: change to Sring formatted as `"application_id:donation_id"`
 
 pub mod applications;
+pub mod config;
 pub mod constants;
 pub mod donations;
 pub mod external;
@@ -20,6 +21,7 @@ pub mod internal;
 pub mod payouts;
 pub mod sbt;
 pub use crate::applications::*;
+pub use crate::config::*;
 pub use crate::constants::*;
 pub use crate::donations::*;
 pub use crate::external::*;
@@ -39,9 +41,9 @@ pub struct Contract {
     /// Friendly & descriptive round description
     pub round_description: String,
     /// MS Timestamp when the round starts
-    pub start_time: TimestampMs,
+    pub round_start_time: TimestampMs,
     /// MS Timestamp when the round ends
-    pub end_time: TimestampMs,
+    pub round_end_time: TimestampMs,
     /// MS Timestamp when applications can be submitted from
     pub application_start_ms: TimestampMs,
     /// MS Timestamp when applications can be submitted until
@@ -90,9 +92,9 @@ pub struct Contract {
     pub applications_by_id: UnorderedMap<ApplicationId, Application>,
     pub application_ids: UnorderedSet<ApplicationId>,
     pub application_id_by_project_id: LookupMap<ProjectId, ApplicationId>,
-    pub approved_application_ids: UnorderedSet<ApplicationId>,
-    pub rejected_application_ids: UnorderedSet<ApplicationId>,
-    pub pending_application_ids: UnorderedSet<ApplicationId>,
+    // pub approved_application_ids: UnorderedSet<ApplicationId>,
+    // pub rejected_application_ids: UnorderedSet<ApplicationId>,
+    // pub pending_application_ids: UnorderedSet<ApplicationId>,
 
     // DONATION MAPPINGS
     /// All donation records
@@ -108,16 +110,6 @@ pub struct Contract {
     // PAYOUT MAPPINGS
     pub payouts_by_id: UnorderedMap<PayoutId, Payout>, // can iterate over this to get all payouts
     pub payout_ids_by_application_id: LookupMap<ApplicationId, UnorderedSet<PayoutId>>,
-}
-
-// REQUIREMENTS
-
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[serde(crate = "near_sdk::serde")]
-pub struct SBTRequirement {
-    registry_id: AccountId,
-    issuer_id: AccountId,
-    class_id: u64,
 }
 
 #[derive(BorshSerialize, BorshStorageKey)]
@@ -148,8 +140,8 @@ impl Contract {
         chef_id: AccountId,
         round_name: String,
         round_description: String,
-        start_time: TimestampMs,
-        end_time: TimestampMs,
+        round_start_time: TimestampMs,
+        round_end_time: TimestampMs,
         application_start_ms: TimestampMs,
         application_end_ms: TimestampMs,
         max_projects: u32,
@@ -171,8 +163,8 @@ impl Contract {
             chef_id,
             round_name,
             round_description,
-            start_time,
-            end_time,
+            round_start_time,
+            round_end_time,
             application_start_ms,
             application_end_ms,
             max_projects,
@@ -193,9 +185,9 @@ impl Contract {
             application_ids: UnorderedSet::new(StorageKey::ApplicationIds),
             applications_by_id: UnorderedMap::new(StorageKey::ApplicationsById),
             application_id_by_project_id: LookupMap::new(StorageKey::ApplicationIdByProjectId),
-            approved_application_ids: UnorderedSet::new(StorageKey::ApprovedApplicationIds),
-            rejected_application_ids: UnorderedSet::new(StorageKey::RejectedApplicationIds),
-            pending_application_ids: UnorderedSet::new(StorageKey::PendingApplicationIds),
+            // approved_application_ids: UnorderedSet::new(StorageKey::ApprovedApplicationIds),
+            // rejected_application_ids: UnorderedSet::new(StorageKey::RejectedApplicationIds),
+            // pending_application_ids: UnorderedSet::new(StorageKey::PendingApplicationIds),
             donations_by_id: UnorderedMap::new(StorageKey::DonationsById),
             donation_ids_by_application_id: LookupMap::new(StorageKey::DonationIdsByApplicationId),
             donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
@@ -205,39 +197,10 @@ impl Contract {
         }
     }
 
-    pub fn add_donation(&mut self, donation: Donation, application_id: AccountId) {
-        // TODO: Implementation
+    pub fn is_round_active(&self) -> bool {
+        let block_timestamp_ms = env::block_timestamp_ms();
+        block_timestamp_ms >= self.round_start_time && block_timestamp_ms < self.round_end_time
     }
-
-    pub fn approve_applicant(&mut self, applicant: Application, reason: String) {
-        // TODO: Implementation
-    }
-
-    pub fn approve_multi_applicants(&mut self, applicants: Vec<Application>, reasons: Vec<String>) {
-        // TODO: Implementation
-    }
-
-    pub fn reject_application(&mut self, applicant: Application, reason: String) {
-        // TODO: Implementation
-    }
-
-    pub fn reject_multi_applicants(&mut self, applicants: Vec<Application>, reasons: Vec<String>) {
-        // TODO: Implementation
-    }
-
-    pub fn add_to_matched_round(&mut self, amount: u64) {
-        // TODO: Implementation
-    }
-
-    pub fn add_to_matched_round_referrer(&mut self, amount: u64, referrer_id: AccountId) {
-        // TODO: Implementation
-    }
-
-    pub fn remove_approved_application(&mut self, application_id: AccountId, reason: String) {
-        // TODO: Implementation
-    }
-
-    // ...etc
 }
 
 // TODO: not sure why this is necessary
@@ -247,8 +210,8 @@ impl Default for Contract {
             chef_id: AccountId::new_unchecked("".to_string()),
             round_name: "".to_string(),
             round_description: "".to_string(),
-            start_time: 0,
-            end_time: 0,
+            round_start_time: 0,
+            round_end_time: 0,
             application_start_ms: 0,
             application_end_ms: 0,
             max_projects: 0,
@@ -269,9 +232,9 @@ impl Default for Contract {
             application_ids: UnorderedSet::new(StorageKey::ApplicationIds),
             applications_by_id: UnorderedMap::new(StorageKey::ApplicationsById),
             application_id_by_project_id: LookupMap::new(StorageKey::ApplicationIdByProjectId),
-            approved_application_ids: UnorderedSet::new(StorageKey::ApprovedApplicationIds),
-            rejected_application_ids: UnorderedSet::new(StorageKey::RejectedApplicationIds),
-            pending_application_ids: UnorderedSet::new(StorageKey::PendingApplicationIds),
+            // approved_application_ids: UnorderedSet::new(StorageKey::ApprovedApplicationIds),
+            // rejected_application_ids: UnorderedSet::new(StorageKey::RejectedApplicationIds),
+            // pending_application_ids: UnorderedSet::new(StorageKey::PendingApplicationIds),
             donations_by_id: UnorderedMap::new(StorageKey::DonationsById),
             donation_ids_by_application_id: LookupMap::new(StorageKey::DonationIdsByApplicationId),
             donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),

@@ -1,7 +1,16 @@
 use crate::*;
 
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct SBTRequirement {
+    pub registry_id: AccountId,
+    pub issuer_id: AccountId,
+    pub class_id: u64,
+}
+
 #[near_bindgen]
 impl Contract {
+    // TODO: possibly remove this; currently unused
     pub(crate) fn query_sbts_for_owner(
         &self,
         registry_id: AccountId,
