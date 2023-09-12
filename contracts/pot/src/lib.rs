@@ -70,40 +70,33 @@ pub struct Contract {
     /// Protocol fee
     pub protocol_fee_basis_points: u32, // e.g. 700 (7%)
     /// Amount of matching funds available
-    pub total_matching_pool_funds: U128,
+    pub matching_pool_balance: u128, // TODO: may want to change this to U128?
     /// Amount of donated funds available
-    pub total_donations_funds: U128,
+    pub donations_balance: u128, // TODO: may want to change this to U128?
     /// Cooldown period starts when Chef sets payouts
     pub cooldown_end_ms: Option<TimestampMs>,
     /// Have all projects been paid out?
     pub paid_out: bool,
 
-    // PROJECT MAPPINGS // TODO: update this
-    /// All project records
-    // pub projects_by_id: LookupMap<ProjectId, Project>,
-    // /// IDs of all projects
-    // pub project_ids: UnorderedSet<ProjectId>,
-    // /// IDs of projects that have been approved
-    // pub approved_project_ids: UnorderedSet<ProjectId>,
-    // /// IDs of projects that have been rejected
-    // pub rejected_project_ids: UnorderedSet<ProjectId>,
-    // /// IDs of projects that are pending approval
-    // pub pending_project_ids: UnorderedSet<ProjectId>,
+    // APPLICATION MAPPINGS
+    /// All application records
     pub applications_by_id: UnorderedMap<ApplicationId, Application>,
+    /// IDs of all applications
     pub application_ids: UnorderedSet<ApplicationId>,
+    /// ID of applications by their `project_id`
     pub application_id_by_project_id: LookupMap<ProjectId, ApplicationId>,
-    // pub approved_application_ids: UnorderedSet<ApplicationId>,
-    // pub rejected_application_ids: UnorderedSet<ApplicationId>,
-    // pub pending_application_ids: UnorderedSet<ApplicationId>,
 
-    // DONATION MAPPINGS
+    // DONATION MAPPINGS (end-user)
     /// All donation records
-    pub donations_by_id: UnorderedMap<DonationId, Donation>, // can iterate over this to get all donations
+    pub donations_by_id: UnorderedMap<DonationId, Donation>,
     /// IDs of donations made to a given project
     pub donation_ids_by_application_id: LookupMap<ApplicationId, UnorderedSet<DonationId>>,
     /// IDs of donations made by a given donor (user)
     pub donation_ids_by_donor_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
-    // TODO: add records for matching pool donations
+
+    // MATCHING POOL DONATION MAPPINGS (patron)
+    /// All matching pool donation records
+    pub patron_donations_by_id: UnorderedMap<DonationId, PatronDonation>,
     /// IDs of matching pool donations
     pub patron_donation_ids: UnorderedSet<DonationId>,
 
@@ -125,6 +118,7 @@ pub enum StorageKey {
     DonationIdsByApplicationIdInner { application_id: ApplicationId },
     DonationIdsByDonorId,
     DonationIdsByDonorIdInner { donor_id: AccountId },
+    PatronDonationsById,
     PatronDonationIds,
     PayoutsById,
     PayoutIdsByApplicationId,
@@ -178,19 +172,17 @@ impl Contract {
             max_patron_referral_fee,
             round_manager_fee_basis_points,
             protocol_fee_basis_points,
-            total_matching_pool_funds: U128(0),
-            total_donations_funds: U128(0),
+            matching_pool_balance: 0,
+            donations_balance: 0,
             cooldown_end_ms: None,
             paid_out: false,
             application_ids: UnorderedSet::new(StorageKey::ApplicationIds),
             applications_by_id: UnorderedMap::new(StorageKey::ApplicationsById),
             application_id_by_project_id: LookupMap::new(StorageKey::ApplicationIdByProjectId),
-            // approved_application_ids: UnorderedSet::new(StorageKey::ApprovedApplicationIds),
-            // rejected_application_ids: UnorderedSet::new(StorageKey::RejectedApplicationIds),
-            // pending_application_ids: UnorderedSet::new(StorageKey::PendingApplicationIds),
             donations_by_id: UnorderedMap::new(StorageKey::DonationsById),
             donation_ids_by_application_id: LookupMap::new(StorageKey::DonationIdsByApplicationId),
             donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
+            patron_donations_by_id: UnorderedMap::new(StorageKey::PatronDonationsById),
             patron_donation_ids: UnorderedSet::new(StorageKey::PatronDonationIds),
             payout_ids_by_application_id: LookupMap::new(StorageKey::PayoutIdsByApplicationId),
             payouts_by_id: UnorderedMap::new(StorageKey::PayoutsById),
@@ -225,19 +217,17 @@ impl Default for Contract {
             max_patron_referral_fee: U128(0),
             round_manager_fee_basis_points: 0,
             protocol_fee_basis_points: 0,
-            total_matching_pool_funds: U128(0),
-            total_donations_funds: U128(0),
+            matching_pool_balance: 0,
+            donations_balance: 0,
             cooldown_end_ms: None,
             paid_out: false,
             application_ids: UnorderedSet::new(StorageKey::ApplicationIds),
             applications_by_id: UnorderedMap::new(StorageKey::ApplicationsById),
             application_id_by_project_id: LookupMap::new(StorageKey::ApplicationIdByProjectId),
-            // approved_application_ids: UnorderedSet::new(StorageKey::ApprovedApplicationIds),
-            // rejected_application_ids: UnorderedSet::new(StorageKey::RejectedApplicationIds),
-            // pending_application_ids: UnorderedSet::new(StorageKey::PendingApplicationIds),
             donations_by_id: UnorderedMap::new(StorageKey::DonationsById),
             donation_ids_by_application_id: LookupMap::new(StorageKey::DonationIdsByApplicationId),
             donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
+            patron_donations_by_id: UnorderedMap::new(StorageKey::PatronDonationsById),
             patron_donation_ids: UnorderedSet::new(StorageKey::PatronDonationIds),
             payout_ids_by_application_id: LookupMap::new(StorageKey::PayoutIdsByApplicationId),
             payouts_by_id: UnorderedMap::new(StorageKey::PayoutsById),

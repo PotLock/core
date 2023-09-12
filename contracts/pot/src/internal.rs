@@ -51,4 +51,21 @@ impl Contract {
     pub(crate) fn assert_round_active(&self) {
         assert!(self.is_round_active(), "Round is not active");
     }
+
+    pub(crate) fn assert_max_projects_not_reached(&self) {
+        let mut approved_applications_count = 0;
+        for application_id in self.application_ids.iter() {
+            let application = self
+                .applications_by_id
+                .get(&application_id)
+                .expect("Application does not exist");
+            if application.status == ApplicationStatus::Approved {
+                approved_applications_count += 1;
+            }
+        }
+        assert!(
+            approved_applications_count < self.max_projects,
+            "Max projects reached"
+        );
+    }
 }

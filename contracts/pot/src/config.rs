@@ -38,9 +38,9 @@ pub struct PotConfig {
     /// Protocol fee
     pub protocol_fee_basis_points: u32, // e.g. 700 (7%)
     /// Amount of matching funds available
-    pub total_matching_pool_funds: U128,
+    pub matching_pool_balance: u128,
     /// Amount of donated funds available
-    pub total_donations_funds: U128,
+    pub donations_balance: u128,
     /// Cooldown period starts when Chef sets payouts
     pub cooldown_end_ms: Option<TimestampMs>,
     /// Have all projects been paid out?
@@ -68,8 +68,8 @@ impl Contract {
             max_patron_referral_fee: self.max_patron_referral_fee,
             round_manager_fee_basis_points: self.round_manager_fee_basis_points,
             protocol_fee_basis_points: self.protocol_fee_basis_points,
-            total_matching_pool_funds: self.total_matching_pool_funds,
-            total_donations_funds: self.total_donations_funds,
+            matching_pool_balance: self.matching_pool_balance,
+            donations_balance: self.donations_balance,
             cooldown_end_ms: self.cooldown_end_ms,
             paid_out: self.paid_out,
         }
