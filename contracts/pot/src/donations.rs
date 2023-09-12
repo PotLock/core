@@ -1,5 +1,5 @@
 use crate::*;
-/// Could be an end-user donation (must include a project_id in this case) or a matching pool donation (may include a referrer_id in this case)
+/// End-user donation
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Donation {
@@ -8,7 +8,7 @@ pub struct Donation {
     /// ID of the donor               
     pub donor_id: AccountId,
     /// Amount donated         
-    pub amount: U128,
+    pub amount: u128,
     /// Optional message from the donor          
     pub message: Option<String>,
     /// Timestamp when the donation was made
@@ -19,10 +19,102 @@ pub struct Donation {
     pub referrer_id: Option<AccountId>,
 }
 
+/// Matching pool / patron donation
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct PatronDonation {
+    /// Unique identifier for the donation
+    pub id: DonationId,
+    /// ID of the donor               
+    pub donor_id: AccountId,
+    /// Amount donated         
+    pub amount: u128,
+    /// Optional message from the donor          
+    pub message: Option<String>,
+    /// Timestamp when the donation was made
+    pub donated_at: TimestampMs,
+    /// Referrer ID
+    pub referrer_id: Option<AccountId>,
+}
+
 pub const DONATION_ID_DELIMETER: &str = ":";
 
 #[near_bindgen]
 impl Contract {
+    // GETTERS
+    // get_donations
+    // get_matching_pool_balance
+    pub fn get_donations(&self, from_index: Option<u128>, limit: Option<u64>) -> Vec<Donation> {
+        let start_index: u128 = from_index.unwrap_or_default();
+        assert!(
+            (self.donations_by_id.len() as u128) >= start_index,
+            "Out of bounds, please use a smaller from_index."
+        );
+        let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
+        assert_ne!(limit, 0, "Cannot provide limit of 0.");
+        self.donations_by_id
+            .iter()
+            .skip(start_index as usize)
+            .take(limit)
+            .map(|(_, v)| v)
+            .collect()
+    }
+
+    pub fn get_donations_for_application(
+        &self,
+        application_id: ApplicationId,
+        from_index: Option<u128>,
+        limit: Option<u64>,
+    ) -> Vec<Donation> {
+        let start_index: u128 = from_index.unwrap_or_default();
+        assert!(
+            (self.donations_by_id.len() as u128) >= start_index,
+            "Out of bounds, please use a smaller from_index."
+        );
+        let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
+        assert_ne!(limit, 0, "Cannot provide limit of 0.");
+        let donation_ids_by_application_set = self
+            .donation_ids_by_application_id
+            .get(&application_id)
+            .unwrap();
+        donation_ids_by_application_set
+            .iter()
+            .skip(start_index as usize)
+            .take(limit)
+            .map(|donation_id| self.donations_by_id.get(&donation_id).unwrap())
+            .collect()
+    }
+
+    pub fn get_donations_for_donor(
+        &self,
+        donor_id: AccountId,
+        from_index: Option<u128>,
+        limit: Option<u64>,
+    ) -> Vec<Donation> {
+        let start_index: u128 = from_index.unwrap_or_default();
+        assert!(
+            (self.donations_by_id.len() as u128) >= start_index,
+            "Out of bounds, please use a smaller from_index."
+        );
+        let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
+        assert_ne!(limit, 0, "Cannot provide limit of 0.");
+        let donation_ids_by_donor_set = self.donation_ids_by_donor_id.get(&donor_id).unwrap();
+        donation_ids_by_donor_set
+            .iter()
+            .skip(start_index as usize)
+            .take(limit)
+            .map(|donation_id| self.donations_by_id.get(&donation_id).unwrap())
+            .collect()
+    }
+
+    pub fn get_matching_pool_balance(&self) -> u128 {
+        self.matching_pool_balance
+    }
+
+    pub fn get_donations_balance(&self) -> u128 {
+        self.donations_balance
+    }
+
     #[payable]
     pub fn set_donation_requirement(&mut self, donation_requirement: Option<SBTRequirement>) {
         self.assert_chef();
@@ -33,6 +125,26 @@ impl Contract {
     pub fn donate(&mut self, application_id: ApplicationId, message: Option<String>) -> Promise {
         // TODO: add referrer_id
         self.assert_caller_can_donate(application_id, message)
+    }
+
+    /// Adds attached deposit to matching pool, adds mappings & returns PatronDonation
+    #[payable]
+    pub fn patron_donate_to_matching_pool(&mut self, message: Option<String>) -> PatronDonation {
+        let deposit = env::attached_deposit();
+        self.matching_pool_balance += deposit;
+        let patron_donation_count = self.patron_donation_ids.len();
+        let patron_donation = PatronDonation {
+            id: patron_donation_count + 1 as DonationId,
+            donor_id: env::predecessor_account_id(),
+            amount: deposit,
+            message,
+            donated_at: env::block_timestamp(),
+            referrer_id: None, // TODO: handle referrer
+        };
+        self.patron_donations_by_id
+            .insert(&patron_donation.id, &patron_donation);
+        self.patron_donation_ids.insert(&patron_donation.id);
+        patron_donation
     }
 
     pub(crate) fn assert_caller_can_donate(
@@ -75,16 +187,18 @@ impl Contract {
         } else {
             0
         };
+        let amount = env::attached_deposit();
         let donation = Donation {
             id: donation_count_for_project + 1 as DonationId,
             donor_id: env::predecessor_account_id(),
-            amount: U128::from(env::attached_deposit()),
+            amount,
             message,
             donated_at: env::block_timestamp(),
             application_id,
             referrer_id: None,
         };
         self.insert_donation_record(&donation);
+        self.donations_balance += amount;
         // TODO: TAKE OUT PROTOCOL FEE & ANY OTHER FEES
         donation
         // Promise::new()

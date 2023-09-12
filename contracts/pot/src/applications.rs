@@ -48,6 +48,8 @@ impl Contract {
         }
         // check that application period is open
         self.assert_application_period_open();
+        // check that max_projects hasn't been reached
+        self.assert_max_projects_not_reached();
         // add application
         let application = Application {
             id: self.applications_by_id.len() + 1 as ApplicationId,
