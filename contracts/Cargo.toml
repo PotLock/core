@@ -1,0 +1,2 @@
+[workspace]
+members = ["pot", "pot_deployer"]

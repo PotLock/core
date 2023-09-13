@@ -145,8 +145,6 @@ impl Contract {
         basis_points_paid_upfront: u32,
         application_requirement: Option<SBTRequirement>,
         donation_requirement: Option<SBTRequirement>,
-        // application_requirements: UnorderedSet<SBTRequirement>,
-        // donation_requirements: UnorderedSet<SBTRequirement>,
         patron_referral_fee_basis_points: u32,
         max_patron_referral_fee: U128,
         round_manager_fee_basis_points: u32,
