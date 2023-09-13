@@ -5,7 +5,7 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-echo ">> Deploying Pot contract"
+echo ">> Deploying PotDeployer contract"
 
 # https://docs.near.org/tools/near-cli#near-dev-deploy
 near dev-deploy --wasmFile ./target/wasm32-unknown-unknown/release/contract.wasm
