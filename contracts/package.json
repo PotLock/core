@@ -7,11 +7,11 @@
   "author": "Lachlan Glen <54282009+lachlanglen@users.noreply.github.com>",
   "license": "MIT",
   "scripts": {
-    "build:pot": "cd pot/ && ./scripts/build.sh && cd ../",
-    "build:potdeployer": "cd pot_deployer/ && ./scripts/build.sh && cd ../",
-    "dev:deploy:pot": "cd pot && (near dev-deploy || exit 0) && cd ..",
-    "dev:deploy:pot:refresh": "rm -rf neardev && yarn dev:deploy:pot",
-    "dev:deploy:potdeployer": "cd pot_deployer && (near dev-deploy || exit 0) && cd ..",
-    "dev:deploy:potdeployer:refresh": "rm -rf neardev && yarn dev:deploy:potdeployer"
+    "build:pot": "cd pot && ./scripts/build.sh && cd ..",
+    "build:potdeployer": "cd pot_deployer && ./scripts/build.sh && cd ..",
+    "dev:deploy:pot": "cd pot && ./scripts/deploy.sh && cd ..",
+    "dev:deploy:pot:refresh": "cd pot && rm -rf neardev && ./scripts/deploy.sh && cd ..",
+    "dev:deploy:potdeployer": "cd pot_deployer && ./scripts/deploy.sh && cd ..",
+    "dev:deploy:potdeployer:refresh": "cd pot_deployer && rm -rf neardev && ./scripts/deploy.sh && cd .."
   }
 }
