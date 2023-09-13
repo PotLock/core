@@ -9,9 +9,12 @@
   "scripts": {
     "build:pot": "cd pot && ./scripts/build.sh && cd ..",
     "build:potdeployer": "cd pot_deployer && ./scripts/build.sh && cd ..",
+    "build:registry": "cd registry && ./scripts/build.sh && cd ..",
     "dev:deploy:pot": "cd pot && ./scripts/deploy.sh && cd ..",
     "dev:deploy:pot:refresh": "cd pot && rm -rf neardev && ./scripts/deploy.sh && cd ..",
     "dev:deploy:potdeployer": "cd pot_deployer && ./scripts/deploy.sh && cd ..",
-    "dev:deploy:potdeployer:refresh": "cd pot_deployer && rm -rf neardev && ./scripts/deploy.sh && cd .."
+    "dev:deploy:potdeployer:refresh": "cd pot_deployer && rm -rf neardev && ./scripts/deploy.sh && cd ..",
+    "dev:deploy:registry": "cd registry && ./scripts/deploy.sh && cd ..",
+    "dev:deploy:registry:refresh": "cd registry && rm -rf neardev && ./scripts/deploy.sh && cd .."
   }
 }

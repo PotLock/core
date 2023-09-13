@@ -1,5 +1,5 @@
 [package]
-name = "potlock-pot-deployer"
+name = "potlock-registry"
 version = "0.1.0"
 edition = "2021"
 
