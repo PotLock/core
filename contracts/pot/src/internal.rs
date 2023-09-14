@@ -11,7 +11,7 @@ impl Contract {
 
     pub(crate) fn assert_round_closed(&self) {
         assert!(
-            env::block_timestamp_ms() >= self.round_end_time,
+            env::block_timestamp_ms() >= self.round_end_ms,
             "Round is still open"
         );
     }

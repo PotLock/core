@@ -17,7 +17,6 @@ type TimestampMs = u64;
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug)]
 #[serde(crate = "near_sdk::serde")]
 pub enum ProjectStatus {
-    Draft,
     Submitted,
     InReview,
     Approved,
@@ -30,6 +29,7 @@ pub struct Project {
     pub description: String,
     pub status: ProjectStatus,
     pub owner: AccountId,
+    pub payout_to: AccountId,
     // team members by project stored on top level of Contract
     pub submitted_at: TimestampMs,
     pub updated_at: TimestampMs,

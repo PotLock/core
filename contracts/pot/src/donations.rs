@@ -107,11 +107,11 @@ impl Contract {
             .collect()
     }
 
-    pub fn get_matching_pool_balance(&self) -> u128 {
+    pub fn get_matching_pool_balance(&self) -> U128 {
         self.matching_pool_balance
     }
 
-    pub fn get_donations_balance(&self) -> u128 {
+    pub fn get_donations_balance(&self) -> U128 {
         self.donations_balance
     }
 
@@ -131,7 +131,15 @@ impl Contract {
     #[payable]
     pub fn patron_donate_to_matching_pool(&mut self, message: Option<String>) -> PatronDonation {
         let deposit = env::attached_deposit();
-        self.matching_pool_balance += deposit;
+        self.matching_pool_balance = U128::from(
+            self.matching_pool_balance
+                .0
+                .checked_add(deposit)
+                .expect(&format!(
+                    "Overflow occurred when calculating self.matching_pool_balance ({} + {})",
+                    self.matching_pool_balance.0, deposit,
+                )),
+        );
         let patron_donation_count = self.patron_donation_ids.len();
         let patron_donation = PatronDonation {
             id: patron_donation_count + 1 as DonationId,
@@ -198,7 +206,12 @@ impl Contract {
             referrer_id: None,
         };
         self.insert_donation_record(&donation);
-        self.donations_balance += amount;
+        self.donations_balance = U128::from(self.donations_balance.0.checked_add(amount).expect(
+            &format!(
+                "Overflow occurred when calculating self.donations_balance ({} + {})",
+                self.donations_balance.0, amount,
+            ),
+        ));
         // TODO: TAKE OUT PROTOCOL FEE & ANY OTHER FEES
         donation
         // Promise::new()

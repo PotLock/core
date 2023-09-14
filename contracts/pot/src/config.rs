@@ -9,9 +9,9 @@ pub struct PotConfig {
     /// Friendly & descriptive round description
     pub round_description: String,
     /// MS Timestamp when the round starts
-    pub round_start_time: TimestampMs,
+    pub round_start_ms: TimestampMs,
     /// MS Timestamp when the round ends
-    pub round_end_time: TimestampMs,
+    pub round_end_ms: TimestampMs,
     /// MS Timestamp when applications can be submitted from
     pub application_start_ms: TimestampMs,
     /// MS Timestamp when applications can be submitted until
@@ -38,9 +38,9 @@ pub struct PotConfig {
     /// Protocol fee
     pub protocol_fee_basis_points: u32, // e.g. 700 (7%)
     /// Amount of matching funds available
-    pub matching_pool_balance: u128,
+    pub matching_pool_balance: U128,
     /// Amount of donated funds available
-    pub donations_balance: u128,
+    pub donations_balance: U128,
     /// Cooldown period starts when Chef sets payouts
     pub cooldown_end_ms: Option<TimestampMs>,
     /// Have all projects been paid out?
@@ -53,8 +53,8 @@ impl Contract {
             chef_id: self.chef_id.clone(),
             round_name: self.round_name.clone(),
             round_description: self.round_description.clone(),
-            round_start_time: self.round_start_time,
-            round_end_time: self.round_end_time,
+            round_start_ms: self.round_start_ms,
+            round_end_ms: self.round_end_ms,
             application_start_ms: self.application_start_ms,
             application_end_ms: self.application_end_ms,
             max_projects: self.max_projects,

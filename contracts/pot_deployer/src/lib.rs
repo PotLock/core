@@ -25,26 +25,34 @@ pub struct SBTRequirement {
 
 const POT_WASM_CODE: &[u8] = include_bytes!("../../pot/out/main.wasm");
 
+pub struct Pot {
+    // TODO: use this
+    pub on_chain_name: String,
+    pub deployed_by: AccountId,
+}
+
 /// Pot Deployer Contract
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Contract {
-    pots: UnorderedSet<PotId>,
-    protocol_fee: u128,
-    chef_fee: u128,
+    pot_ids: UnorderedSet<PotId>,
+    pots_by_id: UnorderedMap<PotId, Pot>,
+    protocol_fee_basis_points: u32,
+    max_protocol_fee_basis_points: u32,
+    default_chef_fee_basis_points: u32,
+    max_chef_fee_basis_points: u32,
     max_round_time: u128,
     max_application_time: u128,
     max_milestones: u32,
-    max_protocol_fee_basis_points: u32,
-    max_chef_fee_basis_points: u32,
-    initial_chef_fee_basis_points: u32,
-    initial_protocol_fee_basis_points: u32,
     admin: AccountId,
+    whitelisted_deployers: UnorderedSet<AccountId>,
 }
 
 #[derive(BorshSerialize, BorshStorageKey)]
 pub enum StorageKey {
-    Pots,
+    PotsById,
+    PotIds,
+    WhitelistedDeployers,
 }
 
 #[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
@@ -53,8 +61,8 @@ pub struct PotArgs {
     chef_id: AccountId,
     round_name: String,
     round_description: String,
-    round_start_time: TimestampMs,
-    round_end_time: TimestampMs,
+    round_start_ms: TimestampMs,
+    round_end_ms: TimestampMs,
     application_start_ms: TimestampMs,
     application_end_ms: TimestampMs,
     max_projects: u32,
@@ -79,25 +87,25 @@ impl Contract {
         max_round_time: u128,
         max_application_time: u128,
         max_milestones: u32,
+        protocol_fee_basis_points: u32,
         max_protocol_fee_basis_points: u32,
+        default_chef_fee_basis_points: u32,
         max_chef_fee_basis_points: u32,
-        initial_chef_fee_basis_points: u32,
-        initial_protocol_fee_basis_points: u32,
         admin: AccountId,
     ) -> Self {
         assert!(!env::state_exists(), "Already initialized");
         Self {
-            pots: UnorderedSet::new(StorageKey::Pots),
-            protocol_fee,
-            chef_fee,
+            pot_ids: UnorderedSet::new(StorageKey::PotIds),
+            pots_by_id: UnorderedMap::new(StorageKey::PotsById),
+            protocol_fee_basis_points,
+            default_chef_fee_basis_points,
+            max_protocol_fee_basis_points,
+            max_chef_fee_basis_points,
             max_round_time,
             max_application_time,
             max_milestones,
-            max_protocol_fee_basis_points,
-            max_chef_fee_basis_points,
-            initial_chef_fee_basis_points,
-            initial_protocol_fee_basis_points,
             admin,
+            whitelisted_deployers: UnorderedSet::new(StorageKey::WhitelistedDeployers),
         }
     }
 
@@ -132,7 +140,7 @@ impl Contract {
                 serde_json::to_vec(&pot_args).unwrap(),
                 0,
                 GAS,
-            )
+            ) // TODO: ADD CALLBACK TO CREATE NEW POT MAPPINGS
     }
 }
 
@@ -140,17 +148,17 @@ impl Contract {
 impl Default for Contract {
     fn default() -> Self {
         Self {
-            pots: UnorderedSet::new(StorageKey::Pots),
-            protocol_fee: 0,
-            chef_fee: 0,
+            pot_ids: UnorderedSet::new(StorageKey::PotIds),
+            pots_by_id: UnorderedMap::new(StorageKey::PotsById),
+            protocol_fee_basis_points: 0,
+            default_chef_fee_basis_points: 0,
             max_round_time: 0,
             max_application_time: 0,
             max_milestones: 0,
             max_protocol_fee_basis_points: 0,
             max_chef_fee_basis_points: 0,
-            initial_chef_fee_basis_points: 0,
-            initial_protocol_fee_basis_points: 0,
             admin: AccountId::new_unchecked("".to_string()),
+            whitelisted_deployers: UnorderedSet::new(StorageKey::WhitelistedDeployers),
         }
     }
 }

@@ -51,10 +51,11 @@ impl Contract {
         let mut running_total: u128 = 0;
         let balance_available = self
             .matching_pool_balance
-            .checked_add(self.donations_balance)
+            .0
+            .checked_add(self.donations_balance.0)
             .expect(&format!(
                 "Overflow occurred when calculating balance available ({} + {})",
-                self.matching_pool_balance, self.donations_balance,
+                self.matching_pool_balance.0, self.donations_balance.0,
             ));
         // for each payout:
         for payout in payouts.iter() {
