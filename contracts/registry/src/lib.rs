@@ -8,7 +8,9 @@ use near_sdk::{
     Gas, Promise, PromiseError,
 };
 
+pub mod internal;
 pub mod utils;
+pub use crate::internal::*;
 pub use crate::utils::*;
 
 type ProjectId = AccountId;
@@ -23,16 +25,14 @@ pub enum ProjectStatus {
     Rejected,
 }
 
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug)]
+#[serde(crate = "near_sdk::serde")]
 pub struct Project {
     pub id: ProjectId,
     pub name: String,
-    pub description: String,
     pub status: ProjectStatus,
-    pub owner: AccountId,
-    pub payout_to: AccountId,
-    // team members by project stored on top level of Contract
-    pub submitted_at: TimestampMs,
-    pub updated_at: TimestampMs,
+    pub submitted_ms: TimestampMs,
+    pub updated_ms: TimestampMs,
     pub review_notes: Option<String>,
 }
 
@@ -42,13 +42,15 @@ pub struct Project {
 pub struct Contract {
     owner: AccountId,
     admins: UnorderedSet<AccountId>,
-    projects_by_id: UnorderedMap<ProjectId, Project>,
+    project_ids: UnorderedSet<ProjectId>,
+    projects_by_id: LookupMap<ProjectId, Project>,
     project_team_members_by_project_id: LookupMap<ProjectId, UnorderedSet<AccountId>>,
 }
 
 #[derive(BorshSerialize, BorshStorageKey)]
 pub enum StorageKey {
     Admins,
+    ProjectIds,
     ProjectsById,
     ProjectTeamMembersByProjectId,
     ProjectTeamMembersByProjectIdInner { project_id: ProjectId },
@@ -62,11 +64,78 @@ impl Contract {
         Self {
             owner,
             admins: account_vec_to_set(admins, StorageKey::Admins),
-            projects_by_id: UnorderedMap::new(StorageKey::ProjectsById),
+            project_ids: UnorderedSet::new(StorageKey::ProjectIds),
+            projects_by_id: LookupMap::new(StorageKey::ProjectsById),
             project_team_members_by_project_id: LookupMap::new(
                 StorageKey::ProjectTeamMembersByProjectId,
             ),
         }
+    }
+
+    #[payable]
+    pub fn owner_add_admins(&mut self, admins: Vec<AccountId>) {
+        self.assert_owner();
+        for admin in admins {
+            self.admins.insert(&admin);
+        }
+    }
+
+    #[payable]
+    pub fn owner_remove_admins(&mut self, admins: Vec<AccountId>) {
+        self.assert_owner();
+        for admin in admins {
+            self.admins.remove(&admin);
+        }
+    }
+
+    pub fn register(
+        &mut self,
+        name: String,
+        team_members: Vec<AccountId>,
+        _project_id: Option<AccountId>,
+    ) -> Project {
+        // _project_id can only be specified by admin; otherwise, it is the caller
+        let project_id = if let Some(_project_id) = _project_id {
+            self.assert_admin();
+            _project_id
+        } else {
+            env::predecessor_account_id()
+        };
+        self.assert_project_does_not_exist(&project_id);
+        let project = Project {
+            id: project_id.clone(),
+            name,
+            status: ProjectStatus::Approved, // approved by default - TODO: double-check that this is desired functionality
+            submitted_ms: env::block_timestamp_ms(),
+            updated_ms: env::block_timestamp_ms(),
+            review_notes: None,
+        };
+        self.projects_by_id.insert(&project_id, &project);
+        let mut team_members_set =
+            UnorderedSet::new(StorageKey::ProjectTeamMembersByProjectIdInner {
+                project_id: project_id.clone(),
+            });
+        for team_member in team_members {
+            team_members_set.insert(&team_member);
+        }
+        self.project_team_members_by_project_id
+            .insert(&project_id, &team_members_set);
+        project
+    }
+
+    pub fn admin_set_project_status(
+        &mut self,
+        project_id: ProjectId,
+        status: ProjectStatus,
+        review_notes: Option<String>,
+    ) {
+        self.assert_admin();
+        self.assert_project_exists(&project_id);
+        let mut project = self.projects_by_id.get(&project_id).unwrap();
+        project.status = status;
+        project.review_notes = review_notes;
+        project.updated_ms = env::block_timestamp_ms();
+        self.projects_by_id.insert(&project_id, &project);
     }
 }
 
@@ -76,7 +145,8 @@ impl Default for Contract {
         Self {
             owner: AccountId::new_unchecked("".to_string()),
             admins: UnorderedSet::new(StorageKey::Admins),
-            projects_by_id: UnorderedMap::new(StorageKey::ProjectsById),
+            project_ids: UnorderedSet::new(StorageKey::ProjectIds),
+            projects_by_id: LookupMap::new(StorageKey::ProjectsById),
             project_team_members_by_project_id: LookupMap::new(
                 StorageKey::ProjectTeamMembersByProjectId,
             ),

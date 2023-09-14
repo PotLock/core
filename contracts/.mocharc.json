@@ -1,0 +1,4 @@
+{
+  "spec": ["test/**/contract.test.ts"],
+  "require": ["ts-node/register"]
+}

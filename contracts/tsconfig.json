@@ -1,0 +1,23 @@
+{
+    "compilerOptions": {
+      "target": "ES2020",                
+      "module": "commonjs",                    
+      "strict": true,                          
+      "esModuleInterop": true,                   
+      "skipLibCheck": true,                    
+      "forceConsistentCasingInFileNames": true,
+      "outDir": "./dist",                      
+      "moduleResolution": "node",              
+      "resolveJsonModule": true,               
+      "types": ["node", "mocha"],                        
+      "lib": ["ES2020"],                        
+      "sourceMap": true                        
+    },
+    "include": [
+      "**/*.ts", "test/**/contract.test.ts"                            
+    ],
+    "exclude": [
+      "node_modules"
+    ]
+  }
+  
