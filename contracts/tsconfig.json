@@ -8,13 +8,14 @@
       "forceConsistentCasingInFileNames": true,
       "outDir": "./dist",                      
       "moduleResolution": "node",              
-      "resolveJsonModule": true,               
-      "types": ["node", "mocha"],                        
+      "resolveJsonModule": true,
+      "typeRoots": ["./node_modules/@types", "./test"],               
+      "types": ["node", "mocha", "types"],                        
       "lib": ["ES2020"],                        
       "sourceMap": true                        
     },
     "include": [
-      "**/*.ts", "test/**/contract.test.ts"                            
+      "**/*.ts", "test/**/contract.test.ts"                           
     ],
     "exclude": [
       "node_modules"
