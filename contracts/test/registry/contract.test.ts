@@ -1,5 +1,4 @@
 import assert from "assert";
-import fs from "fs";
 import { Account } from "near-api-js";
 import { contractId } from "./config";
 import { near } from "./setup";
@@ -14,7 +13,17 @@ import {
   registerProject,
 } from "./utils";
 
-describe("Contract Tests", () => {
+/*
+TEST CASES:
+- Can be deployed and initialized
+- Owner can add & remove admins
+- End user or Admins can register a Project
+  - Project ID should not already be registered
+  - Project should be approved by default
+- Admins can change status of a Project
+*/
+
+describe("Registry Contract Tests", () => {
   let ownerAccount: Account;
   let ownerId: AccountId = contractId;
   let adminId: AccountId = contractId;
@@ -27,8 +36,7 @@ describe("Contract Tests", () => {
     adminAccount = new Account(near.connection, adminId);
     projectAccount = new Account(near.connection, projectId);
 
-    // initialize contract if it's not already
-    // attempt to initialize; if it fails, it's already initialized
+    // attempt to initialize contract; if it fails, it's already initialized
     try {
       await initializeContract({
         owner: ownerId,
@@ -68,7 +76,7 @@ describe("Contract Tests", () => {
 
   it("End user or Admins can register a Project", async () => {
     // Project ID should not already be registered
-    // Project should be approved by default❓
+    // Project should be approved by default
     try {
       // End user registers a project
       const projectName = `${projectId}#${Date.now()}`;
@@ -117,12 +125,9 @@ describe("Contract Tests", () => {
   });
 
   it("Admins can change status of Project", async () => {
-    // Project ID should not already be registered
-    // Project should be approved by default❓
     try {
       // Get projects
       let projects = await getProjects();
-
       if (projects.length === 0) {
         // If no projects, create new project and refetch
         const projectName = `${projectId}#${Date.now()}`;

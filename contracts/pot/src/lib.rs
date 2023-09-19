@@ -54,11 +54,11 @@ pub struct Contract {
     pub base_currency: AccountId, // TODO: add FT support
     /// Account ID that deployed this Pot contract
     pub created_by: AccountId,
-    /// If project raises less than this amount in donations, milestone submissions aren't required
-    pub milestone_threshold: U64, // TODO: is this practical to implement?
-    pub basis_points_paid_upfront: u32, // TODO: what does this mean? how will it be paid upfront if there are no donations yet?
-    /// SBTs required to submit an application
-    pub application_requirement: Option<SBTRequirement>,
+    // /// If project raises less than this amount in donations, milestone submissions aren't required
+    // pub milestone_threshold: U64, // TODO: is this practical to implement?
+    // pub basis_points_paid_upfront: u32, // TODO: what does this mean? how will it be paid upfront if there are no donations yet?
+    // /// SBTs required to submit an application
+    // pub application_requirement: Option<SBTRequirement>,
     /// SBTs required to donate to a project
     pub donation_requirement: Option<SBTRequirement>,
     // payment_per_milestone: u32,
@@ -141,9 +141,9 @@ impl Contract {
         max_projects: u32,
         base_currency: AccountId,
         created_by: AccountId,
-        milestone_threshold: U64,
-        basis_points_paid_upfront: u32,
-        application_requirement: Option<SBTRequirement>,
+        // milestone_threshold: U64,
+        // basis_points_paid_upfront: u32,
+        // application_requirement: Option<SBTRequirement>,
         donation_requirement: Option<SBTRequirement>,
         patron_referral_fee_basis_points: u32,
         max_patron_referral_fee: U128,
@@ -162,9 +162,9 @@ impl Contract {
             max_projects,
             base_currency,
             created_by,
-            milestone_threshold,
-            basis_points_paid_upfront,
-            application_requirement,
+            // milestone_threshold,
+            // basis_points_paid_upfront,
+            // application_requirement,
             donation_requirement,
             patron_referral_fee_basis_points,
             max_patron_referral_fee,
@@ -207,9 +207,9 @@ impl Default for Contract {
             max_projects: 0,
             base_currency: AccountId::new_unchecked("".to_string()),
             created_by: AccountId::new_unchecked("".to_string()),
-            milestone_threshold: U64(0),
-            basis_points_paid_upfront: 0,
-            application_requirement: None,
+            // milestone_threshold: U64(0),
+            // basis_points_paid_upfront: 0,
+            // application_requirement: None,
             donation_requirement: None,
             patron_referral_fee_basis_points: 0,
             max_patron_referral_fee: U128(0),

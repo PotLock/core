@@ -10,7 +10,8 @@ if (!projectName) {
 
 const contractId = fs
   .readFileSync(`./${projectName}/neardev/dev-account`)
-  .toString();
+  .toString()
+  .trim(); // remove the newline
 
 const path = `./test/${projectName}/config.ts`;
 
@@ -18,7 +19,7 @@ fs.readFile(path, "utf-8", function (err, data) {
   if (err) throw err;
 
   data = data.replace(
-    /.*export const contractId.*/gim,
+    /^export const contractId = .*;$/m,
     `export const contractId = "${contractId}";`
   );
 

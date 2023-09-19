@@ -14,6 +14,9 @@ type TimestampMs = u64;
 const EXTRA_BYTES: usize = 10000;
 const GAS: Gas = Gas(50_000_000_000_000);
 
+pub mod utils;
+pub use crate::utils::*;
+
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct SBTRequirement {
@@ -25,6 +28,8 @@ pub struct SBTRequirement {
 
 const POT_WASM_CODE: &[u8] = include_bytes!("../../pot/out/main.wasm");
 
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[serde(crate = "near_sdk::serde")]
 pub struct Pot {
     // TODO: use this
     pub on_chain_name: String,
@@ -43,7 +48,7 @@ pub struct Contract {
     max_chef_fee_basis_points: u32,
     max_round_time: u128,
     max_application_time: u128,
-    max_milestones: u32,
+    // max_milestones: u32,
     admin: AccountId,
     whitelisted_deployers: UnorderedSet<AccountId>,
 }
@@ -67,10 +72,31 @@ pub struct PotArgs {
     application_end_ms: TimestampMs,
     max_projects: u32,
     base_currency: AccountId,
+    // milestone_threshold: U64,
+    // basis_points_paid_upfront: u32,
+    donation_requirement: Option<SBTRequirement>,
+    patron_referral_fee_basis_points: u32,
+    max_patron_referral_fee: U128,
+    round_manager_fee_basis_points: u32,
+    protocol_fee_basis_points: u32,
+}
+
+/// `PotArgs` + `created_by`
+#[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct PotArgsInternal {
+    chef_id: AccountId,
+    round_name: String,
+    round_description: String,
+    round_start_ms: TimestampMs,
+    round_end_ms: TimestampMs,
+    application_start_ms: TimestampMs,
+    application_end_ms: TimestampMs,
+    max_projects: u32,
+    base_currency: AccountId,
     created_by: AccountId,
-    milestone_threshold: U64,
-    basis_points_paid_upfront: u32,
-    application_requirement: Option<SBTRequirement>,
+    // milestone_threshold: U64,
+    // basis_points_paid_upfront: u32,
     donation_requirement: Option<SBTRequirement>,
     patron_referral_fee_basis_points: u32,
     max_patron_referral_fee: U128,
@@ -82,11 +108,9 @@ pub struct PotArgs {
 impl Contract {
     #[init]
     pub fn new(
-        protocol_fee: u128,
-        chef_fee: u128,
         max_round_time: u128,
         max_application_time: u128,
-        max_milestones: u32,
+        // max_milestones: u32,
         protocol_fee_basis_points: u32,
         max_protocol_fee_basis_points: u32,
         default_chef_fee_basis_points: u32,
@@ -103,7 +127,7 @@ impl Contract {
             max_chef_fee_basis_points,
             max_round_time,
             max_application_time,
-            max_milestones,
+            // max_milestones,
             admin,
             whitelisted_deployers: UnorderedSet::new(StorageKey::WhitelistedDeployers),
         }
@@ -118,10 +142,15 @@ impl Contract {
     #[payable]
     pub fn deploy_pot(&mut self, pot_on_chain_name: String, pot_args: PotArgs) -> Promise {
         // TODO: ensure caller has appropriate permissions!
-        let pot_account_id_str = format!("{}.{}", pot_on_chain_name, env::current_account_id());
+        let pot_account_id_str = format!(
+            "{}.{}",
+            slugify(&pot_on_chain_name),
+            env::current_account_id()
+        );
         assert!(
             env::is_valid_account_id(pot_account_id_str.as_bytes()),
-            "Pot Account ID is invalid"
+            "Pot Account ID {} is invalid",
+            pot_account_id_str
         );
         let pot_account_id = AccountId::new_unchecked(pot_account_id_str);
         let required_deposit = self.get_min_attached_deposit(&pot_args);
@@ -131,16 +160,43 @@ impl Contract {
         let storage_balance_used =
             Balance::from(env::storage_usage() - initial_storage_usage) * STORAGE_PRICE_PER_BYTE;
 
+        let pot_args_internal = PotArgsInternal {
+            chef_id: pot_args.chef_id,
+            round_name: pot_args.round_name,
+            round_description: pot_args.round_description,
+            round_start_ms: pot_args.round_start_ms,
+            round_end_ms: pot_args.round_end_ms,
+            application_start_ms: pot_args.application_start_ms,
+            application_end_ms: pot_args.application_end_ms,
+            max_projects: pot_args.max_projects,
+            base_currency: pot_args.base_currency,
+            created_by: env::predecessor_account_id(),
+            // milestone_threshold: pot_args.milestone_threshold,
+            // basis_points_paid_upfront: pot_args.basis_points_paid_upfront,
+            donation_requirement: pot_args.donation_requirement,
+            patron_referral_fee_basis_points: pot_args.patron_referral_fee_basis_points,
+            max_patron_referral_fee: pot_args.max_patron_referral_fee,
+            round_manager_fee_basis_points: pot_args.round_manager_fee_basis_points,
+            protocol_fee_basis_points: pot_args.protocol_fee_basis_points,
+        };
+
         Promise::new(pot_account_id)
             .create_account()
             .transfer(required_deposit - storage_balance_used)
             .deploy_contract(POT_WASM_CODE.to_vec())
             .function_call(
                 "new".to_string(),
-                serde_json::to_vec(&pot_args).unwrap(),
+                serde_json::to_vec(&pot_args_internal).unwrap(),
                 0,
                 GAS,
             ) // TODO: ADD CALLBACK TO CREATE NEW POT MAPPINGS
+    }
+
+    pub fn get_pots(&self) -> Vec<Pot> {
+        self.pot_ids
+            .iter()
+            .map(|pot_id| self.pots_by_id.get(&pot_id).unwrap())
+            .collect()
     }
 }
 
@@ -154,7 +210,7 @@ impl Default for Contract {
             default_chef_fee_basis_points: 0,
             max_round_time: 0,
             max_application_time: 0,
-            max_milestones: 0,
+            // max_milestones: 0,
             max_protocol_fee_basis_points: 0,
             max_chef_fee_basis_points: 0,
             admin: AccountId::new_unchecked("".to_string()),

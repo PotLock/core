@@ -13,13 +13,17 @@
     "dev:deploy:pot": "cd pot && ./scripts/deploy.sh && cd ..",
     "dev:deploy:pot:refresh": "cd pot && rm -rf neardev && ./scripts/deploy.sh && cd ..",
     "dev:deploy:potdeployer": "cd pot_deployer && ./scripts/deploy.sh && cd ..",
-    "dev:deploy:potdeployer:refresh": "cd pot_deployer && rm -rf neardev && ./scripts/deploy.sh && cd ..",
+    "dev:deploy:potdeployer:refresh": "cd pot_deployer && rm -rf neardev && ./scripts/deploy.sh && cd .. && yarn patch:config pot_deployer",
+    "test:potdeployer": "yarn test test/pot_deployer/contract.test.ts",
+    "works:potdeployer": "yarn build:potdeployer && yarn dev:deploy:potdeployer && yarn test:potdeployer",
+    "works:potdeployer:refresh": "yarn build:potdeployer && yarn dev:deploy:potdeployer:refresh && yarn test:potdeployer",
     "patch:config": "node ./test/utils/patch-config.mjs",
     "dev:deploy:registry": "cd registry && ./scripts/deploy.sh && cd .. && yarn patch:config registry",
     "dev:deploy:registry:refresh": "cd registry && rm -rf neardev && ./scripts/deploy.sh && cd .. && yarn patch:config registry",
-    "test": "mocha --require ts-node/register --timeout 240000 test/**/contract.test.ts",
     "works:registry": "yarn build:registry && yarn dev:deploy:registry && yarn test",
-    "works:registry:refresh": "yarn build:registry && yarn dev:deploy:registry:refresh && yarn test"
+    "works:registry:refresh": "yarn build:registry && yarn dev:deploy:registry:refresh && yarn test",
+    "test": "mocha --require ts-node/register --timeout 240000",
+    "test:all": "yarn test test/**/contract.test.ts"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.1",

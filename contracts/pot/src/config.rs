@@ -22,11 +22,11 @@ pub struct PotConfig {
     pub base_currency: AccountId,
     /// Account ID that deployed this Pot contract
     pub created_by: AccountId,
-    /// If project raises less than this amount in donations, milestone submissions aren't required
-    pub milestone_threshold: U64, // TODO: is this practical to implement?
-    pub basis_points_paid_upfront: u32, // TODO: what does this mean? how will it be paid upfront if there are no donations yet?
-    /// SBTs required to submit an application
-    pub application_requirement: Option<SBTRequirement>,
+    // /// If project raises less than this amount in donations, milestone submissions aren't required
+    // pub milestone_threshold: U64, // TODO: is this practical to implement?
+    // pub basis_points_paid_upfront: u32, // TODO: what does this mean? how will it be paid upfront if there are no donations yet?
+    // /// SBTs required to submit an application
+    // pub application_requirement: Option<SBTRequirement>,
     /// SBTs required to donate to a project
     pub donation_requirement: Option<SBTRequirement>,
     // payment_per_milestone: u32,
@@ -60,9 +60,9 @@ impl Contract {
             max_projects: self.max_projects,
             base_currency: self.base_currency.clone(),
             created_by: self.created_by.clone(),
-            milestone_threshold: self.milestone_threshold,
-            basis_points_paid_upfront: self.basis_points_paid_upfront,
-            application_requirement: self.application_requirement.clone(),
+            // milestone_threshold: self.milestone_threshold,
+            // basis_points_paid_upfront: self.basis_points_paid_upfront,
+            // application_requirement: self.application_requirement.clone(),
             donation_requirement: self.donation_requirement.clone(),
             patron_referral_fee_basis_points: self.patron_referral_fee_basis_points,
             max_patron_referral_fee: self.max_patron_referral_fee,
