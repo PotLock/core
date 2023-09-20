@@ -17,6 +17,11 @@ const GAS: Gas = Gas(50_000_000_000_000);
 pub mod utils;
 pub use crate::utils::*;
 
+pub const TGAS: u64 = 1_000_000_000_000;
+pub const XXC_GAS: u64 = TGAS * 5;
+pub const NO_DEPOSIT: u128 = 0;
+pub const XCC_SUCCESS: u64 = 1;
+
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct SBTRequirement {
@@ -31,7 +36,7 @@ const POT_WASM_CODE: &[u8] = include_bytes!("../../pot/out/main.wasm");
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Pot {
-    // TODO: use this
+    pub pot_id: AccountId,
     pub on_chain_name: String,
     pub deployed_by: AccountId,
 }
@@ -180,7 +185,7 @@ impl Contract {
             protocol_fee_basis_points: pot_args.protocol_fee_basis_points,
         };
 
-        Promise::new(pot_account_id)
+        Promise::new(pot_account_id.clone())
             .create_account()
             .transfer(required_deposit - storage_balance_used)
             .deploy_contract(POT_WASM_CODE.to_vec())
@@ -189,7 +194,37 @@ impl Contract {
                 serde_json::to_vec(&pot_args_internal).unwrap(),
                 0,
                 GAS,
-            ) // TODO: ADD CALLBACK TO CREATE NEW POT MAPPINGS
+            )
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(Gas(XXC_GAS))
+                    .deploy_pot_callback(
+                        pot_on_chain_name,
+                        env::predecessor_account_id(),
+                        pot_account_id.clone(),
+                    ),
+            )
+    }
+
+    #[private] // Public - but only callable by env::current_account_id()
+    pub fn deploy_pot_callback(
+        &mut self,
+        on_chain_name: String,
+        deployed_by: AccountId,
+        pot_id: AccountId,
+        #[callback_result] call_result: Result<(), PromiseError>,
+    ) -> Pot {
+        if call_result.is_err() {
+            env::panic_str("There was an error deploying the Pot contract.");
+        }
+        let pot = Pot {
+            pot_id: pot_id.clone(),
+            on_chain_name,
+            deployed_by,
+        };
+        self.pot_ids.insert(&pot_id);
+        self.pots_by_id.insert(&pot_id, &pot);
+        pot
     }
 
     pub fn get_pots(&self) -> Vec<Pot> {

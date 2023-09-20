@@ -1,6 +1,6 @@
 import { utils } from "near-api-js";
 
-export const contractId = "1695158005.test-contracts.potlock.testnet";
+export const contractId = "1695219221.test-contracts.potlock.testnet";
 export const networkId = "testnet";
 export const nodeUrl = `https://rpc.${networkId}.near.org`;
 
