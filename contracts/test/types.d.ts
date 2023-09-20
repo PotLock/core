@@ -45,3 +45,12 @@ interface SBTRequirement {
   issuer_id: AccountId;
   class_id: number;
 }
+
+interface PotDeployerConfig {
+  protocol_fee_basis_points: number;
+  max_protocol_fee_basis_points: number;
+  default_chef_fee_basis_points: number;
+  max_chef_fee_basis_points: number;
+  max_round_time: number;
+  max_application_time: number;
+}

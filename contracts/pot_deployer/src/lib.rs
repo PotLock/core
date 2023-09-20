@@ -14,7 +14,9 @@ type TimestampMs = u64;
 const EXTRA_BYTES: usize = 10000;
 const GAS: Gas = Gas(50_000_000_000_000);
 
+pub mod internal;
 pub mod utils;
+pub use crate::internal::*;
 pub use crate::utils::*;
 
 pub const TGAS: u64 = 1_000_000_000_000;
@@ -56,6 +58,17 @@ pub struct Contract {
     // max_milestones: u32,
     admin: AccountId,
     whitelisted_deployers: UnorderedSet<AccountId>,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct ContractConfigExternal {
+    protocol_fee_basis_points: u32,
+    max_protocol_fee_basis_points: u32,
+    default_chef_fee_basis_points: u32,
+    max_chef_fee_basis_points: u32,
+    max_round_time: u128,
+    max_application_time: u128,
 }
 
 #[derive(BorshSerialize, BorshStorageKey)]
@@ -145,8 +158,28 @@ impl Contract {
     }
 
     #[payable]
+    pub fn admin_add_whitelisted_deployers(&mut self, account_ids: Vec<AccountId>) {
+        self.assert_admin();
+        for account_id in account_ids {
+            self.whitelisted_deployers.insert(&account_id);
+        }
+    }
+
+    #[payable]
+    pub fn admin_remove_whitelisted_deployers(&mut self, account_ids: Vec<AccountId>) {
+        self.assert_admin();
+        for account_id in account_ids {
+            self.whitelisted_deployers.remove(&account_id);
+        }
+    }
+
+    pub fn get_whitelisted_deployers(&self) -> Vec<AccountId> {
+        self.whitelisted_deployers.to_vec()
+    }
+
+    #[payable]
     pub fn deploy_pot(&mut self, pot_on_chain_name: String, pot_args: PotArgs) -> Promise {
-        // TODO: ensure caller has appropriate permissions!
+        self.assert_admin_or_whitelisted_deployer();
         let pot_account_id_str = format!(
             "{}.{}",
             slugify(&pot_on_chain_name),
@@ -232,6 +265,73 @@ impl Contract {
             .iter()
             .map(|pot_id| self.pots_by_id.get(&pot_id).unwrap())
             .collect()
+    }
+
+    #[payable]
+    pub fn admin_update_protocol_fee_basis_points(&mut self, protocol_fee_basis_points: u32) {
+        self.assert_admin();
+        assert!(
+            protocol_fee_basis_points <= self.max_protocol_fee_basis_points,
+            "Protocol fee basis points cannot exceed {}",
+            self.max_protocol_fee_basis_points
+        );
+        self.protocol_fee_basis_points = protocol_fee_basis_points;
+    }
+
+    #[payable]
+    pub fn admin_update_default_chef_fee_basis_points(
+        &mut self,
+        default_chef_fee_basis_points: u32,
+    ) {
+        self.assert_admin();
+        assert!(
+            default_chef_fee_basis_points <= self.max_chef_fee_basis_points,
+            "Default chef fee basis points cannot exceed {}",
+            self.max_chef_fee_basis_points
+        );
+        self.default_chef_fee_basis_points = default_chef_fee_basis_points;
+    }
+
+    #[payable]
+    pub fn admin_update_max_protocol_fee_basis_points(
+        &mut self,
+        max_protocol_fee_basis_points: u32,
+    ) {
+        self.assert_admin();
+        self.max_protocol_fee_basis_points = max_protocol_fee_basis_points;
+    }
+
+    #[payable]
+    pub fn admin_update_max_chef_fee_basis_points(&mut self, max_chef_fee_basis_points: u32) {
+        self.assert_admin();
+        self.max_chef_fee_basis_points = max_chef_fee_basis_points;
+    }
+
+    #[payable]
+    pub fn admin_update_max_round_time(&mut self, max_round_time: u128) {
+        self.assert_admin();
+        self.max_round_time = max_round_time;
+    }
+
+    #[payable]
+    pub fn admin_update_max_application_time(&mut self, max_application_time: u128) {
+        self.assert_admin();
+        self.max_application_time = max_application_time;
+    }
+
+    pub fn get_config(&self) -> ContractConfigExternal {
+        ContractConfigExternal {
+            protocol_fee_basis_points: self.protocol_fee_basis_points,
+            max_protocol_fee_basis_points: self.max_protocol_fee_basis_points,
+            default_chef_fee_basis_points: self.default_chef_fee_basis_points,
+            max_chef_fee_basis_points: self.max_chef_fee_basis_points,
+            max_round_time: self.max_round_time,
+            max_application_time: self.max_application_time,
+        }
+    }
+
+    pub fn get_admin(&self) -> AccountId {
+        self.admin.clone()
     }
 }
 

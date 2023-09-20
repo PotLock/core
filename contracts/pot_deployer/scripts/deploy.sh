@@ -18,7 +18,7 @@ echo ">> Generated account name: $account_name"
 # 1. Create a new account
 # Assuming you have a master account that will be used to create the new account.
 # Replace MASTER_ACCOUNT and MASTER_ACCOUNT_KEY_PATH with appropriate values
-near create-account $account_name --masterAccount $MASTER_ACCOUNT_NAME --initialBalance 10 --publicKey ed25519:4PAtgM8Hvz4MamxUaoSN2q3HJ3Npc3oCzyyHK7Y1vncf
+near create-account $account_name --masterAccount $MASTER_ACCOUNT_NAME --initialBalance 15 --publicKey ed25519:4PAtgM8Hvz4MamxUaoSN2q3HJ3Npc3oCzyyHK7Y1vncf
 
 # 2. Funding is implicitly done in the create-account step by setting the initial balance.
 

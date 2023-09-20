@@ -6,11 +6,26 @@ import { NO_DEPOSIT } from "../utils/constants";
 
 const READ_METHODS = {
   GET_POTS: "get_pots",
+  GET_WHITELISTED_DEPLOYERS: "get_whitelisted_deployers",
+  GET_CONFIG: "get_config",
+  GET_ADMIN: "get_admin",
 };
 
 const WRITE_METHODS = {
   NEW: "new",
   DEPLOY_POT: "deploy_pot",
+  ADMIN_ADD_WHITELISTED_DEPLOYERS: "admin_add_whitelisted_deployers",
+  ADMIN_REMOVE_WHITELISTED_DEPLOYERS: "admin_remove_whitelisted_deployers",
+  ADMIN_UPDATE_PROTOCOL_FEE_BASIS_POINTS:
+    "admin_update_protocol_fee_basis_points",
+  ADMIN_UPDATE_DEFAULT_CHEF_FEE_BASIS_POINTS:
+    "admin_update_default_chef_fee_basis_points",
+  ADMIN_UPDATE_MAX_PROTOCOL_FEE_BASIS_POINTS:
+    "admin_update_max_protocol_fee_basis_points",
+  ADMIN_UPDATE_MAX_CHEF_FEE_BASIS_POINTS:
+    "admin_update_max_chef_fee_basis_points",
+  ADMIN_UPDATE_MAX_ROUND_TIME: "admin_update_max_round_time",
+  ADMIN_UPDATE_MAX_APPLICATION_TIME: "admin_update_max_application_time",
 };
 
 // Wrapper around contractView that defaults to the contract account
@@ -117,5 +132,139 @@ export const deployPot = async (
 export const getPots = async (): Promise<Pot[]> => {
   return contractView({
     methodName: READ_METHODS.GET_POTS,
+  });
+};
+
+// WHITELISTED DEPLOYERS
+
+export const adminAddWhitelistedDeployers = async (
+  adminAccount: Account,
+  whitelistedDeployers: AccountId[]
+) => {
+  return contractCall({
+    callerAccount: adminAccount,
+    contractId: _contractId,
+    methodName: WRITE_METHODS.ADMIN_ADD_WHITELISTED_DEPLOYERS,
+    args: {
+      account_ids: whitelistedDeployers,
+    },
+  });
+};
+
+export const adminRemoveWhitelistedDeployers = async (
+  adminAccount: Account,
+  whitelistedDeployers: AccountId[]
+) => {
+  return contractCall({
+    callerAccount: adminAccount,
+    contractId: _contractId,
+    methodName: WRITE_METHODS.ADMIN_REMOVE_WHITELISTED_DEPLOYERS,
+    args: {
+      account_ids: whitelistedDeployers,
+    },
+  });
+};
+
+export const getWhitelistedDeployers = async (): Promise<AccountId[]> => {
+  return contractView({
+    methodName: READ_METHODS.GET_WHITELISTED_DEPLOYERS,
+  });
+};
+
+// CONFIG
+
+export const getConfig = async (): Promise<PotDeployerConfig> => {
+  return contractView({
+    methodName: READ_METHODS.GET_CONFIG,
+  });
+};
+
+export const getAdmin = async (): Promise<AccountId> => {
+  return contractView({
+    methodName: READ_METHODS.GET_ADMIN,
+  });
+};
+
+export const adminUpdateProtocolFeeBasisPoints = async (
+  adminAccount: Account,
+  protocolFeeBasisPoints: number
+) => {
+  return contractCall({
+    callerAccount: adminAccount,
+    contractId: _contractId,
+    methodName: WRITE_METHODS.ADMIN_UPDATE_PROTOCOL_FEE_BASIS_POINTS,
+    args: {
+      protocol_fee_basis_points: protocolFeeBasisPoints,
+    },
+  });
+};
+
+export const adminUpdateDefaultChefFeeBasisPoints = async (
+  adminAccount: Account,
+  defaultChefFeeBasisPoints: number
+) => {
+  return contractCall({
+    callerAccount: adminAccount,
+    contractId: _contractId,
+    methodName: WRITE_METHODS.ADMIN_UPDATE_DEFAULT_CHEF_FEE_BASIS_POINTS,
+    args: {
+      default_chef_fee_basis_points: defaultChefFeeBasisPoints,
+    },
+  });
+};
+
+export const adminUpdateMaxProtocolFeeBasisPoints = async (
+  adminAccount: Account,
+  maxProtocolFeeBasisPoints: number
+) => {
+  return contractCall({
+    callerAccount: adminAccount,
+    contractId: _contractId,
+    methodName: WRITE_METHODS.ADMIN_UPDATE_MAX_PROTOCOL_FEE_BASIS_POINTS,
+    args: {
+      max_protocol_fee_basis_points: maxProtocolFeeBasisPoints,
+    },
+  });
+};
+
+export const adminUpdateMaxChefFeeBasisPoints = async (
+  adminAccount: Account,
+  maxChefFeeBasisPoints: number
+) => {
+  return contractCall({
+    callerAccount: adminAccount,
+    contractId: _contractId,
+    methodName: WRITE_METHODS.ADMIN_UPDATE_MAX_CHEF_FEE_BASIS_POINTS,
+    args: {
+      max_chef_fee_basis_points: maxChefFeeBasisPoints,
+    },
+  });
+};
+
+export const adminUpdateMaxRoundTime = async (
+  adminAccount: Account,
+  maxRoundTime: number
+) => {
+  return contractCall({
+    callerAccount: adminAccount,
+    contractId: _contractId,
+    methodName: WRITE_METHODS.ADMIN_UPDATE_MAX_ROUND_TIME,
+    args: {
+      max_round_time: maxRoundTime,
+    },
+  });
+};
+
+export const adminUpdateMaxApplicationTime = async (
+  adminAccount: Account,
+  maxApplicationTime: number
+) => {
+  return contractCall({
+    callerAccount: adminAccount,
+    contractId: _contractId,
+    methodName: WRITE_METHODS.ADMIN_UPDATE_MAX_APPLICATION_TIME,
+    args: {
+      max_application_time: maxApplicationTime,
+    },
   });
 };
