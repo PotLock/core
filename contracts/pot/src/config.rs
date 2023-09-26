@@ -1,6 +1,8 @@
 use crate::*;
 
 /// Used ephemerally in view methods
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
 pub struct PotConfig {
     /// Address (ID) of round manager ("chef"), essentially the contract owner
     pub chef_id: AccountId,
@@ -47,6 +49,7 @@ pub struct PotConfig {
     pub paid_out: bool,
 }
 
+#[near_bindgen]
 impl Contract {
     pub fn get_pot_config(&self) -> PotConfig {
         PotConfig {

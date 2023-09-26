@@ -5,6 +5,8 @@ pub const XXC_GAS: u64 = TGAS * 5;
 pub const NO_DEPOSIT: u128 = 0;
 pub const XCC_SUCCESS: u64 = 1;
 
+// SBT REGISTRY
+
 // TokenId and ClassId must be positive (0 is not a valid ID)
 pub type TokenId = u64;
 pub type ClassId = u64;
@@ -37,4 +39,37 @@ trait SbtRegistry {
         issuer: Option<AccountId>,
         from_class: Option<u64>,
     ) -> SbtTokensByOwnerResult;
+}
+
+// POTLOCK REGISTRY
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub enum ProjectStatus {
+    Submitted,
+    InReview,
+    Approved,
+    Rejected,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub struct PotlockRegistryProject {
+    pub id: ProjectId,
+    pub name: String,
+    pub team_members: Vec<AccountId>,
+    pub status: ProjectStatus,
+    pub submitted_ms: TimestampMs,
+    pub updated_ms: TimestampMs,
+    pub review_notes: Option<String>,
+}
+
+#[ext_contract(potlock_registry)]
+trait PotlockRegistry {
+    fn get_project_by_id(&self, project_id: ProjectId) -> PotlockRegistryProject;
+}
+
+// POT DEPLOYER
+#[ext_contract(pot_deployer)]
+trait PotDeployer {
+    fn get_admin(&self) -> AccountId;
 }

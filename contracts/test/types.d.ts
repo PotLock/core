@@ -1,8 +1,17 @@
 type TimestampMs = number;
 type AccountId = string;
+type ProjectId = AccountId;
+type ApplicationId = number; // increments from 1
 
 enum ProjectStatus {
   Submitted = "Submitted",
+  InReview = "InReview",
+  Approved = "Approved",
+  Rejected = "Rejected",
+}
+
+enum ApplicationStatus {
+  Pending = "Pending",
   InReview = "InReview",
   Approved = "Approved",
   Rejected = "Rejected",
@@ -35,6 +44,14 @@ interface PotArgs {
   protocol_fee_basis_points: number;
 }
 
+interface PotConfig extends PotArgs {
+  created_by: AccountId;
+  matching_pool_balance: string;
+  donations_balance: string;
+  cooldown_end_ms: TimestampMs | null;
+  paid_out: boolean;
+}
+
 interface Pot {
   on_chain_name: string;
   deployed_by: AccountId;
@@ -53,4 +70,13 @@ interface PotDeployerConfig {
   max_chef_fee_basis_points: number;
   max_round_time: number;
   max_application_time: number;
+}
+
+interface Application {
+  id: ApplicationId;
+  project_id: ProjectId;
+  status: ApplicationStatus;
+  submitted_at: TimestampMs;
+  updated_at: TimestampMs | null;
+  review_notes: string | null;
 }

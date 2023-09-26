@@ -12,6 +12,7 @@ type ProjectId = AccountId;
 type ApplicationId = u64;
 type DonationId = u64; // TODO: change to Sring formatted as `"application_id:donation_id"`
 
+pub mod admin;
 pub mod applications;
 pub mod config;
 pub mod constants;
@@ -20,6 +21,7 @@ pub mod external;
 pub mod internal;
 pub mod payouts;
 pub mod sbt;
+pub use crate::admin::*;
 pub use crate::applications::*;
 pub use crate::config::*;
 pub use crate::constants::*;
@@ -54,6 +56,10 @@ pub struct Contract {
     pub base_currency: AccountId, // TODO: add FT support
     /// Account ID that deployed this Pot contract
     pub created_by: AccountId,
+    /// Account ID of registry contract that should be queried when projects apply to round
+    pub registry_contract_id: AccountId,
+    /// Account ID of pot deployer contract (singleton) that is queried to verify admin status
+    pub pot_deployer_contract_id: AccountId,
     // /// If project raises less than this amount in donations, milestone submissions aren't required
     // pub milestone_threshold: U64, // TODO: is this practical to implement?
     // pub basis_points_paid_upfront: u32, // TODO: what does this mean? how will it be paid upfront if there are no donations yet?
@@ -141,6 +147,8 @@ impl Contract {
         max_projects: u32,
         base_currency: AccountId,
         created_by: AccountId,
+        registry_contract_id: AccountId,
+        pot_deployer_contract_id: AccountId,
         // milestone_threshold: U64,
         // basis_points_paid_upfront: u32,
         // application_requirement: Option<SBTRequirement>,
@@ -155,13 +163,15 @@ impl Contract {
             chef_id,
             round_name,
             round_description,
-            round_start_ms,
+            round_start_ms, // TODO: change to "public_round_start_ms" & update occurrences & related vars
             round_end_ms,
             application_start_ms,
             application_end_ms,
             max_projects,
             base_currency,
             created_by,
+            registry_contract_id,
+            pot_deployer_contract_id,
             // milestone_threshold,
             // basis_points_paid_upfront,
             // application_requirement,
@@ -207,6 +217,8 @@ impl Default for Contract {
             max_projects: 0,
             base_currency: AccountId::new_unchecked("".to_string()),
             created_by: AccountId::new_unchecked("".to_string()),
+            registry_contract_id: AccountId::new_unchecked("".to_string()),
+            pot_deployer_contract_id: AccountId::new_unchecked("".to_string()),
             // milestone_threshold: U64(0),
             // basis_points_paid_upfront: 0,
             // application_requirement: None,

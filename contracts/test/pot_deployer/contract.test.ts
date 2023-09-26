@@ -3,6 +3,11 @@ import { Account, utils } from "near-api-js";
 import {
   ASSERT_ADMIN_ERROR_STR,
   ASSERT_ADMIN_OR_WHITELISTED_DEPLOYER_ERROR_STR,
+  DEFAULT_WHITELISTED_DEPLOYER_ID,
+  POT_DEPLOYER_ALWAYS_ADMIN_ID,
+  contractId,
+} from "./config";
+import {
   DEFAULT_APPLICATION_LENGTH,
   DEFAULT_BASE_CURRENCY,
   DEFAULT_CLASS_ID,
@@ -19,9 +24,7 @@ import {
   DEFAULT_REGISTRY_ID,
   DEFAULT_ROUND_LENGTH,
   DEFAULT_ROUND_MANAGER_FEE_BASIS_POINTS,
-  DEFAULT_WHITELISTED_DEPLOYER_ID,
-  contractId,
-} from "./config";
+} from "../utils/constants";
 import { near } from "./setup";
 import {
   adminAddWhitelistedDeployers,
@@ -57,7 +60,7 @@ TEST CASES (taken from ../README.md):
 
 describe("PotDelpoyer Contract Tests", () => {
   // account that will always be admin for the duration of these tests
-  const alwaysAdminId: AccountId = contractId;
+  const alwaysAdminId: AccountId = POT_DEPLOYER_ALWAYS_ADMIN_ID;
   let alwaysAdminAccount: Account;
 
   // account that will always NOT be admin for the duration of these tests

@@ -37,10 +37,32 @@ pub struct Application {
 #[near_bindgen]
 impl Contract {
     #[payable]
-    pub fn apply(&mut self, project_id: ProjectId) -> Application {
-        // TODO: verify that the project ID exists as an approved project on Registry contract (could also require that the caller be the project_id)
-        // TODO: verify that the caller has permission to take this action
-        // for now, assume that the project_id is valid
+    pub fn apply(&mut self) -> Promise {
+        let project_id = env::predecessor_account_id();
+        let promise = potlock_registry::ext(self.registry_contract_id.clone())
+            .with_static_gas(Gas(XXC_GAS))
+            .get_project_by_id(project_id.clone());
+
+        promise.then(
+            Self::ext(env::current_account_id())
+                .with_static_gas(Gas(XXC_GAS))
+                .assert_can_apply_callback(project_id.clone()),
+        )
+    }
+
+    #[private] // Public - but only callable by env::current_account_id()
+    pub fn assert_can_apply_callback(
+        &mut self,
+        project_id: ProjectId,
+        #[callback_result] call_result: Result<PotlockRegistryProject, PromiseError>,
+    ) -> Application {
+        // Check if the promise succeeded by calling the method outlined in external.rs
+        if call_result.is_err() {
+            env::panic_str(&format!(
+                "Project is not registered on {}",
+                self.registry_contract_id.clone()
+            ));
+        }
         // check that application doesn't already exist for this project
         if self.application_id_by_project_id.get(&project_id).is_some() {
             // application already exists
@@ -69,8 +91,11 @@ impl Contract {
         application
     }
 
-    pub fn unapply(&mut self, application_id: ApplicationId) {
-        // TODO: verify that the caller has permission to take this action
+    pub fn unapply(&mut self) {
+        let application_id = self
+            .application_id_by_project_id
+            .get(&env::predecessor_account_id())
+            .expect("Application does not exist for calling project");
         let application = self
             .applications_by_id
             .get(&application_id)
@@ -84,12 +109,43 @@ impl Contract {
         );
         // remove from mappings
         self.application_ids.remove(&application_id);
+        self.applications_by_id.remove(&application_id);
         self.application_id_by_project_id
             .remove(&application.project_id);
         // TODO: emit event?
     }
 
-    pub fn chef_update_application_status(
+    pub fn get_applications(
+        &self,
+        from_index: Option<U128>,
+        limit: Option<u64>,
+    ) -> Vec<Application> {
+        let start_index: u128 = from_index.map(From::from).unwrap_or_default();
+        assert!(
+            (self.application_ids.len() as u128) >= start_index,
+            "Out of bounds, please use a smaller from_index."
+        );
+        let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
+        assert_ne!(limit, 0, "Cannot provide limit of 0.");
+        self.application_ids
+            .iter()
+            .skip(start_index as usize)
+            .take(limit.try_into().unwrap())
+            .map(|application_id| {
+                self.applications_by_id
+                    .get(&application_id)
+                    .expect("Application does not exist")
+            })
+            .collect()
+    }
+
+    pub fn get_application_by_id(&self, application_id: ApplicationId) -> Application {
+        self.applications_by_id
+            .get(&application_id)
+            .expect("Application does not exist")
+    }
+
+    pub fn chef_set_application_status(
         &mut self,
         application_id: ApplicationId,
         status: ApplicationStatus,
@@ -116,7 +172,7 @@ impl Contract {
         application_id: ApplicationId,
         notes: String,
     ) -> Application {
-        self.chef_update_application_status(application_id, ApplicationStatus::Approved, notes)
+        self.chef_set_application_status(application_id, ApplicationStatus::Approved, notes)
     }
 
     pub fn chef_mark_application_rejected(
@@ -124,7 +180,7 @@ impl Contract {
         application_id: ApplicationId,
         notes: String,
     ) -> Application {
-        self.chef_update_application_status(application_id, ApplicationStatus::Rejected, notes)
+        self.chef_set_application_status(application_id, ApplicationStatus::Rejected, notes)
     }
 
     pub fn chef_mark_application_in_review(
@@ -132,7 +188,7 @@ impl Contract {
         application_id: ApplicationId,
         notes: String,
     ) -> Application {
-        self.chef_update_application_status(application_id, ApplicationStatus::InReview, notes)
+        self.chef_set_application_status(application_id, ApplicationStatus::InReview, notes)
     }
 
     pub fn chef_mark_application_pending(
@@ -140,6 +196,6 @@ impl Contract {
         application_id: ApplicationId,
         notes: String,
     ) -> Application {
-        self.chef_update_application_status(application_id, ApplicationStatus::Pending, notes)
+        self.chef_set_application_status(application_id, ApplicationStatus::Pending, notes)
     }
 }
