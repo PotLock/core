@@ -29,11 +29,15 @@
     "test:all": "yarn test test/**/contract.test.ts"
   },
   "devDependencies": {
+    "@types/bn.js": "^5.1.2",
     "@types/mocha": "^10.0.1",
     "@types/node": "^20.6.0",
     "mocha": "^10.2.0",
     "near-api-js": "^2.1.4",
     "ts-node": "^10.9.1",
     "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "bn.js": "^5.2.1"
   }
 }

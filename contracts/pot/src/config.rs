@@ -39,6 +39,8 @@ pub struct PotConfig {
     pub round_manager_fee_basis_points: u32, // TODO: should this be basis points or a fixed amount?
     /// Protocol fee
     pub protocol_fee_basis_points: u32, // e.g. 700 (7%)
+    /// Account ID that receives protocol fees
+    pub protocol_fee_recipient_account: AccountId,
     /// Amount of matching funds available
     pub matching_pool_balance: U128,
     /// Amount of donated funds available
@@ -71,6 +73,7 @@ impl Contract {
             max_patron_referral_fee: self.max_patron_referral_fee,
             round_manager_fee_basis_points: self.round_manager_fee_basis_points,
             protocol_fee_basis_points: self.protocol_fee_basis_points,
+            protocol_fee_recipient_account: self.protocol_fee_recipient_account.clone(),
             matching_pool_balance: self.matching_pool_balance,
             donations_balance: self.donations_balance,
             cooldown_end_ms: self.cooldown_end_ms,

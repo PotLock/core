@@ -75,6 +75,8 @@ pub struct Contract {
     pub round_manager_fee_basis_points: u32, // TODO: should this be basis points or a fixed amount?
     /// Protocol fee
     pub protocol_fee_basis_points: u32, // e.g. 700 (7%)
+    /// Account that protocol fee should be transferred to
+    pub protocol_fee_recipient_account: AccountId,
     /// Amount of matching funds available
     pub matching_pool_balance: U128, // TODO: may want to change this to U128?
     /// Amount of donated funds available
@@ -157,6 +159,7 @@ impl Contract {
         max_patron_referral_fee: U128,
         round_manager_fee_basis_points: u32,
         protocol_fee_basis_points: u32,
+        protocol_fee_recipient_account: AccountId,
     ) -> Self {
         assert!(!env::state_exists(), "Already initialized");
         Self {
@@ -180,6 +183,7 @@ impl Contract {
             max_patron_referral_fee,
             round_manager_fee_basis_points,
             protocol_fee_basis_points,
+            protocol_fee_recipient_account,
             matching_pool_balance: U128::from(0),
             donations_balance: U128::from(0),
             cooldown_end_ms: None,
@@ -227,6 +231,7 @@ impl Default for Contract {
             max_patron_referral_fee: U128(0),
             round_manager_fee_basis_points: 0,
             protocol_fee_basis_points: 0,
+            protocol_fee_recipient_account: AccountId::new_unchecked("".to_string()),
             matching_pool_balance: U128::from(0),
             donations_balance: U128::from(0),
             cooldown_end_ms: None,

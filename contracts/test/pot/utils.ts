@@ -3,12 +3,17 @@ import { contractId as _contractId } from "./config";
 import { Account } from "near-api-js";
 import { contractAccount } from "./setup";
 import { NO_DEPOSIT } from "../utils/constants";
+import { parseNearAmount } from "near-api-js/lib/utils/format";
 
 const READ_METHODS = {
   IS_ROUND_ACTIVE: "is_round_active",
   GET_APPLICATIONS: "get_applications",
   GET_APPLICATION_BY_ID: "get_application_by_id",
   GET_POT_CONFIG: "get_pot_config",
+  GET_DONATIONS_BALANCE: "get_donations_balance",
+  GET_MATCHING_POOL_BALANCE: "get_matching_pool_balance",
+  GET_PATRON_DONATIONS: "get_patron_donations",
+  GET_DONATIONS: "get_donations",
 };
 
 const WRITE_METHODS = {
@@ -18,6 +23,8 @@ const WRITE_METHODS = {
   ADMIN_SET_APPLICATION_START_MS: "admin_set_application_start_ms",
   ADMIN_SET_APPLICATION_END_MS: "admin_set_application_end_ms",
   CHEF_SET_APPLICATION_STATUS: "chef_set_application_status",
+  PATRON_DONATE_TO_MATCHING_POOL: "patron_donate_to_matching_pool",
+  DONATE: "donate",
 };
 
 // Wrapper around contractView that defaults to the contract account
@@ -186,6 +193,80 @@ export const adminSetApplicationEndMs = async (
     contractId: _contractId,
     methodName: WRITE_METHODS.ADMIN_SET_APPLICATION_END_MS,
     args: { application_end_ms: applicationEndMs },
+  });
+};
+
+// PATRON / MATCHING POOL
+
+export const patronDonateToMatchingPool = async ({
+  patronAccount,
+  donationAmount,
+  message,
+  referrerId,
+}: {
+  patronAccount: Account;
+  donationAmount: string;
+  message?: string;
+  referrerId?: AccountId;
+}) => {
+  return contractCall({
+    callerAccount: patronAccount,
+    contractId: _contractId,
+    methodName: WRITE_METHODS.PATRON_DONATE_TO_MATCHING_POOL,
+    args: {
+      message: message || null,
+      referrer_id: referrerId || null,
+    },
+    attachedDeposit: donationAmount,
+  });
+};
+
+export const getPatronDonations = async (): Promise<PatronDonation[]> => {
+  return contractView({
+    methodName: READ_METHODS.GET_PATRON_DONATIONS,
+  });
+};
+
+export const getMatchingPoolBalance = async (): Promise<string> => {
+  return contractView({
+    methodName: READ_METHODS.GET_MATCHING_POOL_BALANCE,
+  });
+};
+
+// DONATIONS
+
+export const donate = async ({
+  donorAccount,
+  applicationId,
+  donationAmount,
+  message,
+}: {
+  donorAccount: Account;
+  applicationId: number;
+  donationAmount: string;
+  message?: string;
+}) => {
+  return contractCall({
+    callerAccount: donorAccount,
+    contractId: _contractId,
+    methodName: WRITE_METHODS.DONATE,
+    args: {
+      application_id: applicationId,
+      message: message || null,
+    },
+    attachedDeposit: donationAmount,
+  });
+};
+
+export const getDonationsBalance = async (): Promise<string> => {
+  return contractView({
+    methodName: READ_METHODS.GET_DONATIONS_BALANCE,
+  });
+};
+
+export const getDonations = async (): Promise<Donation[]> => {
+  return contractView({
+    methodName: READ_METHODS.GET_DONATIONS,
   });
 };
 

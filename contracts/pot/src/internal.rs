@@ -24,6 +24,13 @@ impl Contract {
         );
     }
 
+    pub(crate) fn assert_round_not_closed(&self) {
+        assert!(
+            env::block_timestamp_ms() < self.round_end_ms,
+            "Round is closed"
+        );
+    }
+
     pub(crate) fn assert_approved_application(&self, application_id: &ApplicationId) {
         let application = self
             .applications_by_id

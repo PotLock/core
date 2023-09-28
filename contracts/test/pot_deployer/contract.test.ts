@@ -135,6 +135,7 @@ describe("PotDelpoyer Contract Tests", () => {
       max_patron_referral_fee: DEFAULT_MAX_PATRON_REFERRAL_FEE,
       round_manager_fee_basis_points: DEFAULT_ROUND_MANAGER_FEE_BASIS_POINTS,
       protocol_fee_basis_points: DEFAULT_PROTOCOL_FEE_BASIS_POINTS,
+      protocol_fee_recipient_account: alwaysAdminId,
     };
     try {
       // admin can deploy a new pot

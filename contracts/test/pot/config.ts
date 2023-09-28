@@ -1,4 +1,4 @@
-export const contractId = "dev-1695764376141-53008000402650";
+export const contractId = "dev-1695913449860-56763964902905";
 export const networkId = "testnet";
 export const nodeUrl = `https://rpc.${networkId}.near.org`;
 

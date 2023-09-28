@@ -1,4 +1,5 @@
 import fs from "fs";
+import BN from "bn.js";
 import assert from "assert";
 
 import { Account, utils } from "near-api-js";
@@ -35,8 +36,11 @@ export const _contractCall = async ({
     contractId,
     methodName,
     args,
-    gas: gas || DEFAULT_GAS,
-    attachedDeposit: attachedDeposit === "0" ? undefined : attachedDeposit,
+    gas: new BN(gas || DEFAULT_GAS),
+    attachedDeposit:
+      !attachedDeposit || attachedDeposit === "0"
+        ? undefined
+        : new BN(attachedDeposit),
   });
 };
 
@@ -59,7 +63,10 @@ export const _contractView = async ({
     contractId,
     methodName,
     args,
-    gas: gas || DEFAULT_GAS,
-    attachedDeposit: attachedDeposit === "0" ? undefined : attachedDeposit,
+    gas: new BN(gas || DEFAULT_GAS),
+    attachedDeposit:
+      !attachedDeposit || attachedDeposit === "0"
+        ? undefined
+        : new BN(attachedDeposit),
   });
 };

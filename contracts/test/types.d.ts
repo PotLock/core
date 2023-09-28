@@ -42,6 +42,7 @@ interface PotArgs {
   max_patron_referral_fee: string;
   round_manager_fee_basis_points: number;
   protocol_fee_basis_points: number;
+  protocol_fee_recipient_account: AccountId;
 }
 
 interface PotConfig extends PotArgs {
@@ -79,4 +80,29 @@ interface Application {
   submitted_at: TimestampMs;
   updated_at: TimestampMs | null;
   review_notes: string | null;
+}
+
+/// Patron donation; no application specified
+interface PatronDonation {
+  id: number;
+  donor_id: AccountId;
+  total_amount: string;
+  message: string | null;
+  donated_at: TimestampMs;
+  referrer_id: AccountId | null;
+  referrer_fee: string | null;
+  protocol_fee: string;
+  amount_after_fees: string;
+}
+
+/// End-user donation; must specify application
+interface Donation {
+  application_id: ApplicationId;
+  id: number;
+  donor_id: AccountId;
+  total_amount: string;
+  message: string | null;
+  donated_at: TimestampMs;
+  protocol_fee: string;
+  amount_after_fees: string;
 }
