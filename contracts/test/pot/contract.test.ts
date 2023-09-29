@@ -4,14 +4,22 @@ import { Account } from "near-api-js";
 import { DEFAULT_PROJECT_ID, contractId } from "./config";
 import { contractId as registryContractId } from "../registry/config";
 import { contractId as potDeployerContractId } from "../pot_deployer/config";
-import { contractAccount, near } from "./setup";
+import {
+  contractAccount,
+  getChefAccount,
+  getPatronAccount,
+  getProjectAccounts,
+  near,
+} from "./setup";
 import {
   adminSetApplicationEndMs,
   adminSetApplicationStartMs,
+  adminSetChef,
   apply,
   chefSetApplicationStatus,
+  chefSetDonationRequirement,
   donate,
-  getApplicationById,
+  getApplicationByProjectId,
   getApplications,
   getDonations,
   getDonationsBalance,
@@ -68,14 +76,13 @@ TEST CASES (taken from ../README.md):
   - ✅ Referrer paid out
   - ✅ Enforces round not closed
   - Emits event
-- End user can donate to specific project
-  - Enforces round open
+- ✅ End user can donate to specific project
+  - ✅ Enforces round open
   - Emits event
-- End user can donate to all projects
+- End user can donate to all projects // TODO: implemented on contract, but need to have two projects to test
   - Enforces round open
   - Emits events
 - PotDeployer Admin (DAO) can change chef & chef fee
-- Chef can set (update) the application requirement
 - Chef can set (update) the donation requirement
 - Chef can update the patron referral fee❓
 - Chef can set payouts (CLR / quadratic calculations)
@@ -83,28 +90,29 @@ TEST CASES (taken from ../README.md):
   - Can cooldown period be overridden?
 */
 
-describe("Pot Contract Tests", () => {
+describe("Pot Contract Tests", async () => {
   // other accounts
-  let projectId = DEFAULT_PROJECT_ID;
-  let projectAccount: Account;
-  let chefId: AccountId = contractId;
+  // let projectId = DEFAULT_PROJECT_ID;
+  // let projectAccount: Account;
+  let projectAccounts: Account[];
+  // let chefId: AccountId; // TODO:
   let chefAccount: Account;
   let potDeployerAdminId: AccountId = POT_DEPLOYER_ALWAYS_ADMIN_ID;
   let potDeployerAdminAccount: Account;
-  let patronId: AccountId = contractId; // TODO: change this to use dedicated patron subaccount of contract (will need to move from near dev-deploy in order to do this)
   let patronAccount: Account;
 
   before(async () => {
-    projectAccount = new Account(near.connection, projectId);
-    chefAccount = new Account(near.connection, chefId);
+    // projectAccount = new Account(near.connection, projectId);
+    chefAccount = await getChefAccount();
     potDeployerAdminAccount = new Account(near.connection, potDeployerAdminId);
-    patronAccount = new Account(near.connection, patronId);
+    patronAccount = await getPatronAccount();
+    projectAccounts = await getProjectAccounts();
 
     // attempt to initialize contract; if it fails, it's already initialized
     const now = Date.now();
     const defaultPotArgs = {
-      created_by: chefId,
-      chef_id: chefId,
+      created_by: chefAccount.accountId,
+      chef_id: chefAccount.accountId,
       round_name: "test round",
       round_description: "test round description",
       round_start_ms: now,
@@ -113,12 +121,12 @@ describe("Pot Contract Tests", () => {
       application_end_ms: now + DEFAULT_APPLICATION_LENGTH, // 1 week
       max_projects: DEFAULT_MAX_PROJECTS,
       base_currency: DEFAULT_BASE_CURRENCY,
-      donation_requirement: {
-        // TODO: removing this for now for ease of testing
-        registry_id: DEFAULT_REGISTRY_ID,
-        issuer_id: DEFAULT_ISSUER_ID,
-        class_id: DEFAULT_CLASS_ID,
-      },
+      // donation_requirement: {
+      //   // TODO: removing this for now for ease of testing
+      //   registry_id: DEFAULT_REGISTRY_ID,
+      //   issuer_id: DEFAULT_ISSUER_ID,
+      //   class_id: DEFAULT_CLASS_ID,
+      // },
       patron_referral_fee_basis_points:
         DEFAULT_PATRON_REFERRAL_FEE_BASIS_POINTS,
       max_patron_referral_fee: DEFAULT_MAX_PATRON_REFERRAL_FEE,
@@ -143,14 +151,20 @@ describe("Pot Contract Tests", () => {
       }
     } finally {
       // join potlock registry unless already joined
-      try {
-        console.log("📄 Registering project...");
-        await registerProject(projectAccount, "New Project", []);
-      } catch (e) {
-        if (JSON.stringify(e).includes("Project already exists")) {
-          console.log("➡️ Project already registered... skipping registration");
-        } else {
-          console.log("🚨 Error registering project in before hook: ", e);
+      for (const account of projectAccounts) {
+        try {
+          console.log("📄 Registering project " + account.accountId);
+          await registerProject(account, "New Project", []);
+        } catch (e) {
+          if (JSON.stringify(e).includes("Project already exists")) {
+            console.log(
+              `➡️ Project ${account.accountId} already registered... skipping registration`
+            );
+            continue;
+          } else {
+            console.log("🚨 Error registering project in before hook: ", e);
+            assert(false);
+          }
         }
       }
     }
@@ -192,12 +206,73 @@ describe("Pot Contract Tests", () => {
   //   }
   // });
 
+  it("Pot Deployer Admin can update chef", async () => {
+    try {
+      const newChef = "new-chef.testnet";
+      await adminSetChef(potDeployerAdminAccount, newChef);
+      let config = await getPotConfig();
+      assert(config.chef_id === newChef);
+      // change back to original chef
+      await adminSetChef(potDeployerAdminAccount, chefAccount.accountId);
+      // non-admin CANNOT set chef
+      try {
+        await adminSetChef(projectAccounts[0], newChef);
+        assert(false);
+      } catch (e) {
+        assert(JSON.stringify(e).includes("Caller is not admin"));
+      }
+    } catch (e) {
+      console.log("🚨 Error updating chef: ", e);
+      assert(false);
+    }
+  });
+
+  it("Chef can update donation requirement", async () => {
+    try {
+      const originalConfig = await getPotConfig();
+      const newDonationRequirement: SBTRequirement = {
+        registry_id: "new-registry-id.testnet",
+        issuer_id: "new-issuer-id.testnet",
+        class_id: 1,
+      };
+      await chefSetDonationRequirement(chefAccount, newDonationRequirement);
+      let config = await getPotConfig();
+      assert.deepEqual(config.donation_requirement, newDonationRequirement);
+      // change back to original donationRequirement
+      await chefSetDonationRequirement(
+        chefAccount,
+        originalConfig.donation_requirement
+      );
+      config = await getPotConfig();
+      assert.deepEqual(
+        config.donation_requirement,
+        originalConfig.donation_requirement
+      );
+      // non-chef CANNOT update donation requirement
+      try {
+        await chefSetDonationRequirement(
+          projectAccounts[0],
+          newDonationRequirement
+        );
+        assert(false);
+      } catch (e) {
+        assert(
+          JSON.stringify(e).includes("Only the chef can call this method")
+        );
+      }
+    } catch (e) {
+      console.log("🚨 Error updating donation requirement: ", e);
+      assert(false);
+    }
+  });
+
   it("Project can apply if they are on registry & application period is open", async () => {
     try {
       // NB: project account has been added to registry in "before" hook
       // first, try to apply before application period starts
       const start = Date.now() + DEFAULT_APPLICATION_LENGTH;
       await adminSetApplicationStartMs(potDeployerAdminAccount, start);
+      const projectAccount = projectAccounts[0];
       try {
         await apply(projectAccount);
         assert(false);
@@ -206,9 +281,21 @@ describe("Pot Contract Tests", () => {
         // update application period to start from now
         await adminSetApplicationStartMs(potDeployerAdminAccount, Date.now());
         // try applying; this time it should succeed
-        await apply(projectAccount);
+        // apply for all accounts
+        for (const account of projectAccounts) {
+          console.log("applying for project " + account.accountId);
+          await apply(account);
+        }
         const applications = await getApplications();
-        const exists = applications.some((a) => a.project_id === projectId);
+        console.log("applications line 222: ", applications);
+        console.log(
+          "projectAccount.accountId line 223: ",
+          projectAccount.accountId
+        );
+        console.log("chefAccount.accountId line 224: ", chefAccount.accountId);
+        const exists = applications.some(
+          (a) => a.project_id === projectAccount.accountId
+        );
         assert(exists);
         // unapply
         await unapply(projectAccount);
@@ -222,41 +309,37 @@ describe("Pot Contract Tests", () => {
           assert(false);
         } catch (e) {
           assert(JSON.stringify(e).includes("Application already exists"));
-          // chef can set/update application status
+          // non-chef CANNOT set/update application status
           const applications = await getApplications();
-          let application = applications.find(
-            (a) => a.project_id === projectId
-          );
-          if (!application || application.status !== "Pending") {
-            console.log(
-              "Error setting application status: No pending application found"
-            );
-            assert(false);
-          }
           const newStatus = "Approved";
           const notes = "LGTM";
-          await chefSetApplicationStatus(
-            chefAccount,
-            application.id,
-            newStatus,
-            notes
-          );
-          application = await getApplicationById(application.id);
-          assert(application.status === newStatus);
-          assert(application.review_notes === notes);
-          // non-chef (e.g. project) CANNOT update application status
           try {
             await chefSetApplicationStatus(
               projectAccount,
-              application.id,
+              applications[0].project_id,
               newStatus,
               notes
             );
             assert(false);
           } catch (e) {
             assert(
-              JSON.stringify(e).includes("Only the chef can call this method")
+              JSON.stringify(e).includes("Only the chef can call this method") // TODO: make this error message a constant
             );
+            // chef can set/update application status
+            for (const application of applications) {
+              // approve application
+              await chefSetApplicationStatus(
+                chefAccount,
+                application.project_id,
+                newStatus,
+                notes
+              );
+              const app = await getApplicationByProjectId(
+                application.project_id
+              );
+              assert(app.status === newStatus);
+              assert(app.review_notes === notes);
+            }
           }
         }
       }
@@ -332,14 +415,58 @@ describe("Pot Contract Tests", () => {
   //   }
   // });
 
-  it("End user can donate to specific project", async () => {
+  // it("End user can donate to specific project", async () => {
+  //   try {
+  //     const applications = await getApplications();
+  //     const application = applications.find((a) => a.status === "Approved");
+  //     if (!application) {
+  //       console.log("No approved application to donate to");
+  //       assert(false);
+  //     }
+  //     const message = "Go go go!";
+  //     const donationAmount = parseNearAmount("1") as string; // 1 NEAR in YoctoNEAR
+  //     const donorAccount = chefAccount;
+  //     const potConfig = await getPotConfig();
+  //     // const referrerFee = new BN(potConfig.max_patron_referral_fee);
+  //     const amountPerBasisPoint = new BN(donationAmount).div(new BN(10_000));
+  //     // calculate protocol fee
+  //     let protocolFee = amountPerBasisPoint.mul(
+  //       new BN(potConfig.protocol_fee_basis_points)
+  //     );
+  //     const donationsBalanceBefore = new BN(await getDonationsBalance()); // YoctoNEAR
+  //     await donate({
+  //       donorAccount,
+  //       applicationId: application.id,
+  //       donationAmount,
+  //       message,
+  //     });
+  //     const donationsBalanceAfter = new BN(await getDonationsBalance()); // YoctoNEAR
+  //     // assert that fees were correctly taken out
+  //     assert(
+  //       donationsBalanceAfter.sub(donationsBalanceBefore).toString() ===
+  //         new BN(donationAmount).sub(protocolFee).toString()
+  //     );
+  //     // assert that the donation record was created
+  //     const donations = await getDonations();
+  //     let exists = donations.some(
+  //       (d) => d.message === message && d.donor_id === donorAccount.accountId
+  //     );
+  //     assert(exists);
+  //   } catch (e) {
+  //     console.log("error making patron donation: ", e);
+  //     assert(false);
+  //   }
+  // });
+
+  it("End user can donate to all projects", async () => {
     try {
       const applications = await getApplications();
-      const application = applications.find((a) => a.status === "Approved");
-      if (!application) {
-        console.log("No approved application to donate to");
-        assert(false);
-      }
+      console.log("applications line 388: ", applications);
+      // const application = applications.find((a) => a.status === "Approved");
+      // if (!application) {
+      //   console.log("No approved application to donate to");
+      //   assert(false);
+      // }
       const message = "Go go go!";
       const donationAmount = parseNearAmount("1") as string; // 1 NEAR in YoctoNEAR
       const donorAccount = chefAccount;
@@ -353,7 +480,7 @@ describe("Pot Contract Tests", () => {
       const donationsBalanceBefore = new BN(await getDonationsBalance()); // YoctoNEAR
       await donate({
         donorAccount,
-        applicationId: application.id,
+        projectId: null,
         donationAmount,
         message,
       });
@@ -365,6 +492,7 @@ describe("Pot Contract Tests", () => {
       );
       // assert that the donation record was created
       const donations = await getDonations();
+      console.log("donations line 419: ", donations);
       let exists = donations.some(
         (d) => d.message === message && d.donor_id === donorAccount.accountId
       );

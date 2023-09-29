@@ -87,18 +87,19 @@ pub struct Contract {
     pub paid_out: bool,
 
     // APPLICATION MAPPINGS
-    /// All application records
-    pub applications_by_id: UnorderedMap<ApplicationId, Application>,
-    /// IDs of all applications
-    pub application_ids: UnorderedSet<ApplicationId>,
-    /// ID of applications by their `project_id`
-    pub application_id_by_project_id: LookupMap<ProjectId, ApplicationId>,
+    // /// All application records
+    // pub applications_by_id: UnorderedMap<ApplicationId, Application>,
+    // /// IDs of all applications
+    // pub application_ids: UnorderedSet<ApplicationId>,
+    // /// ID of applications by their `project_id`
+    // pub application_id_by_project_id: LookupMap<ProjectId, ApplicationId>,
+    pub applications_by_project_id: UnorderedMap<ProjectId, Application>,
 
     // DONATION MAPPINGS (end-user)
     /// All donation records
     pub donations_by_id: UnorderedMap<DonationId, Donation>,
     /// IDs of donations made to a given project
-    pub donation_ids_by_application_id: LookupMap<ApplicationId, UnorderedSet<DonationId>>,
+    pub donation_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<DonationId>>,
     /// IDs of donations made by a given donor (user)
     pub donation_ids_by_donor_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
 
@@ -110,27 +111,28 @@ pub struct Contract {
 
     // PAYOUT MAPPINGS
     pub payouts_by_id: UnorderedMap<PayoutId, Payout>, // can iterate over this to get all payouts
-    pub payout_ids_by_application_id: LookupMap<ApplicationId, UnorderedSet<PayoutId>>,
+    pub payout_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<PayoutId>>, // TODO: change to project_id
 }
 
 #[derive(BorshSerialize, BorshStorageKey)]
 pub enum StorageKey {
-    ApplicationIds,
-    ApplicationsById,
-    ApplicationIdByProjectId,
+    // ApplicationIds,
+    // ApplicationsById,
+    // ApplicationIdByProjectId,
+    ApplicationsByProjectId,
     ApprovedApplicationIds,
     RejectedApplicationIds,
     PendingApplicationIds,
     DonationsById,
-    DonationIdsByApplicationId,
-    DonationIdsByApplicationIdInner { application_id: ApplicationId },
+    DonationIdsByProjectId,
+    DonationIdsByProjectIdInner { project_id: ProjectId },
     DonationIdsByDonorId,
     DonationIdsByDonorIdInner { donor_id: AccountId },
     PatronDonationsById,
     PatronDonationIds,
     PayoutsById,
-    PayoutIdsByApplicationId,
-    PayoutIdsByApplicationIdInner { application_id: ApplicationId },
+    PayoutIdsByProjectId,
+    PayoutIdsByProjectIdInner { project_id: ProjectId },
     ApplicationRequirements,
     DonationRequirements,
 }
@@ -188,15 +190,16 @@ impl Contract {
             donations_balance: U128::from(0),
             cooldown_end_ms: None,
             paid_out: false,
-            application_ids: UnorderedSet::new(StorageKey::ApplicationIds),
-            applications_by_id: UnorderedMap::new(StorageKey::ApplicationsById),
-            application_id_by_project_id: LookupMap::new(StorageKey::ApplicationIdByProjectId),
+            // application_ids: UnorderedSet::new(StorageKey::ApplicationIds),
+            // applications_by_id: UnorderedMap::new(StorageKey::ApplicationsById),
+            // application_id_by_project_id: LookupMap::new(StorageKey::ApplicationIdByProjectId),
+            applications_by_project_id: UnorderedMap::new(StorageKey::ApplicationsByProjectId),
             donations_by_id: UnorderedMap::new(StorageKey::DonationsById),
-            donation_ids_by_application_id: LookupMap::new(StorageKey::DonationIdsByApplicationId),
+            donation_ids_by_project_id: LookupMap::new(StorageKey::DonationIdsByProjectId),
             donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
             patron_donations_by_id: UnorderedMap::new(StorageKey::PatronDonationsById),
             patron_donation_ids: UnorderedSet::new(StorageKey::PatronDonationIds),
-            payout_ids_by_application_id: LookupMap::new(StorageKey::PayoutIdsByApplicationId),
+            payout_ids_by_project_id: LookupMap::new(StorageKey::PayoutIdsByProjectId),
             payouts_by_id: UnorderedMap::new(StorageKey::PayoutsById),
         }
     }
@@ -236,15 +239,16 @@ impl Default for Contract {
             donations_balance: U128::from(0),
             cooldown_end_ms: None,
             paid_out: false,
-            application_ids: UnorderedSet::new(StorageKey::ApplicationIds),
-            applications_by_id: UnorderedMap::new(StorageKey::ApplicationsById),
-            application_id_by_project_id: LookupMap::new(StorageKey::ApplicationIdByProjectId),
+            // application_ids: UnorderedSet::new(StorageKey::ApplicationIds),
+            // applications_by_id: UnorderedMap::new(StorageKey::ApplicationsById),
+            // application_id_by_project_id: LookupMap::new(StorageKey::ApplicationIdByProjectId),
+            applications_by_project_id: UnorderedMap::new(StorageKey::ApplicationsByProjectId),
             donations_by_id: UnorderedMap::new(StorageKey::DonationsById),
-            donation_ids_by_application_id: LookupMap::new(StorageKey::DonationIdsByApplicationId),
+            donation_ids_by_project_id: LookupMap::new(StorageKey::DonationIdsByProjectId),
             donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
             patron_donations_by_id: UnorderedMap::new(StorageKey::PatronDonationsById),
             patron_donation_ids: UnorderedSet::new(StorageKey::PatronDonationIds),
-            payout_ids_by_application_id: LookupMap::new(StorageKey::PayoutIdsByApplicationId),
+            payout_ids_by_project_id: LookupMap::new(StorageKey::PayoutIdsByProjectId),
             payouts_by_id: UnorderedMap::new(StorageKey::PayoutsById),
         }
     }

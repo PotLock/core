@@ -30,3 +30,6 @@ export const DEFAULT_BASE_CURRENCY = "near";
 export const DEFAULT_REGISTRY_ID = "registry-unstable.i-am-human.testnet";
 export const DEFAULT_ISSUER_ID = "i-am-human-staging.testnet";
 export const DEFAULT_CLASS_ID = 1;
+
+export const DEFAULT_PARENT_ACCOUNT_ID = "test-contracts.potlock.testnet"; // accounts created during testing, with the exception of near dev-deploy, will be subaccounts of this account.
+export const DEFAULT_NEW_ACCOUNT_AMOUNT = utils.format.parseNearAmount("10"); // 10 NEAR

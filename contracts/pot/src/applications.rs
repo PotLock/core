@@ -12,8 +12,7 @@ pub enum ApplicationStatus {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Application {
-    /// Unique identifier for the application, increments from 1
-    pub id: ApplicationId,
+    // functions as unique identifier for application, since projects can only apply once per round
     pub project_id: ProjectId,
     // /// ID of the individual or group that submitted the application. TODO: MUST be on the Potlock Registry (registry.potluck.[NETWORK])
     // pub creator_id: AccountId,
@@ -64,7 +63,7 @@ impl Contract {
             ));
         }
         // check that application doesn't already exist for this project
-        if self.application_id_by_project_id.get(&project_id).is_some() {
+        if self.applications_by_project_id.get(&project_id).is_some() {
             // application already exists
             env::panic_str("Application already exists for this project");
         }
@@ -74,7 +73,6 @@ impl Contract {
         self.assert_max_projects_not_reached();
         // add application
         let application = Application {
-            id: self.applications_by_id.len() + 1 as ApplicationId,
             project_id,
             status: ApplicationStatus::Pending,
             submitted_at: env::block_timestamp_ms(),
@@ -82,24 +80,18 @@ impl Contract {
             review_notes: None,
         };
         // update mappings
-        self.applications_by_id
-            .insert(&application.id, &application);
-        self.application_id_by_project_id
-            .insert(&application.project_id, &application.id);
-        self.application_ids.insert(&application.id);
+        self.applications_by_project_id
+            .insert(&application.project_id, &application);
         // return application
         application
     }
 
     pub fn unapply(&mut self) {
-        let application_id = self
-            .application_id_by_project_id
-            .get(&env::predecessor_account_id())
-            .expect("Application does not exist for calling project");
+        let project_id = env::predecessor_account_id();
         let application = self
-            .applications_by_id
-            .get(&application_id)
-            .expect("Application does not exist");
+            .applications_by_project_id
+            .get(&project_id)
+            .expect("Application does not exist for calling project");
         // verify that application is pending
         assert_eq!(
             application.status,
@@ -108,10 +100,7 @@ impl Contract {
             application.status
         );
         // remove from mappings
-        self.application_ids.remove(&application_id);
-        self.applications_by_id.remove(&application_id);
-        self.application_id_by_project_id
-            .remove(&application.project_id);
+        self.applications_by_project_id.remove(&project_id);
         // TODO: emit event?
     }
 
@@ -122,80 +111,76 @@ impl Contract {
     ) -> Vec<Application> {
         let start_index: u128 = from_index.map(From::from).unwrap_or_default();
         assert!(
-            (self.application_ids.len() as u128) >= start_index,
+            (self.applications_by_project_id.len() as u128) >= start_index,
             "Out of bounds, please use a smaller from_index."
         );
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
         assert_ne!(limit, 0, "Cannot provide limit of 0.");
-        self.application_ids
+        self.applications_by_project_id
             .iter()
             .skip(start_index as usize)
             .take(limit.try_into().unwrap())
-            .map(|application_id| {
-                self.applications_by_id
-                    .get(&application_id)
-                    .expect("Application does not exist")
-            })
+            .map(|(_account_id, application)| application)
             .collect()
     }
 
-    pub fn get_application_by_id(&self, application_id: ApplicationId) -> Application {
-        self.applications_by_id
-            .get(&application_id)
+    pub fn get_application_by_project_id(&self, project_id: ProjectId) -> Application {
+        self.applications_by_project_id
+            .get(&project_id)
             .expect("Application does not exist")
     }
 
     pub fn chef_set_application_status(
         &mut self,
-        application_id: ApplicationId,
+        project_id: ProjectId,
         status: ApplicationStatus,
         notes: String,
     ) -> Application {
         self.assert_chef();
         // verify that the application exists
         let mut application = self
-            .applications_by_id
-            .get(&application_id)
+            .applications_by_project_id
+            .get(&project_id)
             .expect("Application does not exist");
         // verify that the application is pending
         application.status = status;
         application.updated_at = Some(env::block_timestamp_ms());
         application.review_notes = Some(notes);
         // update mapping
-        self.applications_by_id
-            .insert(&application_id, &application);
+        self.applications_by_project_id
+            .insert(&project_id, &application);
         application
     }
 
     pub fn chef_mark_application_approved(
         &mut self,
-        application_id: ApplicationId,
+        project_id: ProjectId,
         notes: String,
     ) -> Application {
-        self.chef_set_application_status(application_id, ApplicationStatus::Approved, notes)
+        self.chef_set_application_status(project_id, ApplicationStatus::Approved, notes)
     }
 
     pub fn chef_mark_application_rejected(
         &mut self,
-        application_id: ApplicationId,
+        project_id: ProjectId,
         notes: String,
     ) -> Application {
-        self.chef_set_application_status(application_id, ApplicationStatus::Rejected, notes)
+        self.chef_set_application_status(project_id, ApplicationStatus::Rejected, notes)
     }
 
     pub fn chef_mark_application_in_review(
         &mut self,
-        application_id: ApplicationId,
+        project_id: ProjectId,
         notes: String,
     ) -> Application {
-        self.chef_set_application_status(application_id, ApplicationStatus::InReview, notes)
+        self.chef_set_application_status(project_id, ApplicationStatus::InReview, notes)
     }
 
     pub fn chef_mark_application_pending(
         &mut self,
-        application_id: ApplicationId,
+        project_id: ProjectId,
         notes: String,
     ) -> Application {
-        self.chef_set_application_status(application_id, ApplicationStatus::Pending, notes)
+        self.chef_set_application_status(project_id, ApplicationStatus::Pending, notes)
     }
 }

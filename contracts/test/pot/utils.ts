@@ -8,7 +8,7 @@ import { parseNearAmount } from "near-api-js/lib/utils/format";
 const READ_METHODS = {
   IS_ROUND_ACTIVE: "is_round_active",
   GET_APPLICATIONS: "get_applications",
-  GET_APPLICATION_BY_ID: "get_application_by_id",
+  GET_APPLICATION_BY_PROJECT_ID: "get_application_by_project_id",
   GET_POT_CONFIG: "get_pot_config",
   GET_DONATIONS_BALANCE: "get_donations_balance",
   GET_MATCHING_POOL_BALANCE: "get_matching_pool_balance",
@@ -22,7 +22,9 @@ const WRITE_METHODS = {
   UNAPPLY: "unapply",
   ADMIN_SET_APPLICATION_START_MS: "admin_set_application_start_ms",
   ADMIN_SET_APPLICATION_END_MS: "admin_set_application_end_ms",
+  ADMIN_SET_CHEF: "admin_set_chef",
   CHEF_SET_APPLICATION_STATUS: "chef_set_application_status",
+  CHEF_SET_DONATION_REQUIREMENT: "chef_set_donation_requirement",
   PATRON_DONATE_TO_MATCHING_POOL: "patron_donate_to_matching_pool",
   DONATE: "donate",
 };
@@ -141,12 +143,12 @@ export const getApplications = async (): Promise<Application[]> => {
   });
 };
 
-export const getApplicationById = async (
-  applicationId: ApplicationId
+export const getApplicationByProjectId = async (
+  projectId: ProjectId
 ): Promise<Application> => {
   return contractView({
-    methodName: READ_METHODS.GET_APPLICATION_BY_ID,
-    args: { application_id: applicationId },
+    methodName: READ_METHODS.GET_APPLICATION_BY_PROJECT_ID,
+    args: { project_id: projectId },
   });
 };
 
@@ -154,7 +156,7 @@ export const getApplicationById = async (
 
 export const chefSetApplicationStatus = async (
   chefAccount: Account,
-  applicationId: number,
+  projectId: ProjectId,
   applicationStatus: string, // ApplicationStatus
   reviewNotes: string
 ) => {
@@ -163,7 +165,7 @@ export const chefSetApplicationStatus = async (
     contractId: _contractId,
     methodName: WRITE_METHODS.CHEF_SET_APPLICATION_STATUS,
     args: {
-      application_id: applicationId,
+      project_id: projectId,
       status: applicationStatus,
       notes: reviewNotes,
     },
@@ -193,6 +195,18 @@ export const adminSetApplicationEndMs = async (
     contractId: _contractId,
     methodName: WRITE_METHODS.ADMIN_SET_APPLICATION_END_MS,
     args: { application_end_ms: applicationEndMs },
+  });
+};
+
+export const adminSetChef = async (
+  adminAccount: Account,
+  chefId: AccountId
+) => {
+  return contractCall({
+    callerAccount: adminAccount,
+    contractId: _contractId,
+    methodName: WRITE_METHODS.ADMIN_SET_CHEF,
+    args: { chef_id: chefId },
   });
 };
 
@@ -237,12 +251,12 @@ export const getMatchingPoolBalance = async (): Promise<string> => {
 
 export const donate = async ({
   donorAccount,
-  applicationId,
+  projectId,
   donationAmount,
   message,
 }: {
   donorAccount: Account;
-  applicationId: number;
+  projectId: number | null; // If null, donation will be split among all approved applications
   donationAmount: string;
   message?: string;
 }) => {
@@ -251,7 +265,7 @@ export const donate = async ({
     contractId: _contractId,
     methodName: WRITE_METHODS.DONATE,
     args: {
-      application_id: applicationId,
+      project_id: projectId,
       message: message || null,
     },
     attachedDeposit: donationAmount,
@@ -267,6 +281,18 @@ export const getDonationsBalance = async (): Promise<string> => {
 export const getDonations = async (): Promise<Donation[]> => {
   return contractView({
     methodName: READ_METHODS.GET_DONATIONS,
+  });
+};
+
+export const chefSetDonationRequirement = async (
+  chefAccount: Account,
+  donationRequirement: SBTRequirement | null
+) => {
+  return contractCall({
+    callerAccount: chefAccount,
+    contractId: _contractId,
+    methodName: WRITE_METHODS.CHEF_SET_DONATION_REQUIREMENT,
+    args: { donation_requirement: donationRequirement },
   });
 };
 

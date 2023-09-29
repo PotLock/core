@@ -10,14 +10,15 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(Gas(XXC_GAS))
-                    .set_application_start_ms_callback(
+                    .admin_set_application_start_ms_callback(
                         env::predecessor_account_id().clone(),
                         application_start_ms.clone(),
                     ),
             )
     }
 
-    pub fn set_application_start_ms_callback(
+    #[private] // Public - but only callable by env::current_account_id()
+    pub fn admin_set_application_start_ms_callback(
         &mut self,
         caller_id: AccountId,
         application_start_ms: u64,
@@ -40,14 +41,15 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(Gas(XXC_GAS))
-                    .set_application_end_ms_callback(
+                    .admin_set_application_end_ms_callback(
                         env::predecessor_account_id().clone(),
                         application_end_ms.clone(),
                     ),
             )
     }
 
-    pub fn set_application_end_ms_callback(
+    #[private] // Public - but only callable by env::current_account_id()
+    pub fn admin_set_application_end_ms_callback(
         &mut self,
         caller_id: AccountId,
         application_end_ms: u64,
@@ -59,5 +61,36 @@ impl Contract {
             "Caller is not admin on Pot Deployer contract."
         );
         self.application_end_ms = application_end_ms;
+    }
+
+    // CHEF
+
+    pub fn admin_set_chef(&mut self, chef_id: AccountId) -> Promise {
+        pot_deployer::ext(self.pot_deployer_contract_id.clone())
+            .with_static_gas(Gas(XXC_GAS))
+            .get_admin()
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(Gas(XXC_GAS))
+                    .admin_set_chef_callback(
+                        env::predecessor_account_id().clone(),
+                        chef_id.clone(),
+                    ),
+            )
+    }
+
+    #[private] // Public - but only callable by env::current_account_id()
+    pub fn admin_set_chef_callback(
+        &mut self,
+        caller_id: AccountId,
+        chef_id: AccountId,
+        #[callback_result] call_result: Result<AccountId, PromiseError>,
+    ) {
+        assert_eq!(
+            caller_id,
+            call_result.expect("Failed to get admin on Pot Deployer contract."),
+            "Caller is not admin on Pot Deployer contract."
+        );
+        self.chef_id = chef_id;
     }
 }

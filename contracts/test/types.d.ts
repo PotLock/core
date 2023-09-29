@@ -74,7 +74,6 @@ interface PotDeployerConfig {
 }
 
 interface Application {
-  id: ApplicationId;
   project_id: ProjectId;
   status: ApplicationStatus;
   submitted_at: TimestampMs;

@@ -11,7 +11,7 @@ pub struct Payout {
     /// Unique identifier for the payout
     pub id: PayoutId,
     /// ID of the application receiving the payout
-    pub application_id: ApplicationId,
+    pub project_id: ProjectId,
     // /// ID of the project receiving the payout
     // pub project_id: ProjectId,
     /// Amount paid out
@@ -22,7 +22,7 @@ pub struct Payout {
 
 pub struct PayoutInput {
     pub amount: U128,
-    pub application_id: ApplicationId,
+    pub project_id: ProjectId,
 }
 
 impl Contract {
@@ -37,14 +37,13 @@ impl Contract {
             "Payouts have already been processed"
         );
         // clear any existing payouts (in case this is a reset, e.g. fixing an error)
-        for application_id in self.application_ids.iter() {
-            if let Some(payout_ids_for_application) =
-                self.payout_ids_by_application_id.get(&application_id)
+        for (project_id, application) in self.applications_by_project_id.iter() {
+            if let Some(payout_ids_for_application) = self.payout_ids_by_project_id.get(&project_id)
             {
                 for payout_id in payout_ids_for_application.iter() {
                     self.payouts_by_id.remove(&payout_id);
                 }
-                self.payout_ids_by_application_id.remove(&application_id);
+                self.payout_ids_by_project_id.remove(&project_id);
             }
         }
         // get down to business
@@ -60,11 +59,9 @@ impl Contract {
         // for each payout:
         for payout in payouts.iter() {
             // 1. verify that the project exists and is approved
-            self.assert_approved_application(&payout.application_id);
+            self.assert_approved_application(&payout.project_id);
             // 2. verify that the project is not already paid out
-            let existing_payout = self
-                .payout_ids_by_application_id
-                .get(&payout.application_id);
+            let existing_payout = self.payout_ids_by_project_id.get(&payout.project_id);
             assert!(
                 existing_payout.is_none(),
                 "Project has already been paid out"
@@ -80,28 +77,26 @@ impl Contract {
             self.cooldown_end_ms = Some(env::block_timestamp_ms() + ONE_WEEK_MS);
             // add payout to payouts
             let mut payout_ids_for_application = self
-                .payout_ids_by_application_id
-                .get(&payout.application_id)
-                .unwrap_or(UnorderedSet::new(
-                    StorageKey::PayoutIdsByApplicationIdInner {
-                        application_id: payout.application_id.clone(),
-                    },
-                ));
+                .payout_ids_by_project_id
+                .get(&payout.project_id)
+                .unwrap_or(UnorderedSet::new(StorageKey::PayoutIdsByProjectIdInner {
+                    project_id: payout.project_id.clone(),
+                }));
             let payout_id = format!(
                 "{}{}{}",
-                payout.application_id,
+                payout.project_id,
                 PAYOUT_ID_DELIMITER,
                 payout_ids_for_application.len() + 1
             );
             let payout = Payout {
                 id: payout_id.clone(),
                 amount: payout.amount,
-                application_id: payout.application_id.clone(),
+                project_id: payout.project_id.clone(),
                 paid_at: None,
             };
             payout_ids_for_application.insert(&payout_id);
-            self.payout_ids_by_application_id
-                .insert(&payout.application_id, &payout_ids_for_application);
+            self.payout_ids_by_project_id
+                .insert(&payout.project_id, &payout_ids_for_application);
             self.payouts_by_id.insert(&payout_id, &payout);
         }
     }
@@ -119,26 +114,18 @@ impl Contract {
         self.assert_cooldown_period_complete();
         // pay out each project
         // for each approved project...
-        for application_id in self.application_ids.iter() {
-            self.assert_approved_application(&application_id);
+        for (project_id, application) in self.applications_by_project_id.iter() {
+            self.assert_approved_application(&project_id);
             // ...if there are payouts for the project...
-            if let Some(payout_ids_for_project) =
-                self.payout_ids_by_application_id.get(&application_id)
-            {
+            if let Some(payout_ids_for_project) = self.payout_ids_by_project_id.get(&project_id) {
                 // TODO: handle milestones (for now just paying out all payouts)
                 for payout_id in payout_ids_for_project.iter() {
                     let mut payout = self.payouts_by_id.get(&payout_id).expect("no payout");
                     if payout.paid_at.is_none() {
                         // ...transfer funds...
-                        let payout_to = self
-                            .applications_by_id
-                            .get(&payout.application_id)
-                            .expect("no application")
-                            .project_id; // TODO: consider adding payout_to to Payout struct
-                                         // TODO: what happens if this fails?
-                        Promise::new(payout_to).transfer(payout.amount.0);
-                        // ...and update payout to indicate that funds have been transferred
-                        // TODO: handle via Promise callback?
+                        Promise::new(application.project_id.clone()).transfer(payout.amount.0); // TODO: what happens if this fails?
+                                                                                                // ...and update payout to indicate that funds have been transferred
+                                                                                                // TODO: handle via Promise callback?
                         payout.paid_at = Some(env::block_timestamp_ms());
                         self.payouts_by_id.insert(&payout_id, &payout);
                     }

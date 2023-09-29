@@ -13,8 +13,9 @@ pub struct Donation {
     pub message: Option<String>,
     /// Timestamp when the donation was made
     pub donated_at: TimestampMs,
-    /// ID of the project receiving the donation        
-    pub application_id: ApplicationId,
+    /// ID of the project receiving the donation  
+    pub project_id: ProjectId,
+    // pub application_id: ApplicationId,
     /// Protocol fee
     pub protocol_fee: U128,
     /// Amount added after fees
@@ -88,9 +89,9 @@ impl Contract {
             .collect()
     }
 
-    pub fn get_donations_for_application(
+    pub fn get_donations_for_project(
         &self,
-        application_id: ApplicationId,
+        project_id: ProjectId,
         from_index: Option<u128>,
         limit: Option<u64>,
     ) -> Vec<Donation> {
@@ -101,11 +102,8 @@ impl Contract {
         );
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
         assert_ne!(limit, 0, "Cannot provide limit of 0.");
-        let donation_ids_by_application_set = self
-            .donation_ids_by_application_id
-            .get(&application_id)
-            .unwrap();
-        donation_ids_by_application_set
+        let donation_ids_by_project_set = self.donation_ids_by_project_id.get(&project_id).unwrap();
+        donation_ids_by_project_set
             .iter()
             .skip(start_index as usize)
             .take(limit)
@@ -161,22 +159,18 @@ impl Contract {
     }
 
     #[payable]
-    pub fn set_donation_requirement(&mut self, donation_requirement: Option<SBTRequirement>) {
+    pub fn chef_set_donation_requirement(&mut self, donation_requirement: Option<SBTRequirement>) {
         self.assert_chef();
         self.donation_requirement = donation_requirement;
     }
 
     #[payable]
-    pub fn donate(
-        &mut self,
-        application_id: Option<ApplicationId>,
-        message: Option<String>,
-    ) -> Promise {
-        if let Some(application_id) = application_id.clone() {
-            self.assert_approved_application(&application_id);
+    pub fn donate(&mut self, project_id: Option<ProjectId>, message: Option<String>) -> Promise {
+        if let Some(project_id) = project_id.clone() {
+            self.assert_approved_application(&project_id);
         };
         self.assert_round_active();
-        self.assert_caller_can_donate(application_id, message)
+        self.assert_caller_can_donate(project_id, message)
     }
 
     /// Adds attached deposit to matching pool, adds mappings & returns PatronDonation
@@ -231,7 +225,7 @@ impl Contract {
 
     pub(crate) fn assert_caller_can_donate(
         &mut self,
-        application_id: ApplicationId,
+        project_id: Option<ProjectId>,
         message: Option<String>,
     ) -> Promise {
         if let Some(donation_requirement) = &self.donation_requirement {
@@ -249,7 +243,7 @@ impl Contract {
                     .assert_can_donate_callback(
                         env::predecessor_account_id(),
                         env::attached_deposit(),
-                        application_id,
+                        project_id,
                         message,
                     ),
             )
@@ -260,40 +254,39 @@ impl Contract {
                 .always_allow_callback(
                     env::predecessor_account_id(),
                     env::attached_deposit(),
-                    application_id,
+                    project_id,
                     message,
                 )
         }
     }
 
-    pub(crate) fn handle_donation(
+    pub(crate) fn donate_to_application(
         &mut self,
         caller_id: AccountId,
         amount: u128,
-        application_id: ApplicationId,
+        project_id: ProjectId,
         message: Option<String>,
     ) {
-        let donation_count_for_project = if let Some(donation_ids_by_project_set) =
-            self.donation_ids_by_application_id.get(&application_id)
-        {
-            donation_ids_by_project_set.len()
-        } else {
-            0
-        };
-        // let deposit = env::attached_deposit();
+        let donation_count_for_project = self
+            .donation_ids_by_project_id
+            .get(&project_id)
+            .map_or(0, |ids| ids.len());
+
         let mut remainder = amount;
         let protocol_fee = self.calculate_protocol_fee(amount);
         remainder -= protocol_fee;
+
         let donation = Donation {
-            id: donation_count_for_project + 1 as DonationId,
-            donor_id: caller_id.clone(),
+            id: (donation_count_for_project + 1) as DonationId,
+            donor_id: caller_id,
             total_amount: U128::from(amount),
             message,
             donated_at: env::block_timestamp(),
-            application_id,
+            project_id,
             protocol_fee: U128::from(protocol_fee),
             amount_after_fees: U128::from(remainder),
         };
+
         self.insert_donation_record(&donation);
         self.donations_balance = U128::from(
             self.donations_balance
@@ -304,6 +297,7 @@ impl Contract {
                     self.donations_balance.0, remainder,
                 )),
         );
+
         log!(format!(
             "Transferring protocol fee {} to {}",
             protocol_fee, self.protocol_fee_recipient_account
@@ -311,22 +305,112 @@ impl Contract {
         Promise::new(self.protocol_fee_recipient_account.clone()).transfer(protocol_fee);
     }
 
+    pub(crate) fn handle_donation(
+        &mut self,
+        caller_id: AccountId,
+        amount: u128,
+        project_id: Option<ProjectId>,
+        message: Option<String>,
+    ) {
+        match project_id {
+            Some(app_id) => {
+                self.donate_to_application(caller_id, amount, app_id, message.clone());
+            }
+            None => {
+                // First, collect the applications into a Vec
+                let all_applications: Vec<_> = self.applications_by_project_id.values().collect();
+
+                // Filter the applications that are Approved
+                let approved_applications: Vec<_> = all_applications
+                    .into_iter()
+                    .filter(|application| application.status == ApplicationStatus::Approved)
+                    .collect();
+
+                let num_approved_applications = approved_applications.len() as u128;
+                if num_approved_applications == 0 {
+                    env::panic_str("No approved applications");
+                }
+                let amount_per_application = amount / num_approved_applications;
+                let remainder = amount % num_approved_applications;
+
+                // Now, iterate over the Vec of approved applications
+                for (i, application) in approved_applications.iter().enumerate() {
+                    let mut final_amount = amount_per_application;
+                    // Distribute the remainder until it's depleted
+                    if (i as u128) < remainder {
+                        final_amount += 1;
+                    }
+                    self.donate_to_application(
+                        caller_id.clone(),
+                        final_amount,
+                        application.project_id.clone(),
+                        message.clone(),
+                    );
+                }
+            }
+        }
+    }
+
+    // pub(crate) fn handle_donation(
+    //     &mut self,
+    //     caller_id: AccountId,
+    //     amount: u128,
+    //     application_id: Option<ApplicationId>,
+    //     message: Option<String>,
+    // ) {
+    //     let donation_count_for_project = if let Some(donation_ids_by_project_set) =
+    //         self.donation_ids_by_application_id.get(&application_id)
+    //     {
+    //         donation_ids_by_project_set.len()
+    //     } else {
+    //         0
+    //     };
+    //     // let deposit = env::attached_deposit();
+    //     let mut remainder = amount;
+    //     let protocol_fee = self.calculate_protocol_fee(amount);
+    //     remainder -= protocol_fee;
+    //     let donation = Donation {
+    //         id: donation_count_for_project + 1 as DonationId,
+    //         donor_id: caller_id.clone(),
+    //         total_amount: U128::from(amount),
+    //         message,
+    //         donated_at: env::block_timestamp(),
+    //         application_id,
+    //         protocol_fee: U128::from(protocol_fee),
+    //         amount_after_fees: U128::from(remainder),
+    //     };
+    //     self.insert_donation_record(&donation);
+    //     self.donations_balance = U128::from(
+    //         self.donations_balance
+    //             .0
+    //             .checked_add(remainder)
+    //             .expect(&format!(
+    //                 "Overflow occurred when calculating self.donations_balance ({} + {})",
+    //                 self.donations_balance.0, remainder,
+    //             )),
+    //     );
+    //     log!(format!(
+    //         "Transferring protocol fee {} to {}",
+    //         protocol_fee, self.protocol_fee_recipient_account
+    //     ));
+    //     Promise::new(self.protocol_fee_recipient_account.clone()).transfer(protocol_fee);
+    // }
+
     pub(crate) fn insert_donation_record(&mut self, donation: &Donation) {
         self.donations_by_id.insert(&donation.id, &donation);
         // add to donations-by-application mapping
-        let mut donation_ids_by_application_set = if let Some(donation_ids_by_application_set) =
-            self.donation_ids_by_application_id
-                .get(&donation.application_id)
+        let mut donation_ids_by_project_set = if let Some(donation_ids_by_application_set) =
+            self.donation_ids_by_project_id.get(&donation.project_id)
         {
             donation_ids_by_application_set
         } else {
-            UnorderedSet::new(StorageKey::DonationIdsByApplicationIdInner {
-                application_id: donation.application_id.clone(),
+            UnorderedSet::new(StorageKey::DonationIdsByProjectIdInner {
+                project_id: donation.project_id.clone(),
             })
         };
-        donation_ids_by_application_set.insert(&donation.id);
-        self.donation_ids_by_application_id
-            .insert(&donation.application_id, &donation_ids_by_application_set);
+        donation_ids_by_project_set.insert(&donation.id);
+        self.donation_ids_by_project_id
+            .insert(&donation.project_id, &donation_ids_by_project_set);
         // add to donations-by-donor mapping
         // self.add_donation_for_donor(&donation);
         let mut donation_ids_by_donor_set = if let Some(donation_ids_by_donor_set) =
@@ -345,15 +429,15 @@ impl Contract {
 
     // CALLBACKS
 
-    #[private]
+    #[private] // Public - but only callable by env::current_account_id()
     pub fn always_allow_callback(
         &mut self,
         caller_id: AccountId,
         amount: u128,
-        application_id: ApplicationId,
+        project_id: Option<ProjectId>,
         message: Option<String>,
     ) {
-        self.handle_donation(caller_id, amount, application_id, message)
+        self.handle_donation(caller_id, amount, project_id, message)
     }
 
     #[private] // Public - but only callable by env::current_account_id()
@@ -361,7 +445,7 @@ impl Contract {
         &mut self,
         caller_id: AccountId,
         amount: u128,
-        application_id: ApplicationId,
+        project_id: Option<ProjectId>,
         message: Option<String>,
         #[callback_result] call_result: Result<SbtTokensByOwnerResult, PromiseError>,
     ) {
@@ -379,7 +463,7 @@ impl Contract {
         let tokens: Vec<(AccountId, Vec<OwnedToken>)> = call_result.unwrap();
         if tokens.len() > 0 {
             // user holds the required SBT(s)
-            self.handle_donation(caller_id, amount, application_id, message)
+            self.handle_donation(caller_id, amount, project_id, message)
         } else {
             log!(format!(
                 "Donor doesn't have the required SBTs in order to donate; returning donation {} to donor {}",
