@@ -36,7 +36,7 @@ pub struct PotConfig {
     /// Max amount that can be paid to an account that referred a Patron
     pub max_patron_referral_fee: U128, // TODO: consider whether this is necessary
     /// Chef's fee for managing the round
-    pub round_manager_fee_basis_points: u32, // TODO: should this be basis points or a fixed amount?
+    pub chef_fee_basis_points: u32, // TODO: should this be basis points or a fixed amount?
     /// Protocol fee
     pub protocol_fee_basis_points: u32, // e.g. 700 (7%)
     /// Account ID that receives protocol fees
@@ -71,7 +71,7 @@ impl Contract {
             donation_requirement: self.donation_requirement.clone(),
             patron_referral_fee_basis_points: self.patron_referral_fee_basis_points,
             max_patron_referral_fee: self.max_patron_referral_fee,
-            round_manager_fee_basis_points: self.round_manager_fee_basis_points,
+            chef_fee_basis_points: self.chef_fee_basis_points,
             protocol_fee_basis_points: self.protocol_fee_basis_points,
             protocol_fee_recipient_account: self.protocol_fee_recipient_account.clone(),
             matching_pool_balance: self.matching_pool_balance,

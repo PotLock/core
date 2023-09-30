@@ -24,7 +24,7 @@ export const DEFAULT_PATRON_REFERRAL_FEE_BASIS_POINTS = 100; // 1%
 export const DEFAULT_MAX_PATRON_REFERRAL_FEE = utils.format.parseNearAmount(
   "1000"
 ) as string;
-export const DEFAULT_ROUND_MANAGER_FEE_BASIS_POINTS = 100; // 1%
+export const DEFAULT_chef_fee_basis_points = 100; // 1%
 export const DEFAULT_MAX_PROJECTS = 10;
 export const DEFAULT_BASE_CURRENCY = "near";
 export const DEFAULT_REGISTRY_ID = "registry-unstable.i-am-human.testnet";

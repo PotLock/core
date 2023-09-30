@@ -71,8 +71,8 @@ pub struct Contract {
     pub patron_referral_fee_basis_points: u32, // TODO: implement referral fees
     /// Max amount that can be paid to an account that referred a Patron
     pub max_patron_referral_fee: U128, // TODO: consider whether this is necessary
-    /// Chef's fee for managing the round // TODO: use consistent terminology between Pot & PotDeployer contract (round_manager vs. chef)
-    pub round_manager_fee_basis_points: u32, // TODO: should this be basis points or a fixed amount?
+    /// Chef's fee for managing the round
+    pub chef_fee_basis_points: u32, // TODO: should this be basis points or a fixed amount?
     /// Protocol fee
     pub protocol_fee_basis_points: u32, // e.g. 700 (7%)
     /// Account that protocol fee should be transferred to
@@ -159,7 +159,7 @@ impl Contract {
         donation_requirement: Option<SBTRequirement>,
         patron_referral_fee_basis_points: u32,
         max_patron_referral_fee: U128,
-        round_manager_fee_basis_points: u32,
+        chef_fee_basis_points: u32,
         protocol_fee_basis_points: u32,
         protocol_fee_recipient_account: AccountId,
     ) -> Self {
@@ -183,7 +183,7 @@ impl Contract {
             donation_requirement,
             patron_referral_fee_basis_points,
             max_patron_referral_fee,
-            round_manager_fee_basis_points,
+            chef_fee_basis_points,
             protocol_fee_basis_points,
             protocol_fee_recipient_account,
             matching_pool_balance: U128::from(0),
@@ -232,7 +232,7 @@ impl Default for Contract {
             donation_requirement: None,
             patron_referral_fee_basis_points: 0,
             max_patron_referral_fee: U128(0),
-            round_manager_fee_basis_points: 0,
+            chef_fee_basis_points: 0,
             protocol_fee_basis_points: 0,
             protocol_fee_recipient_account: AccountId::new_unchecked("".to_string()),
             matching_pool_balance: U128::from(0),

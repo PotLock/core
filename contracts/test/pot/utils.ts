@@ -23,6 +23,7 @@ const WRITE_METHODS = {
   ADMIN_SET_APPLICATION_START_MS: "admin_set_application_start_ms",
   ADMIN_SET_APPLICATION_END_MS: "admin_set_application_end_ms",
   ADMIN_SET_CHEF: "admin_set_chef",
+  ADMIN_SET_CHEF_FEE_BASIS_POINTS: "admin_set_chef_fee_basis_points",
   CHEF_SET_APPLICATION_STATUS: "chef_set_application_status",
   CHEF_SET_DONATION_REQUIREMENT: "chef_set_donation_requirement",
   PATRON_DONATE_TO_MATCHING_POOL: "patron_donate_to_matching_pool",
@@ -207,6 +208,18 @@ export const adminSetChef = async (
     contractId: _contractId,
     methodName: WRITE_METHODS.ADMIN_SET_CHEF,
     args: { chef_id: chefId },
+  });
+};
+
+export const adminSetChefFeeBasisPoints = async (
+  adminAccount: Account,
+  chefFeeBasisPoints: number
+) => {
+  return contractCall({
+    callerAccount: adminAccount,
+    contractId: _contractId,
+    methodName: WRITE_METHODS.ADMIN_SET_CHEF_FEE_BASIS_POINTS,
+    args: { chef_fee_basis_points: chefFeeBasisPoints },
   });
 };
 

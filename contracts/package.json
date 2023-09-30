@@ -38,6 +38,7 @@
     "typescript": "^5.2.2"
   },
   "dependencies": {
+    "bn-sqrt": "^1.0.0",
     "bn.js": "^5.2.1"
   }
 }

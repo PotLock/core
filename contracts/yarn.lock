@@ -273,6 +273,13 @@ binary-extensions@^2.0.0:
   resolved "https://registry.yarnpkg.com/binary-extensions/-/binary-extensions-2.2.0.tgz#75f502eeaf9ffde42fc98829645be4ea76bd9e2d"
   integrity sha512-jDctJ/IVQbZoJykoeHbhXpOlNBqGNcwXJKJog42E5HDPUwQTSdjCHdihjj0DlnheQ7blbT6dHOafNAiS8ooQKA==
 
+bn-sqrt@^1.0.0:
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/bn-sqrt/-/bn-sqrt-1.0.0.tgz#aac3fcb56a359850d8339d3925213ac27c22b782"
+  integrity sha512-XdCMQ7tfEF/f7nrQgnrJ+DLQBwQzSQyPOKIXdUOTcGEvsRKBcIsdfORp7B5H8DWo8FOzZ4+a2TjSZzaqKgzicg==
+  dependencies:
+    bn.js "^5.2.0"
+
 bn.js@5.2.1, bn.js@^5.2.0, bn.js@^5.2.1:
   version "5.2.1"
   resolved "https://registry.yarnpkg.com/bn.js/-/bn.js-5.2.1.tgz#0bc527a6a0d18d0aa8d5b0538ce4a77dccfa7b70"

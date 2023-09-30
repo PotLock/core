@@ -23,7 +23,7 @@ import {
   DEFAULT_PROTOCOL_FEE_BASIS_POINTS,
   DEFAULT_REGISTRY_ID,
   DEFAULT_ROUND_LENGTH,
-  DEFAULT_ROUND_MANAGER_FEE_BASIS_POINTS,
+  DEFAULT_chef_fee_basis_points,
 } from "../utils/constants";
 import { near } from "./setup";
 import {
@@ -133,7 +133,7 @@ describe("PotDelpoyer Contract Tests", () => {
       patron_referral_fee_basis_points:
         DEFAULT_PATRON_REFERRAL_FEE_BASIS_POINTS,
       max_patron_referral_fee: DEFAULT_MAX_PATRON_REFERRAL_FEE,
-      round_manager_fee_basis_points: DEFAULT_ROUND_MANAGER_FEE_BASIS_POINTS,
+      chef_fee_basis_points: DEFAULT_chef_fee_basis_points,
       protocol_fee_basis_points: DEFAULT_PROTOCOL_FEE_BASIS_POINTS,
       protocol_fee_recipient_account: alwaysAdminId,
     };

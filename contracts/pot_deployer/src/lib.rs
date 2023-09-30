@@ -95,7 +95,7 @@ pub struct PotArgs {
     donation_requirement: Option<SBTRequirement>,
     patron_referral_fee_basis_points: u32,
     max_patron_referral_fee: U128,
-    round_manager_fee_basis_points: u32,
+    chef_fee_basis_points: u32,
     protocol_fee_basis_points: u32,
 }
 
@@ -118,7 +118,7 @@ pub struct PotArgsInternal {
     donation_requirement: Option<SBTRequirement>,
     patron_referral_fee_basis_points: u32,
     max_patron_referral_fee: U128,
-    round_manager_fee_basis_points: u32,
+    chef_fee_basis_points: u32,
     protocol_fee_basis_points: u32,
 }
 
@@ -214,7 +214,7 @@ impl Contract {
             donation_requirement: pot_args.donation_requirement,
             patron_referral_fee_basis_points: pot_args.patron_referral_fee_basis_points,
             max_patron_referral_fee: pot_args.max_patron_referral_fee,
-            round_manager_fee_basis_points: pot_args.round_manager_fee_basis_points,
+            chef_fee_basis_points: pot_args.chef_fee_basis_points,
             protocol_fee_basis_points: pot_args.protocol_fee_basis_points,
         };
 

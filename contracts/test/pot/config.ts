@@ -1,4 +1,4 @@
-export const contractId = "dev-1695931565948-79384424668093";
+export const contractId = "1696021990.test-contracts.potlock.testnet";
 export const networkId = "testnet";
 export const nodeUrl = `https://rpc.${networkId}.near.org`;
 
