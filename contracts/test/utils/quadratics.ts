@@ -1,9 +1,6 @@
+// USING BN:
 // taken from https://github.com/gitcoinco/quadratic-funding/blob/master/quadratic-funding/clr.py
-// import BN from "bn.js";
-// import bnsqrt from "bn-sqrt";
-const BN = require("bn.js");
-const bnsqrt = require("bn-sqrt");
-// console.log("sqrt: ", bnsqrt.sqrt(new BN(2).mul(new BN(8))).toString());
+const BN = require("big.js");
 
 type YoctoBN = typeof BN;
 type UserId = AccountId;
@@ -16,22 +13,22 @@ type GrantContribution = [ProjectId, UserId, YoctoBN];
 
 let CLR_PERCENTAGE_DISTRIBUTED = 0;
 const GRANT_CONTRIBUTIONS_EXAMPLE: GrantContribution[] = [
-  ["4", "1", new BN("100000000000")],
-  ["4", "2", new BN("50000000000")],
-  ["4", "2", new BN("100000000000")],
-  ["4", "3", new BN("70000000000")],
-  ["4", "5", new BN("50000000000")],
-  ["4", "4", new BN("100000000000")],
-  ["4", "5", new BN("50000000000")],
-  ["4", "5", new BN("50000000000")],
-  ["5", "1", new BN("100000000000")],
-  ["5", "1", new BN("50000000000")],
-  ["5", "2", new BN("200000000000")],
-  ["5", "3", new BN("30000000000")],
-  ["5", "8", new BN("20000000000")],
-  ["5", "9", new BN("100000000000")],
-  ["5", "7", new BN("70000000000")],
-  ["5", "2", new BN("50000000000")],
+  ["4", "1", new BN("10000000000000000000000000")],
+  ["4", "2", new BN("5000000000000000000000000")],
+  ["4", "2", new BN("10000000000000000000000000")],
+  ["4", "3", new BN("7000000000000000000000000")],
+  ["4", "5", new BN("5000000000000000000000000")],
+  ["4", "4", new BN("10000000000000000000000000")],
+  ["4", "5", new BN("5000000000000000000000000")],
+  ["4", "5", new BN("5000000000000000000000000")],
+  ["5", "1", new BN("10000000000000000000000000")],
+  ["5", "1", new BN("5000000000000000000000000")],
+  ["5", "2", new BN("20000000000000000000000000")],
+  ["5", "3", new BN("3000000000000000000000000")],
+  ["5", "8", new BN("2000000000000000000000000")],
+  ["5", "9", new BN("10000000000000000000000000")],
+  ["5", "7", new BN("7000000000000000000000000")],
+  ["5", "2", new BN("5000000000000000000000000")],
 ];
 
 // // This function takes the grant data as input and produces a list of
@@ -78,7 +75,7 @@ function aggregateContributions(
 // and the inner values are the total overlap between these two users' contributions.
 type PairTotals = { [key: UserId]: { [key: UserId]: YoctoBN } };
 function getTotalsByPair(contribDict: ContribDict): PairTotals {
-  console.log("contribDict: ", contribDict);
+  // console.log("contribDict: ", contribDict);
   const totOverlap: { [key: UserId]: { [key: UserId]: YoctoBN } } = {};
   for (const contribz of Object.values(contribDict)) {
     for (const [k1, v1] of Object.entries(contribz)) {
@@ -89,7 +86,7 @@ function getTotalsByPair(contribDict: ContribDict): PairTotals {
         if (!totOverlap[k1][k2]) {
           totOverlap[k1][k2] = new BN(0);
         }
-        totOverlap[k1][k2] = totOverlap[k1][k2].add(bnsqrt.sqrt(v1.mul(v2)));
+        totOverlap[k1][k2] = totOverlap[k1][k2].add(v1.mul(v2).sqrt());
       }
     }
   }
@@ -114,8 +111,8 @@ function calculateClr(
   threshold: typeof BN,
   totalPot: YoctoBN
 ): ClrTotal[] {
-  console.log("aggregated contributions: ", aggregatedContributions);
-  console.log("pair totals: ", pairTotals);
+  // console.log("aggregated contributions: ", aggregatedContributions);
+  // console.log("pair totals: ", pairTotals);
   let bigtot = new BN(0);
   const totals: {
     id: string;
@@ -134,42 +131,13 @@ function calculateClr(
       _sum = _sum.add(v1);
       for (const [k2, v2] of Object.entries(contribz)) {
         if (k2 > k1) {
-          console.log("v1: ", v1.toString());
-          console.log("v2: ", v2.toString());
-          console.log("k2: ", k2, "k1: ", k1);
-          console.log("pairTotals[k1][k2]: ", pairTotals[k1][k2].toString());
-          console.log(
-            "threshold.add(new BN(1)): ",
-            threshold.add(new BN(1)).toString()
-          );
-          //   console.log(
-          //     "bnsqrt.sqrt(v1.mul(v2)): ",
-          //     bnsqrt.sqrt(v1.mul(v2)).toString()
-          //   );
-          const sqrt = bnsqrt.sqrt(v1.mul(v2));
-          console.log("sqrt: ", sqrt.toString());
-          const prod1 = sqrt.div(pairTotals[k1][k2]);
-          console.log("prod1: ", prod1.toString());
-          const prod2 = prod1.div(threshold.add(new BN(1)));
-          console.log("prod2: ", prod2.toString());
-          const addtl = bnsqrt
-            .sqrt(v1.mul(v2))
-            .div(pairTotals[k1][k2])
-            .div(threshold.add(new BN(1)));
-          console.log("addtl: ", addtl.toString());
+          const sqrt = v1.mul(v2).sqrt();
           tot = tot.add(
-            bnsqrt
-              .sqrt(v1.mul(v2))
-              .div(pairTotals[k1][k2])
-              .div(threshold.add(new BN(1)))
+            sqrt.div(pairTotals[k1][k2] / threshold.add(new BN(1)))
           );
-          console.log("tot: ", tot.toString());
-          // TODO: DEBUG WHY TOT IS ALWAYS ZERO
-          //   tot += Math.sqrt(v1 * v2) / (pairTotals[k1][k2] / (threshold + 1));
         }
       }
     }
-
     bigtot = bigtot.add(tot);
     totals.push({
       id: proj,
@@ -179,7 +147,9 @@ function calculateClr(
     });
   }
 
-  if (bigtot >= totalPot) {
+  // if we reach saturation, we need to normalize
+  if (bigtot.gte(totalPot)) {
+    console.log("NORMALIZING");
     // Assuming CLR_PERCENTAGE_DISTRIBUTED is a mutable global variable
     CLR_PERCENTAGE_DISTRIBUTED = 100;
     for (const t of totals) {
@@ -208,10 +178,11 @@ function runClrCalcs(
 // Sample call
 const res = runClrCalcs(
   GRANT_CONTRIBUTIONS_EXAMPLE,
-  new BN(25.0),
-  new BN(5000)
+  new BN("25000000000000000000000000"), // 25
+  new BN("5000000000000000000000000000") // 5000 NEAR
 );
 console.log("res: ", res);
 for (const obj of res) {
-  console.log("matching amount:");
+  console.log("matching amount:", obj.matching_amount.toString());
+  console.log("contribution amount: ", obj.contribution_amount.toString());
 }
