@@ -2,6 +2,7 @@ type TimestampMs = number;
 type AccountId = string;
 type ProjectId = AccountId;
 type ApplicationId = number; // increments from 1
+type PayoutId = number; // increments from 1
 
 enum ProjectStatus {
   Submitted = "Submitted",
@@ -96,12 +97,28 @@ interface PatronDonation {
 
 /// End-user donation; must specify application
 interface Donation {
-  application_id: ApplicationId;
   id: number;
   donor_id: AccountId;
   total_amount: string;
   message: string | null;
   donated_at: TimestampMs;
+  project_id: ProjectId;
   protocol_fee: string;
   amount_after_fees: string;
+}
+
+/// Project payout
+interface Payout {
+  id: PayoutId;
+  project_id: ProjectId;
+  matching_pool_amount: string;
+  donations_amount: string;
+  amount_total: string;
+  paid_at: TimestampMs | null;
+}
+
+interface PayoutInput {
+  project_id: ProjectId;
+  matching_pool_amount: string;
+  donations_amount: string;
 }

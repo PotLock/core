@@ -5,37 +5,52 @@ const BN = require("big.js");
 type YoctoBN = typeof BN;
 type UserId = AccountId;
 
-// type GrantContribution = {
+// type ProjectContribution = {
 //   projectId: ProjectId;
 //   contributions: Array<{ [key: AccountId]: YoctoBN }>;
 // };
-type GrantContribution = [ProjectId, UserId, YoctoBN];
+type ProjectContribution = [ProjectId, UserId, YoctoBN];
 
 let CLR_PERCENTAGE_DISTRIBUTED = 0;
-const GRANT_CONTRIBUTIONS_EXAMPLE: GrantContribution[] = [
-  ["4", "1", new BN("10000000000000000000000000")],
-  ["4", "2", new BN("5000000000000000000000000")],
-  ["4", "2", new BN("10000000000000000000000000")],
-  ["4", "3", new BN("7000000000000000000000000")],
-  ["4", "5", new BN("5000000000000000000000000")],
-  ["4", "4", new BN("10000000000000000000000000")],
-  ["4", "5", new BN("5000000000000000000000000")],
-  ["4", "5", new BN("5000000000000000000000000")],
-  ["5", "1", new BN("10000000000000000000000000")],
-  ["5", "1", new BN("5000000000000000000000000")],
-  ["5", "2", new BN("20000000000000000000000000")],
-  ["5", "3", new BN("3000000000000000000000000")],
-  ["5", "8", new BN("2000000000000000000000000")],
-  ["5", "9", new BN("10000000000000000000000000")],
-  ["5", "7", new BN("7000000000000000000000000")],
-  ["5", "2", new BN("5000000000000000000000000")],
+const PROJECT_CONTRIBUTIONS_EXAMPLE: ProjectContribution[] = [
+  ["project-1.testnet", "user-1.testnet", new BN("10000000000000000000000000")],
+  ["project-1.testnet", "user-2.testnet", new BN("5000000000000000000000000")],
+  ["project-1.testnet", "user-2.testnet", new BN("10000000000000000000000000")],
+  ["project-1.testnet", "user-3.testnet", new BN("7000000000000000000000000")],
+  ["project-1.testnet", "user-5.testnet", new BN("5000000000000000000000000")],
+  ["project-1.testnet", "user-4.testnet", new BN("10000000000000000000000000")],
+  ["project-1.testnet", "user-5.testnet", new BN("5000000000000000000000000")],
+  ["project-1.testnet", "user-5.testnet", new BN("5000000000000000000000000")],
+  ["project-2.testnet", "user-1.testnet", new BN("10000000000000000000000000")],
+  ["project-2.testnet", "user-1.testnet", new BN("5000000000000000000000000")],
+  ["project-2.testnet", "user-2.testnet", new BN("20000000000000000000000000")],
+  ["project-2.testnet", "user-3.testnet", new BN("3000000000000000000000000")],
+  ["project-2.testnet", "user-8.testnet", new BN("2000000000000000000000000")],
+  ["project-2.testnet", "user-9.testnet", new BN("10000000000000000000000000")],
+  ["project-2.testnet", "user-7.testnet", new BN("7000000000000000000000000")],
+  ["project-2.testnet", "user-2.testnet", new BN("5000000000000000000000000")],
 ];
+
+export function convertDonationsToProjectContributions(
+  donations: Donation[]
+): ProjectContribution[] {
+  const projectContributionsList: ProjectContribution[] = [];
+  for (const d of donations) {
+    const val: [ProjectId, UserId, YoctoBN] = [
+      d.project_id,
+      d.donor_id,
+      d.amount_after_fees,
+    ];
+    projectContributionsList.push(val);
+  }
+  return projectContributionsList;
+}
 
 // // This function takes the grant data as input and produces a list of
 // // contributions with the format [projectId, userId, contributionAmount].
 // // Essentially, it's flattening the data structure to make it more manageable.
 // function translateData(
-//   grantsData: GrantContribution[]
+//   grantsData: ProjectContribution[]
 // ): [ProjectId, UserId, BN][] {
 //   let grantsList: [ProjectId, UserId, YoctoBN][] = [];
 //   for (const g of grantsData) {
@@ -58,7 +73,7 @@ const GRANT_CONTRIBUTIONS_EXAMPLE: GrantContribution[] = [
 // is another dictionary of userIds and their aggregated contribution amounts.
 type ContribDict = { [key: ProjectId]: { [key: UserId]: YoctoBN } };
 function aggregateContributions(
-  grantContributions: GrantContribution[]
+  grantContributions: ProjectContribution[]
 ): ContribDict {
   const contribDict: { [key: ProjectId]: { [key: UserId]: YoctoBN } } = {};
   for (const [proj, user, amount] of grantContributions) {
@@ -102,8 +117,8 @@ function getTotalsByPair(contribDict: ContribDict): PairTotals {
 type ClrTotal = {
   id: ProjectId;
   number_contributions: number;
-  contribution_amount: YoctoBN;
-  matching_amount: YoctoBN;
+  contribution_amount_str: string;
+  matching_amount_str: string;
 };
 function calculateClr(
   aggregatedContributions: ContribDict,
@@ -114,12 +129,7 @@ function calculateClr(
   // console.log("aggregated contributions: ", aggregatedContributions);
   // console.log("pair totals: ", pairTotals);
   let bigtot = new BN(0);
-  const totals: {
-    id: string;
-    number_contributions: number;
-    contribution_amount: YoctoBN;
-    matching_amount: YoctoBN;
-  }[] = [];
+  const totals: ClrTotal[] = [];
 
   for (const [proj, contribz] of Object.entries(aggregatedContributions)) {
     let tot = new BN(0);
@@ -127,14 +137,18 @@ function calculateClr(
     let _sum = new BN(0);
 
     for (const [k1, v1] of Object.entries(contribz)) {
+      console.log("line 140");
       _num += 1;
       _sum = _sum.add(v1);
       for (const [k2, v2] of Object.entries(contribz)) {
+        console.log("k2: ", k2);
+        console.log("k1: ", k1);
+        console.log("k2 > k1: ", k2 > k1);
         if (k2 > k1) {
           const sqrt = v1.mul(v2).sqrt();
-          tot = tot.add(
-            sqrt.div(pairTotals[k1][k2] / threshold.add(new BN(1)))
-          );
+          console.log("tot before: ", tot.round(0, 0).toString());
+          tot = tot.add(sqrt.div(pairTotals[k1][k2].div(threshold)));
+          console.log("tot after: ", tot.round(0, 0).toString());
         }
       }
     }
@@ -142,18 +156,24 @@ function calculateClr(
     totals.push({
       id: proj,
       number_contributions: _num,
-      contribution_amount: _sum,
-      matching_amount: tot,
+      contribution_amount_str: _sum.round(0, 0).toFixed(),
+      matching_amount_str: tot.round(0, 0).toFixed(),
     });
   }
 
   // if we reach saturation, we need to normalize
   if (bigtot.gte(totalPot)) {
     console.log("NORMALIZING");
+    console.log("bigtot: ", bigtot.toString());
+    console.log("totalPot: ", totalPot.toString());
     // Assuming CLR_PERCENTAGE_DISTRIBUTED is a mutable global variable
     CLR_PERCENTAGE_DISTRIBUTED = 100;
     for (const t of totals) {
-      t.matching_amount = t.matching_amount.div(bigtot).mul(totalPot);
+      t.matching_amount_str = new BN(t.matching_amount_str)
+        .div(bigtot)
+        .mul(totalPot)
+        .round(0, 0)
+        .toFixed();
     }
   }
 
@@ -163,26 +183,30 @@ function calculateClr(
 // This is the main function that ties everything together. It translates the data, aggregates contributions,
 // calculates pairwise overlaps, and then calculates the CLR matching amounts.
 // It returns the final list of matching amounts for each project.
-function runClrCalcs(
-  grantContribsCurr: GrantContribution[],
+export function calculateQuadraticPayouts(
+  projectContribsCurr: ProjectContribution[],
   threshold: typeof BN,
   totalPot: YoctoBN
-): ClrTotal[] {
-  //   const contribData = translateData(grantContribsCurr);
-  const contributions = aggregateContributions(grantContribsCurr);
+): PayoutInput[] {
+  //   const contribData = translateData(projectContribsCurr);
+  const contributions = aggregateContributions(projectContribsCurr);
   const pairTotals = getTotalsByPair(contributions);
   const totals = calculateClr(contributions, pairTotals, threshold, totalPot);
-  return totals;
+  console.log("totals: ", totals);
+  const payouts: PayoutInput[] = totals.map((t) => {
+    return {
+      project_id: t.id,
+      matching_pool_amount: t.matching_amount_str,
+      donations_amount: t.contribution_amount_str,
+    };
+  });
+  return payouts;
 }
 
-// Sample call
-const res = runClrCalcs(
-  GRANT_CONTRIBUTIONS_EXAMPLE,
-  new BN("25000000000000000000000000"), // 25
-  new BN("5000000000000000000000000000") // 5000 NEAR
-);
-console.log("res: ", res);
-for (const obj of res) {
-  console.log("matching amount:", obj.matching_amount.toString());
-  console.log("contribution amount: ", obj.contribution_amount.toString());
-}
+// // Sample call
+// const res = calculateQuadraticPayouts(
+//   PROJECT_CONTRIBUTIONS_EXAMPLE,
+//   new BN("25000000000000000000000000"), // 25
+//   new BN("5000000000000000000000000000") // 5000 NEAR
+// );
+// console.log("res: ", res);

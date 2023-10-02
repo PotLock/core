@@ -14,17 +14,25 @@ pub struct Payout {
     pub project_id: ProjectId,
     // /// ID of the project receiving the payout
     // pub project_id: ProjectId,
-    /// Amount paid out
-    pub amount: U128,
+    /// Amount paid out from the matching pool
+    pub matching_pool_amount: U128,
+    /// Amount paid out from the donations pool
+    pub donations_amount: U128,
+    /// Amount paid out in total
+    pub amount_total: U128,
     /// Timestamp when the payout was made. None if not yet paid out.
     pub paid_at: Option<TimestampMs>,
 }
 
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
 pub struct PayoutInput {
-    pub amount: U128,
+    pub matching_pool_amount: U128,
+    pub donations_amount: U128,
     pub project_id: ProjectId,
 }
 
+#[near_bindgen]
 impl Contract {
     // set_payouts (only callable by chef)
     pub fn chef_set_payouts(&mut self, payouts: Vec<PayoutInput>) {
@@ -67,7 +75,8 @@ impl Contract {
                 "Project has already been paid out"
             );
             // 3. add amount to running total
-            running_total += payout.amount.0;
+            running_total += payout.matching_pool_amount.0;
+            running_total += payout.donations_amount.0;
             // error if running total exceeds round total
             assert!(
                 running_total <= balance_available,
@@ -90,7 +99,18 @@ impl Contract {
             );
             let payout = Payout {
                 id: payout_id.clone(),
-                amount: payout.amount,
+                matching_pool_amount: payout.matching_pool_amount.clone(),
+                donations_amount: payout.donations_amount.clone(),
+                amount_total: U128::from(
+                    payout
+                        .matching_pool_amount
+                        .0
+                        .checked_add(payout.donations_amount.0)
+                        .expect(&format!(
+                            "Overflow occurred when calculating amount_total ({} + {})",
+                            payout.matching_pool_amount.0, payout.donations_amount.0,
+                        )),
+                ),
                 project_id: payout.project_id.clone(),
                 paid_at: None,
             };
@@ -123,9 +143,10 @@ impl Contract {
                     let mut payout = self.payouts_by_id.get(&payout_id).expect("no payout");
                     if payout.paid_at.is_none() {
                         // ...transfer funds...
-                        Promise::new(application.project_id.clone()).transfer(payout.amount.0); // TODO: what happens if this fails?
-                                                                                                // ...and update payout to indicate that funds have been transferred
-                                                                                                // TODO: handle via Promise callback?
+                        Promise::new(application.project_id.clone())
+                            .transfer(payout.amount_total.0); // TODO: what happens if this fails?
+                                                              // ...and update payout to indicate that funds have been transferred
+                                                              // TODO: handle via Promise callback?
                         payout.paid_at = Some(env::block_timestamp_ms());
                         self.payouts_by_id.insert(&payout_id, &payout);
                     }

@@ -14,6 +14,7 @@ const READ_METHODS = {
   GET_MATCHING_POOL_BALANCE: "get_matching_pool_balance",
   GET_PATRON_DONATIONS: "get_patron_donations",
   GET_DONATIONS: "get_donations",
+  GET_PAYOUTS: "get_payouts",
 };
 
 const WRITE_METHODS = {
@@ -28,6 +29,10 @@ const WRITE_METHODS = {
   CHEF_SET_DONATION_REQUIREMENT: "chef_set_donation_requirement",
   PATRON_DONATE_TO_MATCHING_POOL: "patron_donate_to_matching_pool",
   DONATE: "donate",
+  CHEF_SET_PAYOUTS: "chef_set_payouts",
+  CHEF_PROCESS_PAYOUTS: "chef_process_payouts",
+  ADMIN_CLOSE_ROUND: "admin_close_round",
+  ADMIN_SET_ROUND_OPEN: "admin_set_round_open",
 };
 
 // Wrapper around contractView that defaults to the contract account
@@ -269,7 +274,7 @@ export const donate = async ({
   message,
 }: {
   donorAccount: Account;
-  projectId: number | null; // If null, donation will be split among all approved applications
+  projectId: ProjectId | null; // If null, donation will be split among all approved applications
   donationAmount: string;
   message?: string;
 }) => {
@@ -291,9 +296,16 @@ export const getDonationsBalance = async (): Promise<string> => {
   });
 };
 
-export const getDonations = async (): Promise<Donation[]> => {
+export const getDonations = async (
+  fromIndex: number | null = null,
+  limit: number | null = null
+): Promise<Donation[]> => {
   return contractView({
     methodName: READ_METHODS.GET_DONATIONS,
+    args: {
+      from_index: fromIndex,
+      limit: limit,
+    },
   });
 };
 
@@ -314,5 +326,53 @@ export const chefSetDonationRequirement = async (
 export const isRoundActive = async (): Promise<boolean> => {
   return contractView({
     methodName: READ_METHODS.IS_ROUND_ACTIVE,
+  });
+};
+
+export const adminCloseRound = async (adminAccount: Account) => {
+  return contractCall({
+    callerAccount: adminAccount,
+    contractId: _contractId,
+    methodName: WRITE_METHODS.ADMIN_CLOSE_ROUND,
+  });
+};
+
+export const adminSetRoundOpen = async (
+  adminAccount: Account,
+  roundEndMs: number
+) => {
+  return contractCall({
+    callerAccount: adminAccount,
+    contractId: _contractId,
+    methodName: WRITE_METHODS.ADMIN_SET_ROUND_OPEN,
+    args: { round_end_ms: roundEndMs },
+  });
+};
+
+// PAYOUTS
+
+export const getPayouts = async (): Promise<Payout[]> => {
+  return contractView({
+    methodName: READ_METHODS.GET_PAYOUTS,
+  });
+};
+
+export const chefSetPayouts = async (
+  chefAccount: Account,
+  payouts: PayoutInput[]
+) => {
+  return contractCall({
+    callerAccount: chefAccount,
+    contractId: _contractId,
+    methodName: WRITE_METHODS.CHEF_SET_PAYOUTS,
+    args: { payouts },
+  });
+};
+
+export const chefProcessPayouts = async (chefAccount: Account) => {
+  return contractCall({
+    callerAccount: chefAccount,
+    contractId: _contractId,
+    methodName: WRITE_METHODS.CHEF_SET_PAYOUTS,
   });
 };

@@ -85,6 +85,7 @@ export const getPatronAccount = async () => {
 };
 
 export const getChefAccount = async () => {
+  // TODO: change this so that it creates a single subaccount "chef" under contract account. this way we can determine if they have already been created, and skip if so.
   const now = Date.now();
   const chefAccountPrefix = `chef-${now}.`;
   // create account which shares the credentials of the parent account
@@ -110,6 +111,7 @@ export const getChefAccount = async () => {
 };
 
 export const getProjectAccounts = async () => {
+  // TODO: change this so that it creates three "project" subaccounts under contract account. this way we can determine if they have already been created, and skip if so.
   // create 3 x project accounts
   const now = Date.now();
   const projectAccountPrefixes = [
