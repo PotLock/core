@@ -137,18 +137,12 @@ function calculateClr(
     let _sum = new BN(0);
 
     for (const [k1, v1] of Object.entries(contribz)) {
-      console.log("line 140");
       _num += 1;
       _sum = _sum.add(v1);
       for (const [k2, v2] of Object.entries(contribz)) {
-        console.log("k2: ", k2);
-        console.log("k1: ", k1);
-        console.log("k2 > k1: ", k2 > k1);
         if (k2 > k1) {
           const sqrt = v1.mul(v2).sqrt();
-          console.log("tot before: ", tot.round(0, 0).toString());
           tot = tot.add(sqrt.div(pairTotals[k1][k2].div(threshold)));
-          console.log("tot after: ", tot.round(0, 0).toString());
         }
       }
     }
@@ -192,7 +186,6 @@ export function calculateQuadraticPayouts(
   const contributions = aggregateContributions(projectContribsCurr);
   const pairTotals = getTotalsByPair(contributions);
   const totals = calculateClr(contributions, pairTotals, threshold, totalPot);
-  console.log("totals: ", totals);
   const payouts: PayoutInput[] = totals.map((t) => {
     return {
       project_id: t.id,

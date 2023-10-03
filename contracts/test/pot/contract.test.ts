@@ -19,6 +19,7 @@ import {
   adminSetChefFeeBasisPoints,
   adminSetRoundOpen,
   apply,
+  adminProcessPayouts,
   chefSetApplicationStatus,
   chefSetDonationRequirement,
   chefSetPayouts,
@@ -34,6 +35,7 @@ import {
   initializeContract,
   patronDonateToMatchingPool,
   unapply,
+  adminSetCooldownPeriodComplete,
 } from "./utils";
 import {
   DEFAULT_APPLICATION_LENGTH,
@@ -88,15 +90,16 @@ TEST CASES (taken from ../README.md):
 - ✅ End user can donate to specific project
   - ✅ Enforces round open
   - Emits event
-- ✅ End user can donate to all projects // TODO: implemented on contract, but need to have two projects to test
+- ✅ End user can donate to all projects
   - ✅ Enforces round open
   - Emits events
 - ✅ PotDeployer Admin (DAO) can change chef & chef fee basis points
 - ✅ Chef can set (update) the donation requirement
 - Chef can update the patron referral fee❓
 - ✅ Chef can set payouts (CLR / quadratic calculations)
-- PotDeployer Admin (DAO) can process payouts
-  - Can cooldown period be overridden?
+- ✅ PotDeployer Admin (DAO) can process payouts
+  - ✅ Enforces cooldown period ended
+  - ✅ Admin can end cooldown period manually
 */
 
 describe("Pot Contract Tests", async () => {
@@ -552,7 +555,6 @@ describe("Pot Contract Tests", async () => {
       await adminCloseRound(potDeployerAdminAccount);
       // get matching pot balance
       const matchingPoolBalance = await getMatchingPoolBalance();
-      console.log("matching pool balance: ", matchingPoolBalance);
       // get all donations
       let next = true;
       let fromIndex = 0;
@@ -567,7 +569,6 @@ describe("Pot Contract Tests", async () => {
             "... "
         );
         const donationRecords = await getDonations(fromIndex, limit);
-        console.log("donation records: ", donationRecords);
         allDonations.push(...donationRecords);
         if (donationRecords.length < limit) {
           next = false;
@@ -576,29 +577,57 @@ describe("Pot Contract Tests", async () => {
           fromIndex += limit;
         }
       }
-      console.log("Total donations count: ", allDonations.length);
       // format donations as [ProjectId, UserId, YoctoBN]
       const formattedDonations =
         convertDonationsToProjectContributions(allDonations);
-      console.log("formatted donations: ", formattedDonations);
       // run quadratic calculations to get payouts
       const payoutsInputs = calculateQuadraticPayouts(
         formattedDonations,
         new BN("25000000000000000000000000"), // TODO: figure out threshold
         new BN(matchingPoolBalance)
       );
-      console.log("payoutsInputs line 576: ", payoutsInputs);
       // set payouts
       await chefSetPayouts(chefAccount, payoutsInputs);
       // verify payouts
       const payouts = await getPayouts();
-      console.log("payouts line 586: ", payouts);
       // verify cooldown period started
       const config = await getPotConfig();
-      console.log("config line 590: ", config);
       assert(config.cooldown_end_ms);
     } catch (e) {
       console.log("error in chef set payouts test: ", e);
+    }
+  });
+
+  it("Admin (DAO) can process payouts", async () => {
+    try {
+      // make sure there are payouts
+      let payouts = await getPayouts();
+      if (payouts.length === 0) {
+        console.log("No payouts to process");
+        assert(false);
+      }
+      // process payouts
+      // should fail because cooldown period isn't over
+      try {
+        await adminProcessPayouts(potDeployerAdminAccount);
+        assert(false);
+      } catch (e) {
+        assert(JSON.stringify(e).includes("Cooldown period is not over"));
+        // end cooldown period manually
+        await adminSetCooldownPeriodComplete(potDeployerAdminAccount);
+        // try processing payouts again (should succeed)
+        await adminProcessPayouts(potDeployerAdminAccount);
+        // get payouts and verify paid_at
+        payouts = await getPayouts();
+        for (const payout of payouts) {
+          assert(payout.paid_at);
+        }
+        // verify round config
+        const config = await getPotConfig();
+        assert(config.paid_out);
+      }
+    } catch (e) {
+      console.log("error processing payouts: ", e);
     }
   });
 });

@@ -30,9 +30,10 @@ const WRITE_METHODS = {
   PATRON_DONATE_TO_MATCHING_POOL: "patron_donate_to_matching_pool",
   DONATE: "donate",
   CHEF_SET_PAYOUTS: "chef_set_payouts",
-  CHEF_PROCESS_PAYOUTS: "chef_process_payouts",
+  ADMIN_PROCESS_PAYOUTS: "admin_process_payouts",
   ADMIN_CLOSE_ROUND: "admin_close_round",
   ADMIN_SET_ROUND_OPEN: "admin_set_round_open",
+  ADMIN_SET_COOLDOWN_PERIOD_COMPLETE: "admin_set_cooldown_period_complete",
 };
 
 // Wrapper around contractView that defaults to the contract account
@@ -369,10 +370,18 @@ export const chefSetPayouts = async (
   });
 };
 
-export const chefProcessPayouts = async (chefAccount: Account) => {
+export const adminSetCooldownPeriodComplete = async (adminAccount: Account) => {
   return contractCall({
-    callerAccount: chefAccount,
+    callerAccount: adminAccount,
     contractId: _contractId,
-    methodName: WRITE_METHODS.CHEF_SET_PAYOUTS,
+    methodName: WRITE_METHODS.ADMIN_SET_COOLDOWN_PERIOD_COMPLETE,
+  });
+};
+
+export const adminProcessPayouts = async (adminAccount: Account) => {
+  return contractCall({
+    callerAccount: adminAccount,
+    contractId: _contractId,
+    methodName: WRITE_METHODS.ADMIN_PROCESS_PAYOUTS,
   });
 };
