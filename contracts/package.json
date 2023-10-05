@@ -11,10 +11,33 @@
     "build:potdeployer": "cd pot_deployer && ./scripts/build.sh && cd ..",
     "build:registry": "cd registry && ./scripts/build.sh && cd ..",
     "dev:deploy:pot": "cd pot && ./scripts/deploy.sh && cd ..",
-    "dev:deploy:pot:refresh": "cd pot && rm -rf neardev && ./scripts/deploy.sh && cd ..",
+    "dev:deploy:pot:refresh": "cd pot && rm -rf neardev && ./scripts/deploy.sh && cd .. && yarn patch:config pot",
+    "test:pot": "yarn test test/pot/contract.test.ts",
+    "works:pot": "yarn build:pot && yarn dev:deploy:pot && yarn test:pot",
+    "works:pot:refresh": "yarn build:pot && yarn dev:deploy:pot:refresh && yarn test:pot",
     "dev:deploy:potdeployer": "cd pot_deployer && ./scripts/deploy.sh && cd ..",
-    "dev:deploy:potdeployer:refresh": "cd pot_deployer && rm -rf neardev && ./scripts/deploy.sh && cd ..",
-    "dev:deploy:registry": "cd registry && ./scripts/deploy.sh && cd ..",
-    "dev:deploy:registry:refresh": "cd registry && rm -rf neardev && ./scripts/deploy.sh && cd .."
+    "dev:deploy:potdeployer:refresh": "cd pot_deployer && rm -rf neardev && ./scripts/deploy.sh && cd .. && yarn patch:config pot_deployer",
+    "test:potdeployer": "yarn test test/pot_deployer/contract.test.ts",
+    "works:potdeployer": "yarn build:potdeployer && yarn dev:deploy:potdeployer && yarn test:potdeployer",
+    "works:potdeployer:refresh": "yarn build:potdeployer && yarn dev:deploy:potdeployer:refresh && yarn test:potdeployer",
+    "patch:config": "node ./test/utils/patch-config.mjs",
+    "dev:deploy:registry": "cd registry && ./scripts/deploy.sh && cd .. && yarn patch:config registry",
+    "dev:deploy:registry:refresh": "cd registry && rm -rf neardev && ./scripts/deploy.sh && cd .. && yarn patch:config registry",
+    "works:registry": "yarn build:registry && yarn dev:deploy:registry && yarn test",
+    "works:registry:refresh": "yarn build:registry && yarn dev:deploy:registry:refresh && yarn test",
+    "test": "mocha --require ts-node/register --timeout 240000",
+    "test:all": "yarn test test/**/contract.test.ts"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.2",
+    "@types/mocha": "^10.0.1",
+    "@types/node": "^20.6.0",
+    "mocha": "^10.2.0",
+    "near-api-js": "^2.1.4",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "big.js": "^6.2.1"
   }
 }
