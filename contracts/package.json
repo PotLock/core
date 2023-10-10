@@ -23,8 +23,9 @@
     "patch:config": "node ./test/utils/patch-config.mjs",
     "dev:deploy:registry": "cd registry && ./scripts/deploy.sh && cd .. && yarn patch:config registry",
     "dev:deploy:registry:refresh": "cd registry && rm -rf neardev && ./scripts/deploy.sh && cd .. && yarn patch:config registry",
-    "works:registry": "yarn build:registry && yarn dev:deploy:registry && yarn test",
-    "works:registry:refresh": "yarn build:registry && yarn dev:deploy:registry:refresh && yarn test",
+    "test:registry": "yarn test test/registry/contract.test.ts",
+    "works:registry": "yarn build:registry && yarn dev:deploy:registry && yarn test:registry",
+    "works:registry:refresh": "yarn build:registry && yarn dev:deploy:registry:refresh && yarn test:registry",
     "test": "mocha --require ts-node/register --timeout 240000",
     "test:all": "yarn test test/**/contract.test.ts"
   },
