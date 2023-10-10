@@ -56,7 +56,8 @@ impl Contract {
         team_members: Vec<AccountId>,
         _project_id: Option<AccountId>,
     ) -> ProjectExternal {
-        // TODO: require enough funds to cover storage deposit
+        let initial_storage_usage = env::storage_usage();
+
         // _project_id can only be specified by admin; otherwise, it is the caller
         let project_id = if let Some(_project_id) = _project_id {
             self.assert_admin();
@@ -64,7 +65,11 @@ impl Contract {
         } else {
             env::predecessor_account_id()
         };
+
+        // make sure project doesn't already exist at this Project ID
         self.assert_project_does_not_exist(&project_id);
+
+        // create project
         let project_internal = ProjectInternal {
             id: project_id.clone(),
             name,
@@ -73,6 +78,8 @@ impl Contract {
             updated_ms: env::block_timestamp_ms(),
             review_notes: None,
         };
+
+        // update mappings
         self.project_ids.insert(&project_id);
         self.projects_by_id.insert(
             &project_id,
@@ -87,6 +94,11 @@ impl Contract {
         }
         self.project_team_members_by_project_id
             .insert(&project_id, &team_members_set);
+
+        // refund any unused deposit
+        refund_deposit(initial_storage_usage);
+
+        // return formatted project
         self.format_project(project_internal)
     }
 

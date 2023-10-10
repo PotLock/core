@@ -3,6 +3,7 @@ import { contractId as _contractId } from "./config";
 import { Account } from "near-api-js";
 import { contractAccount } from "./setup";
 import { NO_DEPOSIT } from "../utils/constants";
+import { parseNearAmount } from "near-api-js/lib/utils/format";
 
 const READ_METHODS = {
   GET_ADMINS: "get_admins",
@@ -153,6 +154,7 @@ export const registerProject = async (
       team_members: teamMembers,
       ...(projectId ? { _project_id: projectId } : {}),
     },
+    attachedDeposit: parseNearAmount("0.1") as string,
   });
 };
 
