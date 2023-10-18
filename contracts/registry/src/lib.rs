@@ -23,7 +23,6 @@ pub struct Contract {
     admins: UnorderedSet<AccountId>,
     project_ids: UnorderedSet<ProjectId>,
     projects_by_id: LookupMap<ProjectId, VersionedProjectInternal>,
-    project_team_members_by_project_id: LookupMap<ProjectId, UnorderedSet<AccountId>>,
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -45,8 +44,6 @@ pub enum StorageKey {
     Admins,
     ProjectIds,
     ProjectsById,
-    ProjectTeamMembersByProjectId,
-    ProjectTeamMembersByProjectIdInner { project_id: ProjectId },
 }
 
 #[near_bindgen]
@@ -59,9 +56,6 @@ impl Contract {
             admins: account_vec_to_set(admins, StorageKey::Admins),
             project_ids: UnorderedSet::new(StorageKey::ProjectIds),
             projects_by_id: LookupMap::new(StorageKey::ProjectsById),
-            project_team_members_by_project_id: LookupMap::new(
-                StorageKey::ProjectTeamMembersByProjectId,
-            ),
         }
     }
 }
@@ -73,9 +67,6 @@ impl Default for Contract {
             admins: UnorderedSet::new(StorageKey::Admins),
             project_ids: UnorderedSet::new(StorageKey::ProjectIds),
             projects_by_id: LookupMap::new(StorageKey::ProjectsById),
-            project_team_members_by_project_id: LookupMap::new(
-                StorageKey::ProjectTeamMembersByProjectId,
-            ),
         }
     }
 }

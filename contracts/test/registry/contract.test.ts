@@ -80,25 +80,18 @@ describe("Registry Contract Tests", () => {
     try {
       // End user registers a project
       const projectName = `${projectId}#${Date.now()}`;
-      const teamMemberA: AccountId = "a.testnet";
-      const teamMemberB: AccountId = "b.testnet";
-      const teamMembers = [teamMemberA, teamMemberB];
-      await registerProject(projectAccount, projectName, teamMembers);
+      await registerProject(projectAccount);
 
       // Verify project was registered by end user & approved by default
       let projects = await getProjects();
       let existing = projects.find(
-        (p) =>
-          p.name === projectName &&
-          p.id === projectId &&
-          p.status === "Approved"
+        (p) => p.id === projectId && p.status === "Approved"
       );
       assert(!!existing);
-      assert.deepEqual(existing.team_members, teamMembers);
 
       // Cannot reregister
       try {
-        await registerProject(projectAccount, projectName, teamMembers);
+        await registerProject(projectAccount);
         assert(false);
       } catch (e) {
         assert(JSON.stringify(e).includes("Project already exists"));
@@ -106,18 +99,14 @@ describe("Registry Contract Tests", () => {
 
       // Admin registers a project, specifying _project_id
       const projectId2: AccountId = "project2.testnet";
-      await registerProject(adminAccount, projectName, teamMembers, projectId2);
+      await registerProject(adminAccount, projectId2);
 
       // Verify project was registered by admin & approved by default
       projects = await getProjects();
       existing = projects.find(
-        (p) =>
-          p.name === projectName &&
-          p.id === projectId2 &&
-          p.status === "Approved"
+        (p) => p.id === projectId2 && p.status === "Approved"
       );
       assert(!!existing);
-      assert.deepEqual(existing.team_members, teamMembers);
     } catch (e) {
       console.log("Error registering project:", e);
       assert(false);
@@ -131,10 +120,7 @@ describe("Registry Contract Tests", () => {
       if (projects.length === 0) {
         // If no projects, create new project and refetch
         const projectName = `${projectId}#${Date.now()}`;
-        const teamMemberA: AccountId = "a.testnet";
-        const teamMemberB: AccountId = "b.testnet";
-        const teamMembers = [teamMemberA, teamMemberB];
-        await registerProject(projectAccount, projectName, teamMembers);
+        await registerProject(projectAccount, projectName);
         projects = await getProjects();
       }
       // Update status of first project

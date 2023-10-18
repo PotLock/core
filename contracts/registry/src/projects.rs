@@ -7,6 +7,8 @@ pub enum ProjectStatus {
     InReview,
     Approved,
     Rejected,
+    Graylisted,
+    Blacklisted,
 }
 
 // ProjectInternal is the data structure that is stored within the contract
@@ -14,7 +16,6 @@ pub enum ProjectStatus {
 #[serde(crate = "near_sdk::serde")]
 pub struct ProjectInternal {
     pub id: ProjectId,
-    pub name: String,
     pub status: ProjectStatus,
     pub submitted_ms: TimestampMs,
     pub updated_ms: TimestampMs,
@@ -39,8 +40,6 @@ impl From<VersionedProjectInternal> for ProjectInternal {
 #[serde(crate = "near_sdk::serde")]
 pub struct ProjectExternal {
     pub id: ProjectId,
-    pub name: String,
-    pub team_members: Vec<AccountId>,
     pub status: ProjectStatus,
     pub submitted_ms: TimestampMs,
     pub updated_ms: TimestampMs,
@@ -50,12 +49,7 @@ pub struct ProjectExternal {
 #[near_bindgen]
 impl Contract {
     #[payable]
-    pub fn register(
-        &mut self,
-        name: String,
-        team_members: Vec<AccountId>,
-        _project_id: Option<AccountId>,
-    ) -> ProjectExternal {
+    pub fn register(&mut self, _project_id: Option<AccountId>) -> ProjectExternal {
         let initial_storage_usage = env::storage_usage();
 
         // _project_id can only be specified by admin; otherwise, it is the caller
@@ -72,7 +66,6 @@ impl Contract {
         // create project
         let project_internal = ProjectInternal {
             id: project_id.clone(),
-            name,
             status: ProjectStatus::Approved, // approved by default - TODO: double-check that this is desired functionality
             submitted_ms: env::block_timestamp_ms(),
             updated_ms: env::block_timestamp_ms(),
@@ -85,15 +78,6 @@ impl Contract {
             &project_id,
             &VersionedProjectInternal::Current(project_internal.clone()),
         );
-        let mut team_members_set =
-            UnorderedSet::new(StorageKey::ProjectTeamMembersByProjectIdInner {
-                project_id: project_id.clone(),
-            });
-        for team_member in team_members {
-            team_members_set.insert(&team_member);
-        }
-        self.project_team_members_by_project_id
-            .insert(&project_id, &team_members_set);
 
         // refund any unused deposit
         refund_deposit(initial_storage_usage);
@@ -122,12 +106,6 @@ impl Contract {
     pub(crate) fn format_project(&self, project_internal: ProjectInternal) -> ProjectExternal {
         ProjectExternal {
             id: project_internal.id.clone(),
-            name: project_internal.name,
-            team_members: self
-                .project_team_members_by_project_id
-                .get(&project_internal.id)
-                .unwrap()
-                .to_vec(),
             status: project_internal.status,
             submitted_ms: project_internal.submitted_ms,
             updated_ms: project_internal.updated_ms,

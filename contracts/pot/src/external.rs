@@ -55,8 +55,6 @@ pub enum ProjectStatus {
 #[serde(crate = "near_sdk::serde")]
 pub struct PotlockRegistryProject {
     pub id: ProjectId,
-    pub name: String,
-    pub team_members: Vec<AccountId>,
     pub status: ProjectStatus,
     pub submitted_ms: TimestampMs,
     pub updated_ms: TimestampMs,
