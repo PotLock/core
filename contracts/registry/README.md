@@ -21,7 +21,6 @@ pub struct Contract {
     admins: UnorderedSet<AccountId>,
     project_ids: UnorderedSet<ProjectId>,
     projects_by_id: LookupMap<ProjectId, VersionedProjectInternal>,
-    project_team_members_by_project_id: LookupMap<ProjectId, UnorderedSet<AccountId>>,
 }
 ```
 
@@ -50,8 +49,6 @@ pub struct ProjectInternal {
 // Ephemeral data structure used for view methods, not stored within contract
 pub struct ProjectExternal {
     pub id: ProjectId,
-    pub name: String,
-    pub team_members: Vec<AccountId>,
     pub status: ProjectStatus,
     pub submitted_ms: TimestampMs,
     pub updated_ms: TimestampMs,
@@ -69,8 +66,6 @@ pub struct ProjectExternal {
 #[payable]
 pub fn register(
     &mut self,
-    name: String,
-    team_members: Vec<AccountId>,
     _project_id: Option<AccountId>, // NB: _project_id can only be specified by admin; otherwise, it is the caller
 ) -> ProjectExternal 
 

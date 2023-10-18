@@ -9,6 +9,8 @@ enum ProjectStatus {
   InReview = "InReview",
   Approved = "Approved",
   Rejected = "Rejected",
+  Graylisted = "Graylisted",
+  Blacklisted = "Blacklisted",
 }
 
 enum ApplicationStatus {
@@ -20,8 +22,6 @@ enum ApplicationStatus {
 
 interface Project {
   id: AccountId;
-  name: string;
-  team_members: AccountId[];
   status: ProjectStatus;
   submitted_ms: TimestampMs;
   updated_ms: TimestampMs;

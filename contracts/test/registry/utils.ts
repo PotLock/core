@@ -141,8 +141,6 @@ export const getAdmins = async (): Promise<AccountId[]> => {
 
 export const registerProject = async (
   callerAccount: Account,
-  name: string,
-  teamMembers: AccountId[],
   projectId?: string
 ) => {
   return contractCall({
@@ -150,8 +148,6 @@ export const registerProject = async (
     contractId: _contractId,
     methodName: WRITE_METHODS.REGISTER,
     args: {
-      name,
-      team_members: teamMembers,
       ...(projectId ? { _project_id: projectId } : {}),
     },
     attachedDeposit: parseNearAmount("0.1") as string,
