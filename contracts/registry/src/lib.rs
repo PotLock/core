@@ -5,10 +5,12 @@ use near_sdk::{env, log, near_bindgen, require, AccountId, Balance, BorshStorage
 
 pub mod admins;
 pub mod internal;
+pub mod owner;
 pub mod projects;
 pub mod utils;
 pub use crate::admins::*;
 pub use crate::internal::*;
+pub use crate::owner::*;
 pub use crate::projects::*;
 pub use crate::utils::*;
 
