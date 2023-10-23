@@ -84,6 +84,11 @@ pub fn owner_add_admins(&mut self, admins: Vec<AccountId>)
 
 #[payable]
 pub fn owner_remove_admins(&mut self, admins: Vec<AccountId>)
+
+// OWNER
+
+#[payable]
+pub fn owner_change_owner(&mut self, owner: AccountId)
 ```
 
 ### Read Methods
