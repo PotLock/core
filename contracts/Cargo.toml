@@ -1,2 +1,2 @@
 [workspace]
-members = ["pot", "pot_deployer", "registry"]
+members = ["donation", "pot", "pot_deployer", "registry"]

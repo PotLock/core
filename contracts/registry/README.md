@@ -103,4 +103,8 @@ pub fn get_project_by_id(&self, project_id: ProjectId) -> ProjectExternal
 // ADMINS
 
 pub fn get_admins(&self) -> Vec<AccountId>
+
+// OWNER
+
+pub fn get_owner(&self) -> AccountId
 ```

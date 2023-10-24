@@ -1,0 +1,2 @@
+# PotLock Donation Contract
+
