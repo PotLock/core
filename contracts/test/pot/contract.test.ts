@@ -166,7 +166,7 @@ describe("Pot Contract Tests", async () => {
       for (const account of projectAccounts) {
         try {
           console.log("📄 Registering project " + account.accountId);
-          await registerProject(account, "New Project", []);
+          await registerProject(account, "New Project");
         } catch (e) {
           if (JSON.stringify(e).includes("Project already exists")) {
             console.log(

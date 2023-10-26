@@ -3,6 +3,7 @@ type AccountId = string;
 type ProjectId = AccountId;
 type ApplicationId = number; // increments from 1
 type PayoutId = number; // increments from 1
+type DonationId = number; // increments from 1
 
 enum ProjectStatus {
   Submitted = "Submitted",

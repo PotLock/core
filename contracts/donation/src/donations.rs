@@ -179,6 +179,12 @@ impl Contract {
             .collect()
     }
 
+    pub fn get_donation_by_id(&self, donation_id: DonationId) -> Option<Donation> {
+        self.donations_by_id
+            .get(&donation_id)
+            .map(|v| Donation::from(v))
+    }
+
     pub fn get_donations_for_recipient(
         &self,
         recipient_id: AccountId,
