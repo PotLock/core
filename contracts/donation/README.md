@@ -17,6 +17,7 @@ type TimestampMs = u64;
 
 ```rs
 pub struct Contract {
+    contract_source_metadata: LazyOption<VersionedContractSourceMetadata>,
     owner: AccountId,
     protocol_fee_basis_points: u32,
     referral_fee_basis_points: u32,
@@ -57,6 +58,21 @@ pub struct Donation {
 }
 ```
 
+### Contract Source Metadata
+
+_NB: Below implemented as per NEP 0330 (https://github.com/near/NEPs/blob/master/neps/nep-0330.md), with addition of `commit_hash`_
+
+```rs
+pub struct ContractSourceMetadata {
+    /// Version of source code, e.g. "v1.0.0", could correspond to Git tag
+    pub version: String,
+    /// Git commit hash of currently deployed contract code
+    pub commit_hash: String,
+    /// GitHub repo url for currently deployed contract code
+    pub link: String,
+}
+```
+
 ## Methods
 
 ### Write Methods
@@ -82,6 +98,10 @@ pub fn owner_set_protocol_fee_basis_points(&mut self, protocol_fee_basis_points:
 pub fn owner_set_referral_fee_basis_points(&mut self, referral_fee_basis_points: u32)
 
 pub fn owner_set_protocol_fee_recipient_account(&mut self, protocol_fee_recipient_account: AccountId)
+
+// SOURCE METADATA
+
+pub fn self_set_source_metadata(&mut self, source_metadata: ContractSourceMetadata) // only callable by the contract account (reasoning is that this should be able to be updated by the same account that can deploy code to the account)
 
 ```
 
@@ -117,6 +137,10 @@ pub fn get_donations_for_ft(
 // OWNER
 
 pub fn get_owner(&self) -> AccountId
+
+// SOURCE METADATA
+
+pub fn get_contract_source_metadata(&self) -> Option<ContractSourceMetadata>
 ```
 
 ## Events
@@ -146,6 +170,29 @@ Indicates that a `Donation` object has been created.
                 "referrer_id": "plugrel.near",
                 "total_amount": "100000000000000000000000"
             },
+        }
+    ]
+}
+```
+
+### `set_source_metadata`
+
+Indicates that `ContractSourceMetadata` object has been set/updated.
+
+**Example:**
+
+```json
+{
+    "standard": "potlock",
+    "version": "1.0.0",
+    "event": "set_source_metadata",
+    "data": [
+        {
+            "source_metadata": {
+                "commit_hash":"ec02294253b22c2d4c50a75331df23ada9eb04db",
+                "link":"https://github.com/PotLock/core",
+                "version":"0.1.0",
+            }
         }
     ]
 }
