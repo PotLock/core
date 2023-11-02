@@ -43,4 +43,13 @@ impl Contract {
         // emit event
         log_set_source_metadata_event(&source_metadata);
     }
+
+    pub fn get_contract_source_metadata(&self) -> Option<ContractSourceMetadata> {
+        let source_metadata = self.contract_source_metadata.get();
+        if source_metadata.is_some() {
+            Some(ContractSourceMetadata::from(source_metadata.unwrap()))
+        } else {
+            None
+        }
+    }
 }
