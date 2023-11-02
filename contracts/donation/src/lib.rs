@@ -2,21 +2,28 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet};
 use near_sdk::json_types::{U128, U64};
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{env, log, near_bindgen, require, AccountId, Balance, BorshStorageKey, Promise};
+use near_sdk::{
+    env, log, near_bindgen, require, serde_json::json, AccountId, Balance, BorshStorageKey, Promise,
+};
 
 pub mod constants;
 pub mod donations;
+pub mod events;
 pub mod internal;
 pub mod owner;
 pub mod utils;
 pub use crate::constants::*;
 pub use crate::donations::*;
+pub use crate::events::*;
 pub use crate::internal::*;
 pub use crate::owner::*;
 pub use crate::utils::*;
 
 type DonationId = u64;
 type TimestampMs = u64;
+
+/// log prefix constant
+pub const EVENT_JSON_PREFIX: &str = "EVENT_JSON:";
 
 /// Registry Contract
 #[near_bindgen]

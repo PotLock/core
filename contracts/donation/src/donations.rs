@@ -20,10 +20,10 @@ pub struct Donation {
     pub recipient_id: AccountId,
     /// Protocol fee
     pub protocol_fee: U128,
+    /// Referrer ID
+    pub referrer_id: Option<AccountId>,
     /// Referrer fee
     pub referrer_fee: Option<U128>,
-    /// Amount added after fees
-    pub amount_after_fees: U128,
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -77,14 +77,25 @@ impl Contract {
             ft_id: AccountId::new_unchecked("near".to_string()), // for now, only NEAR is supported
             message,
             donated_at_ms: env::block_timestamp_ms(),
-            recipient_id,
+            recipient_id: recipient_id.clone(),
             protocol_fee: U128::from(protocol_fee),
+            referrer_id: referrer_id.clone(),
             referrer_fee,
-            amount_after_fees: U128::from(remainder),
         };
 
         // insert mapping records
         self.insert_donation_record(&donation);
+
+        // assert that donation after fees > storage cost
+        let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
+        require!(
+            remainder > required_deposit,
+            format!(
+                "Must attach {} yoctoNEAR to cover storage",
+                required_deposit
+            )
+        );
+        remainder -= required_deposit;
 
         // ensure user attached enough deposit to cover storage (will panic if not, and mappings will be reverted. important to do this before transferring funds)
         refund_deposit(initial_storage_usage);
@@ -105,6 +116,18 @@ impl Contract {
             ));
             Promise::new(referrer_id).transfer(referrer_fee.0);
         }
+
+        // transfer donation
+        log!(format!(
+            "Transferring donation {} to {}",
+            remainder, recipient_id
+        ));
+        Promise::new(recipient_id).transfer(remainder);
+
+        // log event
+        log_donation_event(&donation);
+
+        // return donation
         donation
     }
 
@@ -135,6 +158,8 @@ impl Contract {
             })
         };
         donation_ids_by_recipient_set.insert(&donation.id);
+        self.donation_ids_by_recipient_id
+            .insert(&donation.recipient_id, &donation_ids_by_recipient_set);
 
         // add to donations-by-donor mapping
         let mut donation_ids_by_donor_set = if let Some(donation_ids_by_donor_set) =
@@ -147,6 +172,8 @@ impl Contract {
             })
         };
         donation_ids_by_donor_set.insert(&donation.id);
+        self.donation_ids_by_donor_id
+            .insert(&donation.donor_id, &donation_ids_by_donor_set);
 
         // add to donations-by-ft mapping
         let mut donation_ids_by_ft_set =
@@ -158,6 +185,8 @@ impl Contract {
                 })
             };
         donation_ids_by_ft_set.insert(&donation.id);
+        self.donation_ids_by_ft_id
+            .insert(&donation.ft_id, &donation_ids_by_ft_set);
     }
 
     // GETTERS
@@ -192,22 +221,25 @@ impl Contract {
         limit: Option<u64>,
     ) -> Vec<Donation> {
         let start_index: u128 = from_index.unwrap_or_default();
-        assert!(
-            (self.donations_by_id.len() as u128) >= start_index,
-            "Out of bounds, please use a smaller from_index."
-        );
+        // TODO: ADD BELOW BACK IN
+        // assert!(
+        //     (self.donations_by_id.len() as u128) >= start_index,
+        //     "Out of bounds, please use a smaller from_index."
+        // );
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
         assert_ne!(limit, 0, "Cannot provide limit of 0.");
-        let donation_ids_by_recipient_set = self
-            .donation_ids_by_recipient_id
-            .get(&recipient_id)
-            .unwrap();
-        donation_ids_by_recipient_set
-            .iter()
-            .skip(start_index as usize)
-            .take(limit)
-            .map(|donation_id| Donation::from(self.donations_by_id.get(&donation_id).unwrap()))
-            .collect()
+        let donation_ids_by_recipient_set = self.donation_ids_by_recipient_id.get(&recipient_id);
+        log!("got set"); // TODO: REMOVE
+        if let Some(donation_ids_by_recipient_set) = donation_ids_by_recipient_set {
+            donation_ids_by_recipient_set
+                .iter()
+                .skip(start_index as usize)
+                .take(limit)
+                .map(|donation_id| Donation::from(self.donations_by_id.get(&donation_id).unwrap()))
+                .collect()
+        } else {
+            vec![]
+        }
     }
 
     pub fn get_donations_for_donor(
@@ -217,19 +249,25 @@ impl Contract {
         limit: Option<u64>,
     ) -> Vec<Donation> {
         let start_index: u128 = from_index.unwrap_or_default();
-        assert!(
-            (self.donations_by_id.len() as u128) >= start_index,
-            "Out of bounds, please use a smaller from_index."
-        );
+        // TODO: ADD BELOW BACK IN
+        // assert!(
+        //     (self.donations_by_id.len() as u128) >= start_index,
+        //     "Out of bounds, please use a smaller from_index."
+        // );
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
         assert_ne!(limit, 0, "Cannot provide limit of 0.");
-        let donation_ids_by_donor_set = self.donation_ids_by_donor_id.get(&donor_id).unwrap();
-        donation_ids_by_donor_set
-            .iter()
-            .skip(start_index as usize)
-            .take(limit)
-            .map(|donation_id| Donation::from(self.donations_by_id.get(&donation_id).unwrap()))
-            .collect()
+        let donation_ids_by_donor_set = self.donation_ids_by_donor_id.get(&donor_id);
+        log!("got set"); // TODO: REMOVE
+        if let Some(donation_ids_by_donor_set) = donation_ids_by_donor_set {
+            donation_ids_by_donor_set
+                .iter()
+                .skip(start_index as usize)
+                .take(limit)
+                .map(|donation_id| Donation::from(self.donations_by_id.get(&donation_id).unwrap()))
+                .collect()
+        } else {
+            vec![]
+        }
     }
 
     pub fn get_donations_for_ft(
@@ -239,18 +277,24 @@ impl Contract {
         limit: Option<u64>,
     ) -> Vec<Donation> {
         let start_index: u128 = from_index.unwrap_or_default();
-        assert!(
-            (self.donations_by_id.len() as u128) >= start_index,
-            "Out of bounds, please use a smaller from_index."
-        );
+        // TODO: ADD BELOW BACK IN
+        // assert!(
+        //     (self.donations_by_id.len() as u128) >= start_index,
+        //     "Out of bounds, please use a smaller from_index."
+        // );
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
         assert_ne!(limit, 0, "Cannot provide limit of 0.");
-        let donation_ids_by_ft_set = self.donation_ids_by_ft_id.get(&ft_id).unwrap();
-        donation_ids_by_ft_set
-            .iter()
-            .skip(start_index as usize)
-            .take(limit)
-            .map(|donation_id| Donation::from(self.donations_by_id.get(&donation_id).unwrap()))
-            .collect()
+        let donation_ids_by_ft_set = self.donation_ids_by_ft_id.get(&ft_id);
+        log!("got set"); // TODO: REMOVE
+        if let Some(donation_ids_by_ft_set) = donation_ids_by_ft_set {
+            donation_ids_by_ft_set
+                .iter()
+                .skip(start_index as usize)
+                .take(limit)
+                .map(|donation_id| Donation::from(self.donations_by_id.get(&donation_id).unwrap()))
+                .collect()
+        } else {
+            vec![]
+        }
     }
 }

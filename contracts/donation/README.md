@@ -50,10 +50,10 @@ pub struct Donation {
     pub recipient_id: AccountId,
     /// Protocol fee
     pub protocol_fee: U128,
+    /// Referrer ID
+    pub referrer_id: Option<AccountId>,
     /// Referrer fee
     pub referrer_fee: Option<U128>,
-    /// Amount added after fees
-    pub amount_after_fees: U128,
 }
 ```
 
@@ -117,4 +117,36 @@ pub fn get_donations_for_ft(
 // OWNER
 
 pub fn get_owner(&self) -> AccountId
+```
+
+## Events
+
+### `donation`
+
+Indicates that a `Donation` object has been created.
+
+**Example:**
+
+```json
+{
+    "standard": "potlock",
+    "version": "1.0.0",
+    "event": "donation",
+    "data": [
+        {
+            "donation": {
+                "donated_at_ms": 1698948121940,
+                "donor_id":"lachlan.near",
+                "ft_id":"near",
+                "id":9,
+                "message": "Go go go!",
+                "protocol_fee": "7000000000000000000000",
+                "recipient_id": "magicbuild.near",
+                "referrer_fee": "2000000000000000000000",
+                "referrer_id": "plugrel.near",
+                "total_amount": "100000000000000000000000"
+            },
+        }
+    ]
+}
 ```
