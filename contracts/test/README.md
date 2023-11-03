@@ -1,5 +1,12 @@
 TEST CASES
 
+Donation
+- User can donate
+- Owner can change the owner
+- Owner can set protocol_fee_basis_points
+- Owner can set referral_fee_basis_points
+- Owner can set protocol_fee_recipient_account
+
 Registry
 - Can be deployed and initialized
 - Owner can add & remove admins

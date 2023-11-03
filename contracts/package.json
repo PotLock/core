@@ -7,9 +7,15 @@
   "author": "Lachlan Glen <54282009+lachlanglen@users.noreply.github.com>",
   "license": "MIT",
   "scripts": {
+    "build:donation": "cd donation && ./scripts/build.sh && cd ..",
     "build:pot": "cd pot && ./scripts/build.sh && cd ..",
     "build:potdeployer": "cd pot_deployer && ./scripts/build.sh && cd ..",
     "build:registry": "cd registry && ./scripts/build.sh && cd ..",
+    "dev:deploy:donation": "cd donation && ./scripts/deploy.sh && cd .. && yarn patch:config donation",
+    "dev:deploy:donation:refresh": "cd donation && rm -rf neardev && ./scripts/deploy.sh && cd .. && yarn patch:config donation",
+    "test:donation": "yarn test test/donation/contract.test.ts",
+    "works:donation": "yarn build:donation && yarn dev:deploy:donation && yarn test:donation",
+    "works:donation:refresh": "yarn build:donation && yarn dev:deploy:donation:refresh && yarn test:donation",
     "dev:deploy:pot": "cd pot && ./scripts/deploy.sh && cd ..",
     "dev:deploy:pot:refresh": "cd pot && rm -rf neardev && ./scripts/deploy.sh && cd .. && yarn patch:config pot",
     "test:pot": "yarn test test/pot/contract.test.ts",
@@ -39,6 +45,7 @@
     "typescript": "^5.2.2"
   },
   "dependencies": {
-    "big.js": "^6.2.1"
+    "big.js": "^6.2.1",
+    "near-cli": "^3.4.2"
   }
 }

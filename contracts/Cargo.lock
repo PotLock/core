@@ -846,6 +846,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "potlock-donation"
+version = "0.1.0"
+dependencies = [
+ "near-sdk",
+]
+
+[[package]]
 name = "potlock-pot"
 version = "0.1.0"
 dependencies = [
