@@ -27,6 +27,14 @@ pub struct Contract {
     donation_ids_by_donor_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
     donation_ids_by_ft_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
 }
+
+/// NOT stored in contract storage; only used for get_config response
+pub struct Config {
+    pub owner: AccountId,
+    pub protocol_fee_basis_points: u32,
+    pub referral_fee_basis_points: u32,
+    pub protocol_fee_recipient_account: AccountId,
+}
 ```
 
 ### Donations
@@ -108,6 +116,10 @@ pub fn self_set_source_metadata(&mut self, source_metadata: ContractSourceMetada
 ### Read Methods
 
 ```rs
+// CONFIG
+
+pub fn get_config(&self) -> Config
+
 // DONATIONS
 pub fn get_donations(&self, from_index: Option<u128>, limit: Option<u64>) -> Vec<Donation>
 
