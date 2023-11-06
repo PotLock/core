@@ -97,9 +97,6 @@ impl Contract {
         );
         remainder -= required_deposit;
 
-        // ensure user attached enough deposit to cover storage (will panic if not, and mappings will be reverted. important to do this before transferring funds)
-        refund_deposit(initial_storage_usage);
-
         // transfer fees
         // transfer protocol fee
         log!(format!(
