@@ -58,6 +58,16 @@ impl From<VersionedContract> for Contract {
     }
 }
 
+/// NOT stored in contract storage; only used for get_config response
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct Config {
+    pub owner: AccountId,
+    pub protocol_fee_basis_points: u32,
+    pub referral_fee_basis_points: u32,
+    pub protocol_fee_recipient_account: AccountId,
+}
+
 #[derive(BorshSerialize, BorshStorageKey)]
 pub enum StorageKey {
     DonationsById,
@@ -94,6 +104,15 @@ impl Contract {
             donation_ids_by_recipient_id: LookupMap::new(StorageKey::DonationIdsByRecipientId),
             donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
             donation_ids_by_ft_id: LookupMap::new(StorageKey::DonationIdsByFtId),
+        }
+    }
+
+    pub fn get_config(&self) -> Config {
+        Config {
+            owner: self.owner.clone(),
+            protocol_fee_basis_points: self.protocol_fee_basis_points,
+            referral_fee_basis_points: self.referral_fee_basis_points,
+            protocol_fee_recipient_account: self.protocol_fee_recipient_account.clone(),
         }
     }
 }
