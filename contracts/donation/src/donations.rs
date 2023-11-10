@@ -160,7 +160,7 @@ impl Contract {
 
         // add to donations-by-donor mapping
         let mut donation_ids_by_donor_set = if let Some(donation_ids_by_donor_set) =
-            self.donation_ids_by_donor_id.get(&donation.recipient_id)
+            self.donation_ids_by_donor_id.get(&donation.donor_id)
         {
             donation_ids_by_donor_set
         } else {
