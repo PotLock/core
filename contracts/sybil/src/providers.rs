@@ -26,7 +26,7 @@ pub struct Provider {
     pub name: String,
     /// Default weight for this provider, e.g. 100
     pub default_weight: u32,
-    // TODO: consider adding optional `gas`
+    // TODO: consider adding optional `gas`, `type`/`description` (e.g. "face scan", "twitter", "captcha", etc.)
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -95,6 +95,7 @@ impl Contract {
     ) -> ProviderId {
         // only contract owner or admin can call this method
         self.assert_owner_or_admin();
+        let initial_storage_usage = env::storage_usage();
         // generate provider ID
         let provider_id = ProviderId::new(contract_id, method_name);
         // create provider
@@ -110,7 +111,8 @@ impl Contract {
         // emit event
         log_add_provider_event(&provider_id, &provider);
 
-        // TODO: REFUND UNUSED DEPOSIT
+        // refund any unused deposit
+        refund_deposit(initial_storage_usage);
 
         // return provider ID
         provider_id
@@ -120,13 +122,15 @@ impl Contract {
     pub fn set_default_providers(&mut self, provider_ids: Vec<ProviderId>) {
         // only contract owner or admin can call this method
         self.assert_owner_or_admin();
+        let initial_storage_usage = env::storage_usage();
         // clear existing default providers
         self.default_provider_ids.clear();
         // add new default providers
         for provider_id in provider_ids {
             self.default_provider_ids.insert(&provider_id);
         }
-        // TODO: REFUND UNUSED DEPOSIT
+        // refund any unused deposit
+        refund_deposit(initial_storage_usage);
     }
 
     #[payable]
