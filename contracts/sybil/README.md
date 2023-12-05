@@ -8,7 +8,7 @@ Provides registry for sybil resistance providers (e.g. i-am-human, wormhole, oth
 
 Provides simple `is_human`` check for provided account ID based on default config (weights + threshold).
 
-Allows weight & threshold overrides to be passed in to is_human call.
+Allows weight & threshold overrides to be passed in to is_human call. **(TBC)**
 
 Provides methods to be able to get all providers, single provider, or add/set providers (for owner/admins)
 
