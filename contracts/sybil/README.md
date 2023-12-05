@@ -1,16 +1,22 @@
-# PotLock Donation Contract
+# PotLock Sybil Contract
 
 ## Purpose
 
-Provide a way to donate NEAR or FTs to any account, with a protocol fee taken out
+Abstracts away individual sybil resistance providers/solutions to provide a single contract to call.
+
+Provides registry for sybil resistance providers (e.g. i-am-human, wormhole, others).
+
+Provides simple `is_human`` check for provided account ID based on default config (weights + threshold).
+
+Allows weight & threshold overrides to be passed in to is_human call.
+
+Provides methods to be able to get all providers, single provider, or add/set providers (for owner/admins)
 
 ## Contract Structure
 
 ### General Types
 
 ```rs
-type DonationId = u64;
-type TimestampMs = u64;
 ```
 
 ### Contract
@@ -19,50 +25,40 @@ type TimestampMs = u64;
 pub struct Contract {
     contract_source_metadata: LazyOption<VersionedContractSourceMetadata>,
     owner: AccountId,
-    protocol_fee_basis_points: u32,
-    referral_fee_basis_points: u32,
-    protocol_fee_recipient_account: AccountId,
-    donations_by_id: UnorderedMap<DonationId, VersionedDonation>,
-    donation_ids_by_recipient_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
-    donation_ids_by_donor_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
-    donation_ids_by_ft_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
-}
-
-/// NOT stored in contract storage; only used for get_config response
-pub struct Config {
-    pub owner: AccountId,
-    pub protocol_fee_basis_points: u32,
-    pub referral_fee_basis_points: u32,
-    pub protocol_fee_recipient_account: AccountId,
+    admins: UnorderedSet<AccountId>,
+    providers_by_id: UnorderedMap<ProviderId, VersionedProvider>,
+    default_provider_ids: UnorderedSet<ProviderId>,
+    default_human_threshold: u32,
 }
 ```
 
-### Donations
+### Providers
 
-_NB: Projects are automatically approved by default._
+*NB: Providers are stored by their ID, which is a concatenation of the contract ID + method name, e.g. "iamhuman.near:is_human"*
 
 ```rs
-pub struct Donation {
-    /// Unique identifier for the donation
-    pub id: DonationId,
-    /// ID of the donor               
-    pub donor_id: AccountId,
-    /// Amount donated         
-    pub total_amount: U128,
-    /// FT id (e.g. "near")
-    pub ft_id: AccountId,
-    /// Optional message from the donor          
-    pub message: Option<String>,
-    /// Timestamp when the donation was made
-    pub donated_at_ms: TimestampMs,
-    /// ID of the account receiving the donation  
-    pub recipient_id: AccountId,
-    /// Protocol fee
-    pub protocol_fee: U128,
-    /// Referrer ID
-    pub referrer_id: Option<AccountId>,
-    /// Referrer fee
-    pub referrer_fee: Option<U128>,
+type ProviderId = String; // NB: this is stored internally as a struct
+
+// Provider struct that is versioned & stored internally
+pub struct Provider {
+    // NB: contract address/ID and method name are contained in the Provider's ID (see `ProviderId`) so do not need to be stored here
+    /// Name of the provider, e.g. "I Am Human"
+    pub name: String,
+    /// Default weight for this provider, e.g. 100
+    pub default_weight: u32,
+    // TODO: consider adding optional `gas`, `type`/`description` (e.g. "face scan", "twitter", "captcha", etc.)
+}
+
+// External-only/ephemeral Provider struct (not stored internally) that contains contract_id and method_name
+pub struct ProviderJson {
+    /// Contract ID of the external contract that is the source of this provider
+    pub contract_id: String,
+    /// Method name of the external contract that is the source of this provider
+    pub method_name: String,
+    /// Name of the provider, e.g. "I Am Human"
+    pub name: String,
+    /// Default weight for this provider, e.g. 100
+    pub default_weight: u32,
 }
 ```
 
@@ -83,33 +79,48 @@ pub struct ContractSourceMetadata {
 
 ## Methods
 
-### Write Methods
+### Write Methods (must be owner or admin)
 
 ```rs
-// DONATIONS
+// PROVIDERS
 
 #[payable]
-pub fn donate(
+pub fn add_provider(
     &mut self,
-    recipient_id: AccountId,
-    message: Option<String>,
-    referrer_id: Option<AccountId>,
-) -> Donation
-
-// OWNER
+    contract_id: String,
+    method_name: String,
+    name: String,
+    default_weight: u32,
+) -> ProviderId
 
 #[payable]
-pub fn owner_change_owner(&mut self, owner: AccountId)
+pub fn set_default_providers(&mut self, provider_ids: Vec<ProviderId>)
 
-pub fn owner_set_protocol_fee_basis_points(&mut self, protocol_fee_basis_points: u32)
+#[payable]
+pub fn add_default_provider(&mut self, provider_id: ProviderId)
 
-pub fn owner_set_referral_fee_basis_points(&mut self, referral_fee_basis_points: u32)
+// DEFAULT HUMAN THRESHOLD
 
-pub fn owner_set_protocol_fee_recipient_account(&mut self, protocol_fee_recipient_account: AccountId)
+#[payable]
+pub fn set_default_human_threshold(&mut self, default_human_threshold: u32)
 
 // SOURCE METADATA
 
+#[payable]
 pub fn self_set_source_metadata(&mut self, source_metadata: ContractSourceMetadata) // only callable by the contract account (reasoning is that this should be able to be updated by the same account that can deploy code to the account)
+
+// OWNER/ADMINS
+
+// NB: for all methods below, caller must be owner
+
+#[payable]
+pub fn owner_change_owner(&mut self, new_owner: AccountId)
+
+#[payable]
+pub fn owner_add_admins(&mut self, account_ids: Vec<AccountId>)
+
+#[payable]
+pub fn owner_remove_admins(&mut self, account_ids: Vec<AccountId>)
 
 ```
 
@@ -120,35 +131,20 @@ pub fn self_set_source_metadata(&mut self, source_metadata: ContractSourceMetada
 
 pub fn get_config(&self) -> Config
 
-// DONATIONS
-pub fn get_donations(&self, from_index: Option<u128>, limit: Option<u64>) -> Vec<Donation>
+// PROVIDERS
+pub fn get_provider(&self, contract_id: String, method_name: String) -> Option<ProviderJson>
 
-pub fn get_donation_by_id(&self, donation_id: DonationId) -> Option<Donation>
+pub fn get_providers(&self) -> Vec<ProviderJson>
 
-pub fn get_donations_for_recipient(
-        &self,
-        recipient_id: AccountId,
-        from_index: Option<u128>,
-        limit: Option<u64>,
-    ) -> Vec<Donation>
+// IS-HUMAN
 
-pub fn get_donations_for_donor(
-    &self,
-    donor_id: AccountId,
-    from_index: Option<u128>,
-    limit: Option<u64>,
-) -> Vec<Donation>
+pub fn is_human(&self, account_id: String) -> bool // TODO: add option for caller to specify providers (with weights) + min_human_threshold
 
-pub fn get_donations_for_ft(
-    &self,
-    ft_id: AccountId,
-    from_index: Option<u128>,
-    limit: Option<u64>,
-) -> Vec<Donation>
-
-// OWNER
+// OWNER/ADMINS
 
 pub fn get_owner(&self) -> AccountId
+
+pub fn get_admins(&self) -> Vec<AccountId>
 
 // SOURCE METADATA
 
@@ -156,36 +152,6 @@ pub fn get_contract_source_metadata(&self) -> Option<ContractSourceMetadata>
 ```
 
 ## Events
-
-### `donation`
-
-Indicates that a `Donation` object has been created.
-
-**Example:**
-
-```json
-{
-    "standard": "potlock",
-    "version": "1.0.0",
-    "event": "donation",
-    "data": [
-        {
-            "donation": {
-                "donated_at_ms": 1698948121940,
-                "donor_id":"lachlan.near",
-                "ft_id":"near",
-                "id":9,
-                "message": "Go go go!",
-                "protocol_fee": "7000000000000000000000",
-                "recipient_id": "magicbuild.near",
-                "referrer_fee": "2000000000000000000000",
-                "referrer_id": "plugrel.near",
-                "total_amount": "100000000000000000000000"
-            },
-        }
-    ]
-}
-```
 
 ### `set_source_metadata`
 

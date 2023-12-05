@@ -1,5 +1,5 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap, UnorderedSet};
+use near_sdk::collections::{LazyOption, UnorderedMap, UnorderedSet};
 use near_sdk::json_types::{U128, U64};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
@@ -8,17 +8,19 @@ use near_sdk::{
 };
 
 pub mod events;
+pub mod human;
 pub mod internal;
+pub mod owner;
 pub mod providers;
 pub mod source;
 pub mod utils;
 pub use crate::events::*;
+pub use crate::human::*;
 pub use crate::internal::*;
+pub use crate::owner::*;
 pub use crate::providers::*;
 pub use crate::source::*;
 pub use crate::utils::*;
-
-type TimestampMs = u64;
 
 /// log prefix constant
 pub const EVENT_JSON_PREFIX: &str = "EVENT_JSON:";
@@ -27,7 +29,6 @@ pub const EVENT_JSON_PREFIX: &str = "EVENT_JSON:";
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Contract {
-    /// Contract "source" metadata, as specified in NEP 0330 (https://github.com/near/NEPs/blob/master/neps/nep-0330.md), with addition of `commit_hash`
     contract_source_metadata: LazyOption<VersionedContractSourceMetadata>,
     owner: AccountId,
     admins: UnorderedSet<AccountId>,
@@ -86,6 +87,14 @@ impl Contract {
             default_provider_ids: UnorderedSet::new(StorageKey::DefaultProviderIds),
             default_human_threshold: 0,
         }
+    }
+
+    pub fn get_owner(&self) -> AccountId {
+        self.owner.clone()
+    }
+
+    pub fn get_admins(&self) -> Vec<AccountId> {
+        self.admins.to_vec()
     }
 }
 
