@@ -1219,6 +1219,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81cdd64d312baedb58e21336b31bc043b77e01cc99033ce76ef539f78e965ebc"
 
 [[package]]
+name = "sybil"
+version = "0.1.0"
+dependencies = [
+ "near-sdk",
+]
+
+[[package]]
+name = "sybil_provider_simulator"
+version = "0.1.0"
+dependencies = [
+ "near-sdk",
+]
+
+[[package]]
 name = "syn"
 version = "1.0.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
