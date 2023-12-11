@@ -10,9 +10,9 @@ const READ_METHODS = {
   GET_APPLICATIONS: "get_applications",
   GET_APPLICATION_BY_PROJECT_ID: "get_application_by_project_id",
   GET_POT_CONFIG: "get_pot_config",
-  GET_DONATIONS_BALANCE: "get_donations_balance",
+  GET_DONATIONS_BALANCE: "get_total_donations",
   GET_MATCHING_POOL_BALANCE: "get_matching_pool_balance",
-  GET_PATRON_DONATIONS: "get_patron_donations",
+  GET_MATCHING_POOL_DONATIONS: "get_matching_pool_donations",
   GET_DONATIONS: "get_donations",
   GET_PAYOUTS: "get_payouts",
 };
@@ -213,7 +213,7 @@ export const adminSetChef = async (
     callerAccount: adminAccount,
     contractId: _contractId,
     methodName: WRITE_METHODS.ADMIN_SET_CHEF,
-    args: { chef_id: chefId },
+    args: { chef: chefId },
   });
 };
 
@@ -256,7 +256,7 @@ export const patronDonateToMatchingPool = async ({
 
 export const getPatronDonations = async (): Promise<PatronDonation[]> => {
   return contractView({
-    methodName: READ_METHODS.GET_PATRON_DONATIONS,
+    methodName: READ_METHODS.GET_MATCHING_POOL_DONATIONS,
   });
 };
 
@@ -346,7 +346,7 @@ export const adminSetRoundOpen = async (
     callerAccount: adminAccount,
     contractId: _contractId,
     methodName: WRITE_METHODS.ADMIN_SET_ROUND_OPEN,
-    args: { round_end_ms: roundEndMs },
+    args: { public_round_end_ms: roundEndMs },
   });
 };
 

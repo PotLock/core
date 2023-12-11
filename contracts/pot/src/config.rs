@@ -4,80 +4,56 @@ use crate::*;
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct PotConfig {
-    /// Address (ID) of round manager ("chef"), essentially the contract owner
-    pub chef_id: AccountId,
-    /// Friendly & descriptive round name
-    pub round_name: String,
-    /// Friendly & descriptive round description
-    pub round_description: String,
-    /// MS Timestamp when the round starts
-    pub round_start_ms: TimestampMs,
-    /// MS Timestamp when the round ends
-    pub round_end_ms: TimestampMs,
-    /// MS Timestamp when applications can be submitted from
-    pub application_start_ms: TimestampMs,
-    /// MS Timestamp when applications can be submitted until
-    pub application_end_ms: TimestampMs,
-    /// Maximum number of projects that can be approved for the round
+    pub owner: AccountId,
+    pub admins: Vec<AccountId>,
+    pub chef: Option<AccountId>,
+    pub pot_name: String,
+    pub pot_description: String,
     pub max_projects: u32,
-    /// Base currency for the round
     pub base_currency: AccountId,
-    /// Account ID that deployed this Pot contract
-    pub created_by: AccountId,
-    // /// If project raises less than this amount in donations, milestone submissions aren't required
-    // pub milestone_threshold: U64, // TODO: is this practical to implement?
-    // pub basis_points_paid_upfront: u32, // TODO: what does this mean? how will it be paid upfront if there are no donations yet?
-    // /// SBTs required to submit an application
-    // pub application_requirement: Option<SBTRequirement>,
-    /// SBTs required to donate to a project
-    pub donation_requirement: Option<SBTRequirement>,
-    // payment_per_milestone: u32,
+    pub application_start_ms: TimestampMs,
+    pub application_end_ms: TimestampMs,
+    pub public_round_start_ms: TimestampMs,
+    pub public_round_end_ms: TimestampMs,
+    pub deployed_by: AccountId,
+    pub registry_provider: Option<ProviderId>,
+    pub sybil_wrapper_provider: Option<ProviderId>,
+    pub custom_sybil_checks: Option<HashMap<ProviderId, SybilProviderWeight>>,
+    pub custom_min_threshold_score: Option<u32>,
     pub patron_referral_fee_basis_points: u32,
-    /// Max amount that can be paid to an account that referred a Patron
-    pub max_patron_referral_fee: U128, // TODO: consider whether this is necessary
-    /// Chef's fee for managing the round
     pub chef_fee_basis_points: u32, // TODO: should this be basis points or a fixed amount?
-    /// Protocol fee
-    pub protocol_fee_basis_points: u32, // e.g. 700 (7%)
-    /// Account ID that receives protocol fees
-    pub protocol_fee_recipient_account: AccountId,
-    /// Amount of matching funds available
     pub matching_pool_balance: U128,
-    /// Amount of donated funds available
-    pub donations_balance: U128,
-    /// Cooldown period starts when Chef sets payouts
+    pub total_donations: U128,
     pub cooldown_end_ms: Option<TimestampMs>,
-    /// Have all projects been paid out?
-    pub paid_out: bool,
+    pub all_paid_out: bool,
 }
 
 #[near_bindgen]
 impl Contract {
     pub fn get_pot_config(&self) -> PotConfig {
         PotConfig {
-            chef_id: self.chef_id.clone(),
-            round_name: self.round_name.clone(),
-            round_description: self.round_description.clone(),
-            round_start_ms: self.round_start_ms,
-            round_end_ms: self.round_end_ms,
-            application_start_ms: self.application_start_ms,
-            application_end_ms: self.application_end_ms,
+            owner: self.owner.clone(),
+            admins: self.admins.to_vec(),
+            chef: self.chef.get(),
+            pot_name: self.pot_name.clone(),
+            pot_description: self.pot_description.clone(),
             max_projects: self.max_projects,
             base_currency: self.base_currency.clone(),
-            created_by: self.created_by.clone(),
-            // milestone_threshold: self.milestone_threshold,
-            // basis_points_paid_upfront: self.basis_points_paid_upfront,
-            // application_requirement: self.application_requirement.clone(),
-            donation_requirement: self.donation_requirement.clone(),
+            application_start_ms: self.application_start_ms,
+            application_end_ms: self.application_end_ms,
+            public_round_start_ms: self.public_round_start_ms,
+            public_round_end_ms: self.public_round_end_ms,
+            deployed_by: self.deployed_by.clone(),
+            registry_provider: self.registry_provider.get(),
+            sybil_wrapper_provider: self.sybil_wrapper_provider.get(),
+            custom_sybil_checks: self.custom_sybil_checks.get(),
+            custom_min_threshold_score: self.custom_min_threshold_score.get(),
             patron_referral_fee_basis_points: self.patron_referral_fee_basis_points,
-            max_patron_referral_fee: self.max_patron_referral_fee,
             chef_fee_basis_points: self.chef_fee_basis_points,
-            protocol_fee_basis_points: self.protocol_fee_basis_points,
-            protocol_fee_recipient_account: self.protocol_fee_recipient_account.clone(),
             matching_pool_balance: self.matching_pool_balance,
-            donations_balance: self.donations_balance,
-            cooldown_end_ms: self.cooldown_end_ms,
-            paid_out: self.paid_out,
+            total_donations: self.total_donations,
+            cooldown_end_ms: self.cooldown_end_ms.get(),
+            all_paid_out: self.all_paid_out,
         }
     }
 }

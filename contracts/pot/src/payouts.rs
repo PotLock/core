@@ -41,7 +41,7 @@ impl Contract {
         self.assert_round_closed();
         // verify that payouts have not already been processed
         assert!(
-            self.paid_out == false,
+            self.all_paid_out == false,
             "Payouts have already been processed"
         );
         // clear any existing payouts (in case this is a reset, e.g. fixing an error)
@@ -59,10 +59,10 @@ impl Contract {
         let balance_available = self
             .matching_pool_balance
             .0
-            .checked_add(self.donations_balance.0)
+            .checked_add(self.total_donations.0)
             .expect(&format!(
                 "Overflow occurred when calculating balance available ({} + {})",
-                self.matching_pool_balance.0, self.donations_balance.0,
+                self.matching_pool_balance.0, self.total_donations.0,
             ));
         // for each payout:
         for payout in payouts.iter() {
@@ -83,7 +83,8 @@ impl Contract {
                 "Payouts exceed available balance"
             );
             // set cooldown_end to now + 1 week (?)
-            self.cooldown_end_ms = Some(env::block_timestamp_ms() + ONE_WEEK_MS);
+            self.cooldown_end_ms
+                .set(&(env::block_timestamp_ms() + ONE_WEEK_MS));
             // add payout to payouts
             let mut payout_ids_for_application = self
                 .payout_ids_by_project_id

@@ -32,7 +32,7 @@ PotDeployer
 
 Pot
 - Can be deployed and initialized
-- Enforces round_start_ms & round_end_ms
+- Enforces public_round_start_ms & public_round_end_ms
 - Enforces application_start_ms & application_end_ms
 - Enforces max_projects
 - Enforces supported base_currency

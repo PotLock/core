@@ -30,29 +30,28 @@ interface Project {
 }
 
 interface PotArgs {
-  chef_id: AccountId;
-  round_name: String;
-  round_description: String;
-  round_start_ms: TimestampMs;
-  round_end_ms: TimestampMs;
+  chef: AccountId;
+  pot_name: String;
+  pot_description: String;
+  public_round_start_ms: TimestampMs;
+  public_round_end_ms: TimestampMs;
   application_start_ms: TimestampMs;
   application_end_ms: TimestampMs;
   max_projects: number;
   base_currency: AccountId;
   donation_requirement: SBTRequirement | null;
   patron_referral_fee_basis_points: number;
-  max_patron_referral_fee: string;
   chef_fee_basis_points: number;
   protocol_fee_basis_points: number;
   protocol_fee_recipient_account: AccountId;
 }
 
 interface PotConfig extends PotArgs {
-  created_by: AccountId;
+  deployed_by: AccountId;
   matching_pool_balance: string;
   donations_balance: string;
   cooldown_end_ms: TimestampMs | null;
-  paid_out: boolean;
+  all_paid_out: boolean;
 }
 
 interface Pot {

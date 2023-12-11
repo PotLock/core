@@ -45,7 +45,6 @@ import {
   DEFAULT_ISSUER_ID,
   DEFAULT_MAX_APPLICATION_TIME,
   DEFAULT_MAX_CHEF_FEE_BASIS_POINTS,
-  DEFAULT_MAX_PATRON_REFERRAL_FEE,
   DEFAULT_MAX_PROJECTS,
   DEFAULT_MAX_PROTOCOL_FEE_BASIS_POINTS,
   DEFAULT_MAX_ROUND_TIME,
@@ -65,7 +64,7 @@ import {
 
 /*
 TEST CASES (taken from ../README.md):
-- Enforces round_start_ms & round_end_ms
+- Enforces public_round_start_ms & public_round_end_ms
 - ✅ Enforces application_start_ms & application_end_ms
 - Enforces max_projects
 - Enforces supported base_currency
@@ -123,12 +122,12 @@ describe("Pot Contract Tests", async () => {
     // attempt to initialize contract; if it fails, it's already initialized
     const now = Date.now();
     const defaultPotArgs = {
-      created_by: chefAccount.accountId,
-      chef_id: chefAccount.accountId,
-      round_name: "test round",
-      round_description: "test round description",
-      round_start_ms: now,
-      round_end_ms: now + DEFAULT_ROUND_LENGTH,
+      deployed_by: chefAccount.accountId,
+      chef: chefAccount.accountId,
+      pot_name: "test round",
+      pot_description: "test round description",
+      public_round_start_ms: now,
+      public_round_end_ms: now + DEFAULT_ROUND_LENGTH,
       application_start_ms: now,
       application_end_ms: now + DEFAULT_APPLICATION_LENGTH, // 1 week
       max_projects: DEFAULT_MAX_PROJECTS,
@@ -141,12 +140,10 @@ describe("Pot Contract Tests", async () => {
       // },
       patron_referral_fee_basis_points:
         DEFAULT_PATRON_REFERRAL_FEE_BASIS_POINTS,
-      max_patron_referral_fee: DEFAULT_MAX_PATRON_REFERRAL_FEE,
       chef_fee_basis_points: DEFAULT_chef_fee_basis_points,
       protocol_fee_basis_points: DEFAULT_PROTOCOL_FEE_BASIS_POINTS,
       protocol_fee_recipient_account: potDeployerAdminId,
       registry_contract_id: registryContractId,
-      pot_deployer_contract_id: potDeployerContractId,
     };
     try {
       // initialize contract unless already initialized
@@ -223,7 +220,7 @@ describe("Pot Contract Tests", async () => {
       const newChef = "new-chef.testnet";
       await adminSetChef(potDeployerAdminAccount, newChef);
       let config = await getPotConfig();
-      assert(config.chef_id === newChef);
+      assert(config.chef === newChef);
       // change back to original chef
       await adminSetChef(potDeployerAdminAccount, chefAccount.accountId);
       // non-admin CANNOT set chef
@@ -402,7 +399,7 @@ describe("Pot Contract Tests", async () => {
       assert(JSON.stringify(e).includes("Project is not registered"));
     }
 
-    // it("Enforces round_start_ms & round_end_ms", async () => {
+    // it("Enforces public_round_start_ms & public_round_end_ms", async () => {
     //   // what cannot occur outside of round start/end?
     //   // patron CAN donate before round start
     //   // patron CANNOT donate after round end
@@ -420,15 +417,11 @@ describe("Pot Contract Tests", async () => {
       const referrerId = chefAccount.accountId;
       const donationAmount = parseNearAmount("1") as string; // 1 NEAR in YoctoNEAR
       const potConfig = await getPotConfig();
-      // const referrerFee = new BN(potConfig.max_patron_referral_fee);
       const amountPerBasisPoint = new BN(donationAmount).div(new BN(10_000));
       // calculate referrer fee
       let referrerFee = amountPerBasisPoint.mul(
         new BN(potConfig.patron_referral_fee_basis_points)
       );
-      if (referrerFee > new BN(potConfig.max_patron_referral_fee)) {
-        referrerFee = new BN(potConfig.max_patron_referral_fee);
-      }
       // calculate protocol fee
       let protocolFee = amountPerBasisPoint.mul(
         new BN(potConfig.protocol_fee_basis_points)
@@ -471,7 +464,6 @@ describe("Pot Contract Tests", async () => {
       const donationAmount = parseNearAmount("1") as string; // 1 NEAR in YoctoNEAR
       const donorAccount = chefAccount;
       const potConfig = await getPotConfig();
-      // const referrerFee = new BN(potConfig.max_patron_referral_fee);
       const amountPerBasisPoint = new BN(donationAmount).div(new BN(10_000));
       // calculate protocol fee
       let protocolFee = amountPerBasisPoint.mul(
@@ -514,7 +506,6 @@ describe("Pot Contract Tests", async () => {
       const donationAmount = parseNearAmount("1") as string; // 1 NEAR in YoctoNEAR
       const donorAccount = potDeployerAdminAccount;
       const potConfig = await getPotConfig();
-      // const referrerFee = new BN(potConfig.max_patron_referral_fee);
       const amountPerBasisPoint = new BN(donationAmount).div(new BN(10_000));
       // calculate protocol fee
       let protocolFee = amountPerBasisPoint.mul(
@@ -624,7 +615,7 @@ describe("Pot Contract Tests", async () => {
         }
         // verify round config
         const config = await getPotConfig();
-        assert(config.paid_out);
+        assert(config.all_paid_out);
       }
     } catch (e) {
       console.log("error processing payouts: ", e);

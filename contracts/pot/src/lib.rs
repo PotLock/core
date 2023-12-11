@@ -1,11 +1,12 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet};
+use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap, UnorderedSet};
 use near_sdk::json_types::{Base64VecU8, U128, U64};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
-    env, ext_contract, log, near_bindgen, require, AccountId, BorshStorageKey, Gas, Promise,
-    PromiseError,
+    env, ext_contract, log, near_bindgen, require, serde_json::json, AccountId, Balance,
+    BorshStorageKey, Gas, Promise, PromiseError,
 };
+use std::collections::HashMap;
 
 type TimestampMs = u64;
 type ProjectId = AccountId;
@@ -17,196 +18,308 @@ pub mod applications;
 pub mod config;
 pub mod constants;
 pub mod donations;
-pub mod external;
 pub mod internal;
 pub mod payouts;
-pub mod sbt;
+pub mod utils;
 pub use crate::admin::*;
 pub use crate::applications::*;
 pub use crate::config::*;
 pub use crate::constants::*;
 pub use crate::donations::*;
-pub use crate::external::*;
 pub use crate::internal::*;
 pub use crate::payouts::*;
-pub use crate::sbt::*;
+pub use crate::utils::*;
+
+// TODO: move Provider stuff elsewhere?
+#[derive(
+    BorshDeserialize,
+    BorshSerialize,
+    Serialize,
+    Deserialize,
+    Debug,
+    Clone,
+    Eq,
+    PartialEq,
+    Hash,
+    PartialOrd,
+)]
+#[serde(crate = "near_sdk::serde")]
+pub struct ProviderId(pub String);
+
+pub const PROVIDER_ID_DELIMITER: &str = ":"; // separates contract_id and method_name in ProviderId // TODO: move to constants.rs?
+
+// Generate ProviderId ("{CONTRACT_ADDRESS}:{METHOD_NAME}") from contract_id and method_name
+impl ProviderId {
+    fn new(contract_id: String, method_name: String) -> Self {
+        ProviderId(format!(
+            "{}{}{}",
+            contract_id, PROVIDER_ID_DELIMITER, method_name
+        ))
+    }
+
+    pub fn decompose(&self) -> (String, String) {
+        let parts: Vec<&str> = self.0.split(PROVIDER_ID_DELIMITER).collect();
+        if parts.len() != 2 {
+            panic!("Invalid provider ID format. Expected 'contract_id:method_name'.");
+        }
+        (parts[0].to_string(), parts[1].to_string())
+    }
+}
+
+const MAX_PROTOCOL_FEE_BASIS_POINTS: u32 = 1000; // 10% max protocol fee
+
+// #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+// #[serde(crate = "near_sdk::serde")]
+// pub struct SybilProvider {
+//     // NB: contract address/ID and method name are contained in the Provider's ID (see `ProviderId`) so do not need to be stored here
+//     /// Weight for this provider, e.g. 100
+//     pub default_weight: u32,
+//     // TODO: consider adding optional `gas`, `type`/`description` (e.g. "face scan", "twitter", "captcha", etc.)
+// }
+
+// #[derive(BorshSerialize, BorshDeserialize)]
+// pub enum VersionedProvider {
+//     Current(Provider),
+// }
+
+// impl From<VersionedProvider> for Provider {
+//     fn from(provider: VersionedProvider) -> Self {
+//         match provider {
+//             VersionedProvider::Current(current) => current,
+//         }
+//     }
+// }
+
+// // TODO: move this elsewhere
+// #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
+// #[serde(crate = "near_sdk::serde")]
+// pub struct SybilConfig
+
+/// Sybil provider weight
+type SybilProviderWeight = u32;
 
 /// Pot Contract (funding round)
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Contract {
-    /// Address (ID) of round manager ("chef"), essentially the contract owner
-    // TODO: return error if a specified round manager is not a "chef" role in the refi.sputnik-dao.near contract
-    pub chef_id: AccountId,
-    /// Friendly & descriptive round name
-    pub round_name: String,
-    /// Friendly & descriptive round description
-    pub round_description: String,
-    /// MS Timestamp when the round starts
-    pub round_start_ms: TimestampMs,
-    /// MS Timestamp when the round ends
-    pub round_end_ms: TimestampMs,
+    // PERMISSIONED ACCOUNTS
+    /// Owner of the contract
+    pub owner: AccountId,
+    /// Admins of the contract (Owner, which should in most cases be DAO, might want to delegate admin rights to other accounts)
+    pub admins: UnorderedSet<AccountId>,
+    /// Address (ID) of Pot manager ("chef"). This account is responsible for managing the Pot, e.g. reviewing applications, setting payouts, etc.
+    /// Optional because it may be set after deployment.
+    pub chef: LazyOption<AccountId>,
+
+    // POT CONFIG
+    /// User-facing name for this Pot
+    pub pot_name: String,
+    /// User-facing description for this Pot
+    pub pot_description: String,
+    /// Maximum number of projects that can be approved for the round. Considerations include gas limits for payouts, etc.
+    pub max_projects: u32,
+    /// Base currency for the round
+    /// * NB: currently only `"near"` is supported
+    pub base_currency: AccountId,
     /// MS Timestamp when applications can be submitted from
     pub application_start_ms: TimestampMs,
     /// MS Timestamp when applications can be submitted until
     pub application_end_ms: TimestampMs,
-    /// Maximum number of projects that can be approved for the round
-    pub max_projects: u32,
-    /// Base currency for the round
-    pub base_currency: AccountId, // TODO: add FT support
-    /// Account ID that deployed this Pot contract
-    pub created_by: AccountId,
-    /// Account ID of registry contract that should be queried when projects apply to round
-    pub registry_contract_id: AccountId,
-    /// Account ID of pot deployer contract (singleton) that is queried to verify admin status
-    pub pot_deployer_contract_id: AccountId,
-    // /// If project raises less than this amount in donations, milestone submissions aren't required
-    // pub milestone_threshold: U64, // TODO: is this practical to implement?
-    // pub basis_points_paid_upfront: u32, // TODO: what does this mean? how will it be paid upfront if there are no donations yet?
-    // /// SBTs required to submit an application
-    // pub application_requirement: Option<SBTRequirement>,
-    /// SBTs required to donate to a project
-    pub donation_requirement: Option<SBTRequirement>,
-    // payment_per_milestone: u32,
-    pub patron_referral_fee_basis_points: u32, // TODO: implement referral fees
-    /// Max amount that can be paid to an account that referred a Patron
-    pub max_patron_referral_fee: U128, // TODO: consider whether this is necessary
-    /// Chef's fee for managing the round
-    pub chef_fee_basis_points: u32, // TODO: should this be basis points or a fixed amount?
-    /// Protocol fee
-    pub protocol_fee_basis_points: u32, // e.g. 700 (7%)
-    /// Account that protocol fee should be transferred to
-    pub protocol_fee_recipient_account: AccountId,
+    /// MS Timestamp when the public round starts
+    pub public_round_start_ms: TimestampMs,
+    /// MS Timestamp when the round ends
+    pub public_round_end_ms: TimestampMs,
+    /// Account ID that deployed this Pot contract (set at deployment, cannot be updated)
+    pub deployed_by: AccountId,
+    /// Contract ID + method name of registry provider that should be queried when projects apply to round. Method specified must receive "account_id" and return bool indicating registration status.
+    /// * Optional because not all Pots will require registration, and those that do might set after deployment.
+    pub registry_provider: LazyOption<ProviderId>,
+
+    // SYBIL RESISTANCE
+    /// Sybil contract address & method name that will be called to verify humanness. If `None`, no checks will be made.
+    pub sybil_wrapper_provider: LazyOption<ProviderId>,
+    /// Sybil checks (if using custom sybil config)
+    pub custom_sybil_checks: LazyOption<HashMap<ProviderId, SybilProviderWeight>>,
+    /// Minimum threshold score for Sybil checks (if using custom sybil config)
+    pub custom_min_threshold_score: LazyOption<u32>,
+
+    // FEES
+    /// Basis points (1/100 of a percent) that should be paid to an account that refers a Patron (paid at the point when the matching pool donation comes in)
+    pub patron_referral_fee_basis_points: u32, // TODO: implement referral fee payouts
+    /// Chef's fee for managing the round. Gets taken out of each donation as they come in and are paid out
+    pub chef_fee_basis_points: u32,
+
+    // FUNDS & BALANCES
     /// Amount of matching funds available
-    pub matching_pool_balance: U128, // TODO: may want to change this to U128?
-    /// Amount of donated funds available
-    pub donations_balance: U128, // TODO: may want to change this to U128?
+    pub matching_pool_balance: U128,
+    /// Total amount donated
+    pub total_donations: U128,
+
+    // PAYOUTS
     /// Cooldown period starts when Chef sets payouts
-    pub cooldown_end_ms: Option<TimestampMs>,
-    /// Have all projects been paid out?
-    pub paid_out: bool,
+    pub cooldown_end_ms: LazyOption<TimestampMs>,
+    /// Indicates whether all projects been paid out (this would be considered the "end-of-lifecycle" for the Pot)
+    pub all_paid_out: bool,
 
-    // APPLICATION MAPPINGS
-    // /// All application records
-    // pub applications_by_id: UnorderedMap<ApplicationId, Application>,
-    // /// IDs of all applications
-    // pub application_ids: UnorderedSet<ApplicationId>,
-    // /// ID of applications by their `project_id`
-    // pub application_id_by_project_id: LookupMap<ProjectId, ApplicationId>,
+    // MAPPINGS
+    /// All application records
     pub applications_by_project_id: UnorderedMap<ProjectId, Application>,
-
-    // DONATION MAPPINGS (end-user)
+    // TODO: add approved, rejected, pending application IDs?
     /// All donation records
     pub donations_by_id: UnorderedMap<DonationId, Donation>,
+    /// IDs of public round donations (made by donors who are not Patrons, during public round)
+    pub public_round_donation_ids: UnorderedSet<DonationId>,
+    /// IDs of matching pool donations (made by Patrons)
+    pub matching_pool_donation_ids: UnorderedSet<DonationId>,
     /// IDs of donations made to a given project
     pub donation_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<DonationId>>,
     /// IDs of donations made by a given donor (user)
     pub donation_ids_by_donor_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
-
-    // MATCHING POOL DONATION MAPPINGS (patron)
-    /// All matching pool donation records
-    pub patron_donations_by_id: UnorderedMap<DonationId, PatronDonation>,
-    /// IDs of matching pool donations
-    pub patron_donation_ids: UnorderedSet<DonationId>,
-
-    // PAYOUT MAPPINGS
+    // payouts
     pub payouts_by_id: UnorderedMap<PayoutId, Payout>, // can iterate over this to get all payouts
-    pub payout_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<PayoutId>>, // TODO: change to project_id
+    pub payout_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<PayoutId>>,
+
+    // OTHER
+    /// contract ID + method name of protocol config provider that should be queried for protocol fee basis points and protocol fee recipient account.
+    /// Method specified must receive no requried args and return struct containing protocol_fee_basis_points and protocol_fee_recipient_account.
+    /// Set by deployer and cannot be changed by Pot owner/admins.
+    pub protocol_config_provider: LazyOption<ProviderId>,
 }
 
 #[derive(BorshSerialize, BorshStorageKey)]
 pub enum StorageKey {
-    // ApplicationIds,
-    // ApplicationsById,
-    // ApplicationIdByProjectId,
+    Admins,
+    Chef,
+    RegistryProvider,
+    SybilContractId,
+    CustomSybilChecks,
+    CustomMinThresholdScore,
+    CooldownEndMs,
+    ProtocolConfigProvider,
     ApplicationsByProjectId,
     ApprovedApplicationIds,
     RejectedApplicationIds,
     PendingApplicationIds,
     DonationsById,
+    PublicRoundDonationIds,
+    MatchingPoolDonationIds,
     DonationIdsByProjectId,
     DonationIdsByProjectIdInner { project_id: ProjectId },
     DonationIdsByDonorId,
     DonationIdsByDonorIdInner { donor_id: AccountId },
-    PatronDonationsById,
-    PatronDonationIds,
     PayoutsById,
     PayoutIdsByProjectId,
     PayoutIdsByProjectIdInner { project_id: ProjectId },
-    ApplicationRequirements,
-    DonationRequirements,
 }
 
 #[near_bindgen]
 impl Contract {
     #[init]
     pub fn new(
-        chef_id: AccountId,
-        round_name: String,
-        round_description: String,
-        round_start_ms: TimestampMs,
-        round_end_ms: TimestampMs,
+        // permissioned accounts
+        owner: Option<AccountId>, // defaults to deploying account if not provided
+        admins: Option<Vec<AccountId>>,
+        chef: Option<AccountId>,
+
+        // pot config
+        pot_name: String,
+        pot_description: String,
+        max_projects: u32,
         application_start_ms: TimestampMs,
         application_end_ms: TimestampMs,
-        max_projects: u32,
-        base_currency: AccountId,
-        created_by: AccountId,
-        registry_contract_id: AccountId,
-        pot_deployer_contract_id: AccountId,
-        // milestone_threshold: U64,
-        // basis_points_paid_upfront: u32,
-        // application_requirement: Option<SBTRequirement>,
-        donation_requirement: Option<SBTRequirement>,
-        patron_referral_fee_basis_points: u32,
-        max_patron_referral_fee: U128,
+        public_round_start_ms: TimestampMs,
+        public_round_end_ms: TimestampMs,
+        registry_provider: Option<ProviderId>, // TODO: may need to change type here
+
+        // sybil resistance
+        sybil_wrapper_provider: Option<ProviderId>,
+        custom_sybil_checks: Option<HashMap<ProviderId, SybilProviderWeight>>,
+        custom_min_threshold_score: Option<u32>,
+
+        // fees
+        patron_referral_fee_basis_points: u32, // this could be optional with a default, but better to set explicitly for now
         chef_fee_basis_points: u32,
-        protocol_fee_basis_points: u32,
-        protocol_fee_recipient_account: AccountId,
+
+        // other
+        protocol_config_provider: Option<ProviderId>,
     ) -> Self {
         assert!(!env::state_exists(), "Already initialized");
         Self {
-            chef_id,
-            round_name,
-            round_description,
-            round_start_ms, // TODO: change to "public_round_start_ms" & update occurrences & related vars
-            round_end_ms,
+            // permissioned accounts
+            owner: owner.unwrap_or(env::signer_account_id()),
+            admins: account_vec_to_set(
+                if admins.is_some() {
+                    admins.unwrap()
+                } else {
+                    vec![]
+                },
+                StorageKey::Admins,
+            ),
+            chef: LazyOption::new(StorageKey::Chef, chef.as_ref()),
+
+            // pot config
+            pot_name,
+            pot_description,
+            max_projects,
+            base_currency: AccountId::new_unchecked("near".to_string()),
             application_start_ms,
             application_end_ms,
-            max_projects,
-            base_currency,
-            created_by,
-            registry_contract_id,
-            pot_deployer_contract_id,
-            // milestone_threshold,
-            // basis_points_paid_upfront,
-            // application_requirement,
-            donation_requirement,
+            public_round_start_ms,
+            public_round_end_ms,
+            deployed_by: env::signer_account_id(),
+            registry_provider: LazyOption::new(
+                StorageKey::RegistryProvider,
+                registry_provider.as_ref(),
+            ),
+
+            // sybil resistance
+            sybil_wrapper_provider: LazyOption::new(
+                StorageKey::SybilContractId,
+                sybil_wrapper_provider.as_ref(),
+            ),
+            custom_sybil_checks: LazyOption::new(
+                StorageKey::CustomSybilChecks,
+                custom_sybil_checks.as_ref(),
+            ),
+            custom_min_threshold_score: LazyOption::new(
+                StorageKey::CustomMinThresholdScore,
+                custom_min_threshold_score.as_ref(),
+            ),
+
+            // fees
             patron_referral_fee_basis_points,
-            max_patron_referral_fee,
             chef_fee_basis_points,
-            protocol_fee_basis_points,
-            protocol_fee_recipient_account,
-            matching_pool_balance: U128::from(0),
-            donations_balance: U128::from(0),
-            cooldown_end_ms: None,
-            paid_out: false,
-            // application_ids: UnorderedSet::new(StorageKey::ApplicationIds),
-            // applications_by_id: UnorderedMap::new(StorageKey::ApplicationsById),
-            // application_id_by_project_id: LookupMap::new(StorageKey::ApplicationIdByProjectId),
+
+            // funds and balances
+            matching_pool_balance: U128(0),
+            total_donations: U128(0),
+
+            // payouts
+            cooldown_end_ms: LazyOption::new(StorageKey::CooldownEndMs, None),
+            all_paid_out: false,
+
+            // mappings
             applications_by_project_id: UnorderedMap::new(StorageKey::ApplicationsByProjectId),
             donations_by_id: UnorderedMap::new(StorageKey::DonationsById),
+            public_round_donation_ids: UnorderedSet::new(StorageKey::PublicRoundDonationIds),
+            matching_pool_donation_ids: UnorderedSet::new(StorageKey::MatchingPoolDonationIds),
             donation_ids_by_project_id: LookupMap::new(StorageKey::DonationIdsByProjectId),
             donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
-            patron_donations_by_id: UnorderedMap::new(StorageKey::PatronDonationsById),
-            patron_donation_ids: UnorderedSet::new(StorageKey::PatronDonationIds),
             payout_ids_by_project_id: LookupMap::new(StorageKey::PayoutIdsByProjectId),
             payouts_by_id: UnorderedMap::new(StorageKey::PayoutsById),
+
+            // other
+            protocol_config_provider: LazyOption::new(
+                StorageKey::ProtocolConfigProvider,
+                protocol_config_provider.as_ref(),
+            ),
         }
     }
 
     pub fn is_round_active(&self) -> bool {
         let block_timestamp_ms = env::block_timestamp_ms();
-        block_timestamp_ms >= self.round_start_ms && block_timestamp_ms < self.round_end_ms
+        block_timestamp_ms >= self.public_round_start_ms
+            && block_timestamp_ms < self.public_round_end_ms
     }
 }
 
@@ -214,42 +327,37 @@ impl Contract {
 impl Default for Contract {
     fn default() -> Self {
         Self {
-            chef_id: AccountId::new_unchecked("".to_string()),
-            round_name: "".to_string(),
-            round_description: "".to_string(),
-            round_start_ms: 0,
-            round_end_ms: 0,
+            chef: LazyOption::new(StorageKey::Chef, None),
+            owner: env::signer_account_id(),
+            admins: UnorderedSet::new(StorageKey::Admins),
+            pot_name: "".to_string(),
+            pot_description: "".to_string(),
+            max_projects: 0,
+            base_currency: AccountId::new_unchecked("near".to_string()),
             application_start_ms: 0,
             application_end_ms: 0,
-            max_projects: 0,
-            base_currency: AccountId::new_unchecked("".to_string()),
-            created_by: AccountId::new_unchecked("".to_string()),
-            registry_contract_id: AccountId::new_unchecked("".to_string()),
-            pot_deployer_contract_id: AccountId::new_unchecked("".to_string()),
-            // milestone_threshold: U64(0),
-            // basis_points_paid_upfront: 0,
-            // application_requirement: None,
-            donation_requirement: None,
+            public_round_start_ms: 0,
+            public_round_end_ms: 0,
+            deployed_by: env::signer_account_id(),
+            registry_provider: LazyOption::new(StorageKey::RegistryProvider, None),
+            sybil_wrapper_provider: LazyOption::new(StorageKey::SybilContractId, None),
+            custom_sybil_checks: LazyOption::new(StorageKey::CustomSybilChecks, None),
+            custom_min_threshold_score: LazyOption::new(StorageKey::CustomMinThresholdScore, None),
             patron_referral_fee_basis_points: 0,
-            max_patron_referral_fee: U128(0),
             chef_fee_basis_points: 0,
-            protocol_fee_basis_points: 0,
-            protocol_fee_recipient_account: AccountId::new_unchecked("".to_string()),
-            matching_pool_balance: U128::from(0),
-            donations_balance: U128::from(0),
-            cooldown_end_ms: None,
-            paid_out: false,
-            // application_ids: UnorderedSet::new(StorageKey::ApplicationIds),
-            // applications_by_id: UnorderedMap::new(StorageKey::ApplicationsById),
-            // application_id_by_project_id: LookupMap::new(StorageKey::ApplicationIdByProjectId),
+            matching_pool_balance: U128(0),
+            total_donations: U128(0),
+            cooldown_end_ms: LazyOption::new(StorageKey::CooldownEndMs, None),
+            all_paid_out: false,
             applications_by_project_id: UnorderedMap::new(StorageKey::ApplicationsByProjectId),
             donations_by_id: UnorderedMap::new(StorageKey::DonationsById),
+            public_round_donation_ids: UnorderedSet::new(StorageKey::PublicRoundDonationIds),
+            matching_pool_donation_ids: UnorderedSet::new(StorageKey::MatchingPoolDonationIds),
             donation_ids_by_project_id: LookupMap::new(StorageKey::DonationIdsByProjectId),
             donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
-            patron_donations_by_id: UnorderedMap::new(StorageKey::PatronDonationsById),
-            patron_donation_ids: UnorderedSet::new(StorageKey::PatronDonationIds),
             payout_ids_by_project_id: LookupMap::new(StorageKey::PayoutIdsByProjectId),
             payouts_by_id: UnorderedMap::new(StorageKey::PayoutsById),
+            protocol_config_provider: LazyOption::new(StorageKey::ProtocolConfigProvider, None),
         }
     }
 }

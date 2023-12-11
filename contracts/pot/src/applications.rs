@@ -37,31 +37,48 @@ pub struct Application {
 impl Contract {
     #[payable]
     pub fn apply(&mut self) -> Promise {
-        let project_id = env::predecessor_account_id();
-        let promise = potlock_registry::ext(self.registry_contract_id.clone())
-            .with_static_gas(Gas(XXC_GAS))
-            .get_project_by_id(project_id.clone());
-
-        promise.then(
+        let project_id = env::predecessor_account_id(); // TODO: consider renaming to "applicant_id" to make it less opinionated
+        if let Some(registry_provider) = self.registry_provider.get() {
+            // decompose registry provider
+            let (contract_id, method_name) = registry_provider.decompose();
+            // call registry provider
+            let args = json!({ "account_id": project_id }).to_string().into_bytes();
+            Promise::new(AccountId::new_unchecked(contract_id.clone()))
+                .function_call(method_name.clone(), args, 0, XCC_GAS)
+                .then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(XCC_GAS)
+                        .assert_can_apply_callback(project_id.clone()),
+                )
+        } else {
             Self::ext(env::current_account_id())
-                .with_static_gas(Gas(XXC_GAS))
-                .assert_can_apply_callback(project_id.clone()),
-        )
+                .with_static_gas(XCC_GAS)
+                .apply_always_allow_callback(project_id.clone())
+        }
     }
 
-    #[private] // Public - but only callable by env::current_account_id()
+    #[private] // Only callable by env::current_account_id()
+    pub fn apply_always_allow_callback(&mut self, project_id: ProjectId) -> Application {
+        self.handle_apply(project_id)
+    }
+
+    #[private] // Only callable by env::current_account_id()
     pub fn assert_can_apply_callback(
         &mut self,
         project_id: ProjectId,
-        #[callback_result] call_result: Result<PotlockRegistryProject, PromiseError>,
+        #[callback_result] call_result: Result<bool, PromiseError>,
     ) -> Application {
         // Check if the promise succeeded by calling the method outlined in external.rs
-        if call_result.is_err() {
+        if call_result.is_err() || !call_result.unwrap() {
             env::panic_str(&format!(
-                "Project is not registered on {}",
-                self.registry_contract_id.clone()
+                "Project is not registered on {:#?}",
+                self.registry_provider.get().unwrap()
             ));
         }
+        self.handle_apply(project_id)
+    }
+
+    pub(crate) fn handle_apply(&mut self, project_id: ProjectId) -> Application {
         // check that application doesn't already exist for this project
         if self.applications_by_project_id.get(&project_id).is_some() {
             // application already exists
@@ -93,6 +110,7 @@ impl Contract {
             .get(&project_id)
             .expect("Application does not exist for calling project");
         // verify that application is pending
+        // TODO: consider removing this check
         assert_eq!(
             application.status,
             ApplicationStatus::Pending,
@@ -151,6 +169,8 @@ impl Contract {
             .insert(&project_id, &application);
         application
     }
+
+    // TODO: consider removing convenience methods below
 
     pub fn chef_mark_application_approved(
         &mut self,

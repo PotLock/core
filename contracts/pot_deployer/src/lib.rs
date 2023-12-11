@@ -20,7 +20,7 @@ pub use crate::internal::*;
 pub use crate::utils::*;
 
 pub const TGAS: u64 = 1_000_000_000_000;
-pub const XXC_GAS: u64 = TGAS * 5;
+pub const XCC_GAS: u64 = TGAS * 5;
 pub const NO_DEPOSIT: u128 = 0;
 pub const XCC_SUCCESS: u64 = 1;
 
@@ -81,11 +81,11 @@ pub enum StorageKey {
 #[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct PotArgs {
-    chef_id: AccountId,
-    round_name: String,
-    round_description: String,
-    round_start_ms: TimestampMs,
-    round_end_ms: TimestampMs,
+    chef: AccountId,
+    pot_name: String,
+    pot_description: String,
+    public_round_start_ms: TimestampMs,
+    public_round_end_ms: TimestampMs,
     application_start_ms: TimestampMs,
     application_end_ms: TimestampMs,
     max_projects: u32,
@@ -94,30 +94,28 @@ pub struct PotArgs {
     // basis_points_paid_upfront: u32,
     donation_requirement: Option<SBTRequirement>,
     patron_referral_fee_basis_points: u32,
-    max_patron_referral_fee: U128,
     chef_fee_basis_points: u32,
     protocol_fee_basis_points: u32,
 }
 
-/// `PotArgs` + `created_by`
+/// `PotArgs` + `deployed_by`
 #[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct PotArgsInternal {
-    chef_id: AccountId,
-    round_name: String,
-    round_description: String,
-    round_start_ms: TimestampMs,
-    round_end_ms: TimestampMs,
+    chef: AccountId,
+    pot_name: String,
+    pot_description: String,
+    public_round_start_ms: TimestampMs,
+    public_round_end_ms: TimestampMs,
     application_start_ms: TimestampMs,
     application_end_ms: TimestampMs,
     max_projects: u32,
     base_currency: AccountId,
-    created_by: AccountId,
+    deployed_by: AccountId,
     // milestone_threshold: U64,
     // basis_points_paid_upfront: u32,
     donation_requirement: Option<SBTRequirement>,
     patron_referral_fee_basis_points: u32,
-    max_patron_referral_fee: U128,
     chef_fee_basis_points: u32,
     protocol_fee_basis_points: u32,
 }
@@ -199,21 +197,20 @@ impl Contract {
             Balance::from(env::storage_usage() - initial_storage_usage) * STORAGE_PRICE_PER_BYTE;
 
         let pot_args_internal = PotArgsInternal {
-            chef_id: pot_args.chef_id,
-            round_name: pot_args.round_name,
-            round_description: pot_args.round_description,
-            round_start_ms: pot_args.round_start_ms,
-            round_end_ms: pot_args.round_end_ms,
+            chef: pot_args.chef,
+            pot_name: pot_args.pot_name,
+            pot_description: pot_args.pot_description,
+            public_round_start_ms: pot_args.public_round_start_ms,
+            public_round_end_ms: pot_args.public_round_end_ms,
             application_start_ms: pot_args.application_start_ms,
             application_end_ms: pot_args.application_end_ms,
             max_projects: pot_args.max_projects,
             base_currency: pot_args.base_currency,
-            created_by: env::predecessor_account_id(),
+            deployed_by: env::predecessor_account_id(),
             // milestone_threshold: pot_args.milestone_threshold,
             // basis_points_paid_upfront: pot_args.basis_points_paid_upfront,
             donation_requirement: pot_args.donation_requirement,
             patron_referral_fee_basis_points: pot_args.patron_referral_fee_basis_points,
-            max_patron_referral_fee: pot_args.max_patron_referral_fee,
             chef_fee_basis_points: pot_args.chef_fee_basis_points,
             protocol_fee_basis_points: pot_args.protocol_fee_basis_points,
         };
@@ -230,7 +227,7 @@ impl Contract {
             )
             .then(
                 Self::ext(env::current_account_id())
-                    .with_static_gas(Gas(XXC_GAS))
+                    .with_static_gas(Gas(XCC_GAS))
                     .deploy_pot_callback(
                         pot_on_chain_name,
                         env::predecessor_account_id(),

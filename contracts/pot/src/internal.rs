@@ -1,12 +1,43 @@
 use crate::*;
 
 impl Contract {
-    pub(crate) fn assert_chef(&self) {
-        assert_eq!(
-            env::predecessor_account_id(),
-            self.chef_id,
-            "Only the chef can call this method"
+    pub(crate) fn is_owner(&self) -> bool {
+        env::predecessor_account_id() == self.owner
+    }
+
+    pub(crate) fn is_admin(&self) -> bool {
+        self.admins.contains(&env::predecessor_account_id())
+    }
+
+    pub(crate) fn is_owner_or_admin(&self) -> bool {
+        self.is_owner() || self.is_admin()
+    }
+
+    pub(crate) fn assert_owner(&self) {
+        assert!(self.is_owner(), "Only contract owner can call this method");
+    }
+
+    pub(crate) fn assert_admin(&self) {
+        assert!(self.is_admin(), "Only contract admin can call this method");
+    }
+
+    pub(crate) fn assert_owner_or_admin(&self) {
+        assert!(
+            self.is_owner_or_admin(),
+            "Only contract owner or admin can call this method"
         );
+    }
+
+    pub(crate) fn is_chef(&self) -> bool {
+        if let Some(chef) = self.chef.get() {
+            env::predecessor_account_id() == chef
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn assert_chef(&self) {
+        assert!(self.is_chef(), "Only chef can call this method");
     }
 
     // pub(crate) fn assert_pot_deployer_admin(&self) {
@@ -19,14 +50,14 @@ impl Contract {
 
     pub(crate) fn assert_round_closed(&self) {
         assert!(
-            env::block_timestamp_ms() >= self.round_end_ms,
+            env::block_timestamp_ms() >= self.public_round_end_ms,
             "Round is still open"
         );
     }
 
     pub(crate) fn assert_round_not_closed(&self) {
         assert!(
-            env::block_timestamp_ms() < self.round_end_ms,
+            env::block_timestamp_ms() < self.public_round_end_ms,
             "Round is closed"
         );
     }
@@ -43,11 +74,14 @@ impl Contract {
     }
 
     pub(crate) fn assert_cooldown_period_complete(&self) {
-        assert!(
-            self.cooldown_end_ms.is_some()
-                && self.cooldown_end_ms.unwrap() < env::block_timestamp_ms(),
-            "Cooldown period is not over"
-        );
+        if let Some(cooldown_end_ms) = self.cooldown_end_ms.get() {
+            assert!(
+                cooldown_end_ms < env::block_timestamp_ms(),
+                "Cooldown period is not over"
+            );
+        } else {
+            panic!("Cooldown period is not set");
+        }
     }
 
     pub(crate) fn is_application_period_open(&self) -> bool {

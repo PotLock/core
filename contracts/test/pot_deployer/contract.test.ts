@@ -15,7 +15,6 @@ import {
   DEFAULT_ISSUER_ID,
   DEFAULT_MAX_APPLICATION_TIME,
   DEFAULT_MAX_CHEF_FEE_BASIS_POINTS,
-  DEFAULT_MAX_PATRON_REFERRAL_FEE,
   DEFAULT_MAX_PROJECTS,
   DEFAULT_MAX_PROTOCOL_FEE_BASIS_POINTS,
   DEFAULT_MAX_ROUND_TIME,
@@ -116,11 +115,11 @@ describe("PotDelpoyer Contract Tests", () => {
     let potOnChainName = "test pot";
     const now = Date.now();
     const defaultPotArgs = {
-      chef_id: chefId,
-      round_name: "test round",
-      round_description: "test round description",
-      round_start_ms: now,
-      round_end_ms: now + DEFAULT_ROUND_LENGTH,
+      chef: chefId,
+      pot_name: "test round",
+      pot_description: "test round description",
+      public_round_start_ms: now,
+      public_round_end_ms: now + DEFAULT_ROUND_LENGTH,
       application_start_ms: now,
       application_end_ms: now + DEFAULT_APPLICATION_LENGTH, // 1 week
       max_projects: DEFAULT_MAX_PROJECTS,
@@ -132,7 +131,6 @@ describe("PotDelpoyer Contract Tests", () => {
       },
       patron_referral_fee_basis_points:
         DEFAULT_PATRON_REFERRAL_FEE_BASIS_POINTS,
-      max_patron_referral_fee: DEFAULT_MAX_PATRON_REFERRAL_FEE,
       chef_fee_basis_points: DEFAULT_chef_fee_basis_points,
       protocol_fee_basis_points: DEFAULT_PROTOCOL_FEE_BASIS_POINTS,
       protocol_fee_recipient_account: alwaysAdminId,
