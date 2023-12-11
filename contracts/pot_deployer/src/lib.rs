@@ -67,6 +67,11 @@ pub enum StorageKey {
     WhitelistedDeployers,
 }
 
+pub struct ProtocolConfig {
+    pub protocol_fee_basis_points: u32,
+    pub protocol_fee_recipient_account: AccountId,
+}
+
 #[derive(
     BorshDeserialize,
     BorshSerialize,
@@ -179,6 +184,13 @@ impl Contract {
             default_chef_fee_basis_points: self.default_chef_fee_basis_points,
             whitelisted_deployers: self.whitelisted_deployers.to_vec(),
             require_whitelist: self.require_whitelist,
+        }
+    }
+
+    pub fn get_protocol_config(&self) -> ProtocolConfig {
+        ProtocolConfig {
+            protocol_fee_basis_points: self.protocol_fee_basis_points,
+            protocol_fee_recipient_account: self.protocol_fee_recipient_account.clone(),
         }
     }
 }
