@@ -164,9 +164,10 @@ pub struct Contract {
 
     // FEES
     /// Basis points (1/100 of a percent) that should be paid to an account that refers a Patron (paid at the point when the matching pool donation comes in)
-    pub referral_fee_basis_points: u32, // TODO: implement referral fee payouts
+    pub referral_fee_basis_points: u32,
     /// Chef's fee for managing the round. Gets taken out of each donation as they come in and are paid out
     pub chef_fee_basis_points: u32,
+    // TODO: ADD MAX PROTOCOL FEE BASIS POINTS? or as const so it can't be without code deployment?
 
     // FUNDS & BALANCES
     /// Amount of matching funds available
@@ -236,7 +237,7 @@ impl Contract {
     #[init]
     pub fn new(
         // permissioned accounts
-        owner: Option<AccountId>, // defaults to deploying account if not provided
+        owner: Option<AccountId>, // defaults to signer account if not provided
         admins: Option<Vec<AccountId>>,
         chef: Option<AccountId>,
 

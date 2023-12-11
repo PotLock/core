@@ -18,8 +18,8 @@ const WRITE_METHODS = {
   ADMIN_REMOVE_WHITELISTED_DEPLOYERS: "admin_remove_whitelisted_deployers",
   ADMIN_UPDATE_PROTOCOL_FEE_BASIS_POINTS:
     "admin_update_protocol_fee_basis_points",
-  ADMIN_UPDATE_DEFAULT_CHEF_FEE_BASIS_POINTS:
-    "admin_update_default_chef_fee_basis_points",
+  ADMIN_SET_DEFAULT_CHEF_FEE_BASIS_POINTS:
+    "admin_set_default_chef_fee_basis_points",
   ADMIN_UPDATE_MAX_PROTOCOL_FEE_BASIS_POINTS:
     "admin_update_max_protocol_fee_basis_points",
   ADMIN_UPDATE_MAX_CHEF_FEE_BASIS_POINTS:
@@ -206,7 +206,7 @@ export const adminUpdateDefaultChefFeeBasisPoints = async (
   return contractCall({
     callerAccount: adminAccount,
     contractId: _contractId,
-    methodName: WRITE_METHODS.ADMIN_UPDATE_DEFAULT_CHEF_FEE_BASIS_POINTS,
+    methodName: WRITE_METHODS.ADMIN_SET_DEFAULT_CHEF_FEE_BASIS_POINTS,
     args: {
       default_chef_fee_basis_points: defaultChefFeeBasisPoints,
     },
