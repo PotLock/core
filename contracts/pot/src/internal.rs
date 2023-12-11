@@ -17,8 +17,11 @@ impl Contract {
         assert!(self.is_owner(), "Only contract owner can call this method");
     }
 
-    pub(crate) fn assert_admin(&self) {
-        assert!(self.is_admin(), "Only contract admin can call this method");
+    pub(crate) fn assert_admin_or_greater(&self) {
+        assert!(
+            self.is_admin() || self.is_owner(),
+            "Only contract admin or owner can call this method"
+        );
     }
 
     pub(crate) fn assert_owner_or_admin(&self) {
@@ -36,8 +39,12 @@ impl Contract {
         }
     }
 
-    pub(crate) fn assert_chef(&self) {
-        assert!(self.is_chef(), "Only chef can call this method");
+    /// Asserts that caller is, at minimum, a chef (admin or owner also allowed)
+    pub(crate) fn assert_chef_or_greater(&self) {
+        assert!(
+            self.is_chef() || self.is_admin() || self.is_owner(),
+            "Only chef, admin or owner can call this method"
+        );
     }
 
     // pub(crate) fn assert_pot_deployer_admin(&self) {

@@ -40,7 +40,7 @@ interface PotArgs {
   max_projects: number;
   base_currency: AccountId;
   donation_requirement: SBTRequirement | null;
-  patron_referral_fee_basis_points: number;
+  referral_fee_basis_points: number;
   chef_fee_basis_points: number;
   protocol_fee_basis_points: number;
   protocol_fee_recipient_account: AccountId;

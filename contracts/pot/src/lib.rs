@@ -98,6 +98,25 @@ const MAX_PROTOCOL_FEE_BASIS_POINTS: u32 = 1000; // 10% max protocol fee
 /// Sybil provider weight
 type SybilProviderWeight = u32;
 
+// Ephemeral-only (used in custom_sybil_checks for setting and viewing)
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct CustomSybilCheck {
+    contract_id: AccountId,
+    method_name: String,
+    weight: SybilProviderWeight,
+}
+
+// impl CustomSybilCheck {
+//     pub fn to_stored(contract_id: AccountId, method_name: String, weight: SybilProviderWeight) -> Self {
+//         Self {
+//             contract_id,
+//             method_name,
+//             weight,
+//         }
+//     }
+// }
+
 /// Pot Contract (funding round)
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -145,7 +164,7 @@ pub struct Contract {
 
     // FEES
     /// Basis points (1/100 of a percent) that should be paid to an account that refers a Patron (paid at the point when the matching pool donation comes in)
-    pub patron_referral_fee_basis_points: u32, // TODO: implement referral fee payouts
+    pub referral_fee_basis_points: u32, // TODO: implement referral fee payouts
     /// Chef's fee for managing the round. Gets taken out of each donation as they come in and are paid out
     pub chef_fee_basis_points: u32,
 
@@ -237,7 +256,7 @@ impl Contract {
         custom_min_threshold_score: Option<u32>,
 
         // fees
-        patron_referral_fee_basis_points: u32, // this could be optional with a default, but better to set explicitly for now
+        referral_fee_basis_points: u32, // this could be optional with a default, but better to set explicitly for now
         chef_fee_basis_points: u32,
 
         // other
@@ -287,7 +306,7 @@ impl Contract {
             ),
 
             // fees
-            patron_referral_fee_basis_points,
+            referral_fee_basis_points,
             chef_fee_basis_points,
 
             // funds and balances
@@ -343,7 +362,7 @@ impl Default for Contract {
             sybil_wrapper_provider: LazyOption::new(StorageKey::SybilContractId, None),
             custom_sybil_checks: LazyOption::new(StorageKey::CustomSybilChecks, None),
             custom_min_threshold_score: LazyOption::new(StorageKey::CustomMinThresholdScore, None),
-            patron_referral_fee_basis_points: 0,
+            referral_fee_basis_points: 0,
             chef_fee_basis_points: 0,
             matching_pool_balance: U128(0),
             total_donations: U128(0),

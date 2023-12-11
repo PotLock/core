@@ -48,7 +48,7 @@ import {
   DEFAULT_MAX_PROJECTS,
   DEFAULT_MAX_PROTOCOL_FEE_BASIS_POINTS,
   DEFAULT_MAX_ROUND_TIME,
-  DEFAULT_PATRON_REFERRAL_FEE_BASIS_POINTS,
+  DEFAULT_REFERRAL_FEE_BASIS_POINTS,
   DEFAULT_PROTOCOL_FEE_BASIS_POINTS,
   DEFAULT_REGISTRY_ID,
   DEFAULT_ROUND_LENGTH,
@@ -138,8 +138,7 @@ describe("Pot Contract Tests", async () => {
       //   issuer_id: DEFAULT_ISSUER_ID,
       //   class_id: DEFAULT_CLASS_ID,
       // },
-      patron_referral_fee_basis_points:
-        DEFAULT_PATRON_REFERRAL_FEE_BASIS_POINTS,
+      referral_fee_basis_points: DEFAULT_REFERRAL_FEE_BASIS_POINTS,
       chef_fee_basis_points: DEFAULT_chef_fee_basis_points,
       protocol_fee_basis_points: DEFAULT_PROTOCOL_FEE_BASIS_POINTS,
       protocol_fee_recipient_account: potDeployerAdminId,
@@ -420,7 +419,7 @@ describe("Pot Contract Tests", async () => {
       const amountPerBasisPoint = new BN(donationAmount).div(new BN(10_000));
       // calculate referrer fee
       let referrerFee = amountPerBasisPoint.mul(
-        new BN(potConfig.patron_referral_fee_basis_points)
+        new BN(potConfig.referral_fee_basis_points)
       );
       // calculate protocol fee
       let protocolFee = amountPerBasisPoint.mul(

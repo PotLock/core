@@ -5,21 +5,15 @@ use crate::*;
 pub const PAYOUT_ID_DELIMITER: &str = ":";
 pub type PayoutId = String; // concatenation of application_id + PAYOUT_ID_DELIMITER + incrementing integer per-project
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Payout {
     /// Unique identifier for the payout
     pub id: PayoutId,
     /// ID of the application receiving the payout
     pub project_id: ProjectId,
-    // /// ID of the project receiving the payout
-    // pub project_id: ProjectId,
-    /// Amount paid out from the matching pool
-    pub matching_pool_amount: U128,
-    /// Amount paid out from the donations pool
-    pub donations_amount: U128,
-    /// Amount paid out in total
-    pub amount_total: U128,
+    /// Amount to be paid out
+    pub amount: U128,
     /// Timestamp when the payout was made. None if not yet paid out.
     pub paid_at: Option<TimestampMs>,
 }
@@ -27,16 +21,15 @@ pub struct Payout {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct PayoutInput {
-    pub matching_pool_amount: U128,
-    pub donations_amount: U128,
+    pub amount: U128,
     pub project_id: ProjectId,
 }
 
 #[near_bindgen]
 impl Contract {
-    // set_payouts (only callable by chef)
+    // set_payouts (callable by chef or admin)
     pub fn chef_set_payouts(&mut self, payouts: Vec<PayoutInput>) {
-        self.assert_chef();
+        self.assert_chef_or_greater();
         // verify that the round has closed
         self.assert_round_closed();
         // verify that payouts have not already been processed
@@ -75,8 +68,7 @@ impl Contract {
                 "Project has already been paid out"
             );
             // 3. add amount to running total
-            running_total += payout.matching_pool_amount.0;
-            running_total += payout.donations_amount.0;
+            running_total += payout.amount.0;
             // error if running total exceeds round total
             assert!(
                 running_total <= balance_available,
@@ -100,18 +92,7 @@ impl Contract {
             );
             let payout = Payout {
                 id: payout_id.clone(),
-                matching_pool_amount: payout.matching_pool_amount.clone(),
-                donations_amount: payout.donations_amount.clone(),
-                amount_total: U128::from(
-                    payout
-                        .matching_pool_amount
-                        .0
-                        .checked_add(payout.donations_amount.0)
-                        .expect(&format!(
-                            "Overflow occurred when calculating amount_total ({} + {})",
-                            payout.matching_pool_amount.0, payout.donations_amount.0,
-                        )),
-                ),
+                amount: U128::from(payout.amount.0),
                 project_id: payout.project_id.clone(),
                 paid_at: None,
             };

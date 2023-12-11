@@ -31,7 +31,7 @@ const WRITE_METHODS = {
   DONATE: "donate",
   CHEF_SET_PAYOUTS: "chef_set_payouts",
   ADMIN_PROCESS_PAYOUTS: "admin_process_payouts",
-  ADMIN_CLOSE_ROUND: "admin_close_round",
+  ADMIN_SET_ROUND_CLOSED: "admin_set_round_closed",
   ADMIN_SET_ROUND_OPEN: "admin_set_round_open",
   ADMIN_SET_COOLDOWN_PERIOD_COMPLETE: "admin_set_cooldown_period_complete",
 };
@@ -334,7 +334,7 @@ export const adminCloseRound = async (adminAccount: Account) => {
   return contractCall({
     callerAccount: adminAccount,
     contractId: _contractId,
-    methodName: WRITE_METHODS.ADMIN_CLOSE_ROUND,
+    methodName: WRITE_METHODS.ADMIN_SET_ROUND_CLOSED,
   });
 };
 

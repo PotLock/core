@@ -93,7 +93,7 @@ pub struct PotArgs {
     // milestone_threshold: U64,
     // basis_points_paid_upfront: u32,
     donation_requirement: Option<SBTRequirement>,
-    patron_referral_fee_basis_points: u32,
+    referral_fee_basis_points: u32,
     chef_fee_basis_points: u32,
     protocol_fee_basis_points: u32,
 }
@@ -115,7 +115,7 @@ pub struct PotArgsInternal {
     // milestone_threshold: U64,
     // basis_points_paid_upfront: u32,
     donation_requirement: Option<SBTRequirement>,
-    patron_referral_fee_basis_points: u32,
+    referral_fee_basis_points: u32,
     chef_fee_basis_points: u32,
     protocol_fee_basis_points: u32,
 }
@@ -210,7 +210,7 @@ impl Contract {
             // milestone_threshold: pot_args.milestone_threshold,
             // basis_points_paid_upfront: pot_args.basis_points_paid_upfront,
             donation_requirement: pot_args.donation_requirement,
-            patron_referral_fee_basis_points: pot_args.patron_referral_fee_basis_points,
+            referral_fee_basis_points: pot_args.referral_fee_basis_points,
             chef_fee_basis_points: pot_args.chef_fee_basis_points,
             protocol_fee_basis_points: pot_args.protocol_fee_basis_points,
         };

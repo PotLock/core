@@ -154,7 +154,7 @@ impl Contract {
         status: ApplicationStatus,
         notes: String,
     ) -> Application {
-        self.assert_chef();
+        self.assert_chef_or_greater();
         // verify that the application exists
         let mut application = self
             .applications_by_project_id

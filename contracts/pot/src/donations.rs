@@ -151,8 +151,7 @@ impl Contract {
     pub(crate) fn calculate_referrer_fee(&self, amount: u128) -> u128 {
         let total_basis_points = 10_000u128;
         let amount_per_basis_point = amount / total_basis_points;
-        let referrer_amount =
-            self.patron_referral_fee_basis_points as u128 * amount_per_basis_point;
+        let referrer_amount = self.referral_fee_basis_points as u128 * amount_per_basis_point;
         referrer_amount
     }
 
