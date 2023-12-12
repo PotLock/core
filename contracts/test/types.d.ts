@@ -4,6 +4,7 @@ type ProjectId = AccountId;
 type ApplicationId = number; // increments from 1
 type PayoutId = number; // increments from 1
 type DonationId = number; // increments from 1
+type ProviderId = string; // contract ID + method name separated by ":"
 
 enum ProjectStatus {
   Submitted = "Submitted",
@@ -29,21 +30,30 @@ interface Project {
   review_notes: string | null;
 }
 
+interface CustomSybilCheck {
+  contract_id: AccountId;
+  method_name: string;
+  weight: number;
+}
+
 interface PotArgs {
-  chef: AccountId;
+  owner?: AccountId;
+  admins?: AccountId[];
+  chef?: AccountId;
   pot_name: String;
   pot_description: String;
-  public_round_start_ms: TimestampMs;
-  public_round_end_ms: TimestampMs;
+  max_projects: number;
   application_start_ms: TimestampMs;
   application_end_ms: TimestampMs;
-  max_projects: number;
-  base_currency: AccountId;
-  donation_requirement: SBTRequirement | null;
-  referral_fee_basis_points: number;
+  public_round_start_ms: TimestampMs;
+  public_round_end_ms: TimestampMs;
+  registry_provider?: ProviderId;
+  sybil_wrapper_provider?: ProviderId;
+  custom_sybil_checks?: CustomSybilCheck[];
+  custom_min_threshold_score?: number;
+  patron_referral_fee_basis_points: number;
+  public_round_referral_fee_basis_points: number;
   chef_fee_basis_points: number;
-  protocol_fee_basis_points: number;
-  protocol_fee_recipient_account: AccountId;
 }
 
 interface PotConfig extends PotArgs {
@@ -55,7 +65,7 @@ interface PotConfig extends PotArgs {
 }
 
 interface Pot {
-  on_chain_name: string;
+  pot_id: AccountId;
   deployed_by: AccountId;
 }
 

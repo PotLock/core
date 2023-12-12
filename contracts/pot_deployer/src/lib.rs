@@ -67,6 +67,8 @@ pub enum StorageKey {
     WhitelistedDeployers,
 }
 
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
 pub struct ProtocolConfig {
     pub protocol_fee_basis_points: u32,
     pub protocol_fee_recipient_account: AccountId,
@@ -98,50 +100,6 @@ pub struct CustomSybilCheck {
     method_name: String,
     weight: SybilProviderWeight,
 }
-
-#[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
-#[serde(crate = "near_sdk::serde")]
-pub struct PotArgs {
-    owner: Option<AccountId>,
-    admins: Option<Vec<AccountId>>,
-    chef: AccountId,
-    pot_name: String,
-    pot_description: String,
-    max_projects: u32,
-    application_start_ms: TimestampMs,
-    application_end_ms: TimestampMs,
-    public_round_start_ms: TimestampMs,
-    public_round_end_ms: TimestampMs,
-    registry_provider: Option<ProviderId>,
-    sybil_wrapper_provider: Option<ProviderId>,
-    custom_sybil_checks: Option<Vec<CustomSybilCheck>>,
-    custom_min_threshold_score: Option<u32>,
-    patron_referral_fee_basis_points: u32,
-    public_round_referral_fee_basis_points: u32,
-    chef_fee_basis_points: u32,
-}
-
-// /// `PotArgs` + `deployed_by`
-// #[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
-// #[serde(crate = "near_sdk::serde")]
-// pub struct PotArgsInternal {
-//     chef: AccountId,
-//     pot_name: String,
-//     pot_description: String,
-//     public_round_start_ms: TimestampMs,
-//     public_round_end_ms: TimestampMs,
-//     application_start_ms: TimestampMs,
-//     application_end_ms: TimestampMs,
-//     max_projects: u32,
-//     base_currency: AccountId,
-//     deployed_by: AccountId,
-//     // milestone_threshold: U64,
-//     // basis_points_paid_upfront: u32,
-//     donation_requirement: Option<SBTRequirement>,
-//     referral_fee_basis_points: u32,
-//     chef_fee_basis_points: u32,
-//     protocol_fee_basis_points: u32,
-// }
 
 #[near_bindgen]
 impl Contract {

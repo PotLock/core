@@ -22,22 +22,19 @@ import {
   DEFAULT_PROTOCOL_FEE_BASIS_POINTS,
   DEFAULT_REGISTRY_ID,
   DEFAULT_ROUND_LENGTH,
-  DEFAULT_chef_fee_basis_points,
+  DEFAULT_CHEF_FEE_BASIS_POINTS,
 } from "../utils/constants";
 import { near } from "./setup";
 import {
   adminAddWhitelistedDeployers,
   adminRemoveWhitelistedDeployers,
-  adminUpdateDefaultChefFeeBasisPoints,
-  adminUpdateMaxApplicationTime,
-  adminUpdateMaxChefFeeBasisPoints,
-  adminUpdateMaxProtocolFeeBasisPoints,
-  adminUpdateMaxRoundTime,
-  adminUpdateProtocolFeeBasisPoints,
+  adminSetDefaultChefFeeBasisPoints,
+  adminSetProtocolFeeBasisPoints,
   deployPot,
   getConfig,
   getPots,
   initializeContract,
+  slugify,
 } from "./utils";
 
 /*
@@ -88,13 +85,13 @@ describe("PotDelpoyer Contract Tests", () => {
     // attempt to initialize contract; if it fails, it's already initialized
     try {
       await initializeContract({
-        max_round_time: DEFAULT_MAX_ROUND_TIME,
-        max_application_time: DEFAULT_MAX_APPLICATION_TIME,
+        owner: alwaysAdminId,
+        admins: [],
         protocol_fee_basis_points: DEFAULT_PROTOCOL_FEE_BASIS_POINTS,
-        max_protocol_fee_basis_points: DEFAULT_MAX_PROTOCOL_FEE_BASIS_POINTS,
+        protocol_fee_recipient_account: alwaysAdminId,
         default_chef_fee_basis_points: DEFAULT_DEFAULT_CHEF_FEE_BASIS_POINTS,
-        max_chef_fee_basis_points: DEFAULT_MAX_CHEF_FEE_BASIS_POINTS,
-        admin: alwaysAdminId,
+        whitelisted_deployers: [whitelistedDeployerId],
+        require_whitelist: true,
       });
       console.log(`✅ Initialized PotDeployer contract ${contractId}`);
     } catch (e) {
@@ -114,36 +111,35 @@ describe("PotDelpoyer Contract Tests", () => {
   it("Only Admin or whitelisted_deployer can deploy a new Pot", async () => {
     let potOnChainName = "test pot";
     const now = Date.now();
-    const defaultPotArgs = {
+    const defaultPotArgs: PotArgs = {
       chef: chefId,
-      pot_name: "test round",
+      pot_name: potOnChainName,
       pot_description: "test round description",
       public_round_start_ms: now,
       public_round_end_ms: now + DEFAULT_ROUND_LENGTH,
       application_start_ms: now,
       application_end_ms: now + DEFAULT_APPLICATION_LENGTH, // 1 week
       max_projects: DEFAULT_MAX_PROJECTS,
-      base_currency: DEFAULT_BASE_CURRENCY,
-      donation_requirement: {
-        registry_id: DEFAULT_REGISTRY_ID,
-        issuer_id: DEFAULT_ISSUER_ID,
-        class_id: DEFAULT_CLASS_ID,
-      },
-      referral_fee_basis_points: DEFAULT_REFERRAL_FEE_BASIS_POINTS,
-      chef_fee_basis_points: DEFAULT_chef_fee_basis_points,
-      protocol_fee_basis_points: DEFAULT_PROTOCOL_FEE_BASIS_POINTS,
-      protocol_fee_recipient_account: alwaysAdminId,
+      sybil_wrapper_provider: "dev-1701729483653-58884486628411:is_human",
+      patron_referral_fee_basis_points: DEFAULT_REFERRAL_FEE_BASIS_POINTS,
+      public_round_referral_fee_basis_points: DEFAULT_REFERRAL_FEE_BASIS_POINTS,
+      chef_fee_basis_points: DEFAULT_CHEF_FEE_BASIS_POINTS,
     };
     try {
       // admin can deploy a new pot
-      await deployPot(alwaysAdminAccount, potOnChainName, defaultPotArgs);
+      await deployPot(alwaysAdminAccount, defaultPotArgs);
 
       let pots = await getPots();
-      let exists = pots.some(
-        (p) =>
-          p.on_chain_name === potOnChainName &&
+      console.log("pots: ", pots);
+      const slugifiedName = slugify(potOnChainName);
+
+      let exists = pots.some((p) => {
+        console.log("slugified: ", slugifiedName);
+        return (
+          p.pot_id.startsWith(slugifiedName) &&
           p.deployed_by == alwaysAdminAccount.accountId
-      );
+        );
+      });
       assert(exists);
 
       // whitelisted deployer can deploy a new pot
@@ -158,11 +154,13 @@ describe("PotDelpoyer Contract Tests", () => {
         defaultPotArgs
       );
       pots = await getPots();
-      exists = pots.some(
-        (p) =>
-          p.on_chain_name === potOnChainName &&
-          p.deployed_by == whitelistedDeployerAccount.accountId
-      );
+      exists = pots.some((p) => {
+        console.log("slugified: ", slugifiedName);
+        return (
+          p.pot_id.startsWith(slugifiedName) &&
+          p.deployed_by == alwaysAdminAccount.accountId
+        );
+      });
       assert(exists);
 
       // non-whitelisted deployer cannot deploy a new pot
@@ -194,7 +192,7 @@ describe("PotDelpoyer Contract Tests", () => {
     let config = await getConfig();
     const newProtocolFeeBasisPoints = config.protocol_fee_basis_points + 1;
     try {
-      await adminUpdateProtocolFeeBasisPoints(
+      await adminSetProtocolFeeBasisPoints(
         alwaysAdminAccount,
         newProtocolFeeBasisPoints
       );
@@ -203,7 +201,7 @@ describe("PotDelpoyer Contract Tests", () => {
       // non-admin cannot
       // TODO: wrap/componentize this to remove duplication across tests
       try {
-        await adminUpdateProtocolFeeBasisPoints(
+        await adminSetProtocolFeeBasisPoints(
           alwaysNOTAdminAccount,
           newProtocolFeeBasisPoints
         );
@@ -222,7 +220,7 @@ describe("PotDelpoyer Contract Tests", () => {
     const newDefaultChefFeeBasisPoints =
       config.default_chef_fee_basis_points + 1;
     try {
-      await adminUpdateDefaultChefFeeBasisPoints(
+      await adminSetDefaultChefFeeBasisPoints(
         alwaysAdminAccount,
         newDefaultChefFeeBasisPoints
       );
@@ -232,7 +230,7 @@ describe("PotDelpoyer Contract Tests", () => {
       );
       // non-admin cannot
       try {
-        await adminUpdateDefaultChefFeeBasisPoints(
+        await adminSetDefaultChefFeeBasisPoints(
           alwaysNOTAdminAccount,
           newDefaultChefFeeBasisPoints
         );
@@ -246,104 +244,104 @@ describe("PotDelpoyer Contract Tests", () => {
     }
   });
 
-  it("Admin can update max protocol fee basis points (and non-admin cannot)", async () => {
-    let config = await getConfig();
-    const newMaxProtocolFeeBasisPoints =
-      config.max_protocol_fee_basis_points + 1;
-    try {
-      await adminUpdateMaxProtocolFeeBasisPoints(
-        alwaysAdminAccount,
-        newMaxProtocolFeeBasisPoints
-      );
-      config = await getConfig();
-      assert(
-        config.max_protocol_fee_basis_points == newMaxProtocolFeeBasisPoints
-      );
-      // non-admin cannot
-      try {
-        await adminUpdateMaxProtocolFeeBasisPoints(
-          alwaysNOTAdminAccount,
-          newMaxProtocolFeeBasisPoints
-        );
-        assert(false);
-      } catch (e) {
-        assert(JSON.stringify(e).includes(ASSERT_ADMIN_ERROR_STR));
-      }
-    } catch (e) {
-      console.log("Error updating max protocol fee basis points:", e);
-      assert(false);
-    }
-  });
+  // it("Admin can update max protocol fee basis points (and non-admin cannot)", async () => {
+  //   let config = await getConfig();
+  //   const newMaxProtocolFeeBasisPoints =
+  //     config.max_protocol_fee_basis_points + 1;
+  //   try {
+  //     await adminUpdateMaxProtocolFeeBasisPoints(
+  //       alwaysAdminAccount,
+  //       newMaxProtocolFeeBasisPoints
+  //     );
+  //     config = await getConfig();
+  //     assert(
+  //       config.max_protocol_fee_basis_points == newMaxProtocolFeeBasisPoints
+  //     );
+  //     // non-admin cannot
+  //     try {
+  //       await adminUpdateMaxProtocolFeeBasisPoints(
+  //         alwaysNOTAdminAccount,
+  //         newMaxProtocolFeeBasisPoints
+  //       );
+  //       assert(false);
+  //     } catch (e) {
+  //       assert(JSON.stringify(e).includes(ASSERT_ADMIN_ERROR_STR));
+  //     }
+  //   } catch (e) {
+  //     console.log("Error updating max protocol fee basis points:", e);
+  //     assert(false);
+  //   }
+  // });
 
-  it("Admin can update max chef fee basis points (and non-admin cannot)", async () => {
-    let config = await getConfig();
-    const newMaxChefFeeBasisPoints = config.max_chef_fee_basis_points + 1;
-    try {
-      await adminUpdateMaxChefFeeBasisPoints(
-        alwaysAdminAccount,
-        newMaxChefFeeBasisPoints
-      );
-      config = await getConfig();
-      assert(config.max_chef_fee_basis_points == newMaxChefFeeBasisPoints);
-      // non-admin cannot
-      try {
-        await adminUpdateMaxChefFeeBasisPoints(
-          alwaysNOTAdminAccount,
-          newMaxChefFeeBasisPoints
-        );
-        assert(false);
-      } catch (e) {
-        assert(JSON.stringify(e).includes(ASSERT_ADMIN_ERROR_STR));
-      }
-    } catch (e) {
-      console.log("Error updating max chef fee basis points:", e);
-      assert(false);
-    }
-  });
+  // it("Admin can update max chef fee basis points (and non-admin cannot)", async () => {
+  //   let config = await getConfig();
+  //   const newMaxChefFeeBasisPoints = config.max_chef_fee_basis_points + 1;
+  //   try {
+  //     await adminUpdateMaxChefFeeBasisPoints(
+  //       alwaysAdminAccount,
+  //       newMaxChefFeeBasisPoints
+  //     );
+  //     config = await getConfig();
+  //     assert(config.max_chef_fee_basis_points == newMaxChefFeeBasisPoints);
+  //     // non-admin cannot
+  //     try {
+  //       await adminUpdateMaxChefFeeBasisPoints(
+  //         alwaysNOTAdminAccount,
+  //         newMaxChefFeeBasisPoints
+  //       );
+  //       assert(false);
+  //     } catch (e) {
+  //       assert(JSON.stringify(e).includes(ASSERT_ADMIN_ERROR_STR));
+  //     }
+  //   } catch (e) {
+  //     console.log("Error updating max chef fee basis points:", e);
+  //     assert(false);
+  //   }
+  // });
 
-  it("Admin can update max round time (and non-admin cannot)", async () => {
-    let config = await getConfig();
-    const newMaxRoundTime = config.max_round_time + 1;
-    try {
-      await adminUpdateMaxRoundTime(alwaysAdminAccount, newMaxRoundTime);
-      config = await getConfig();
-      assert(config.max_round_time == newMaxRoundTime);
-      // non-admin cannot
-      try {
-        await adminUpdateMaxRoundTime(alwaysNOTAdminAccount, newMaxRoundTime);
-        assert(false);
-      } catch (e) {
-        assert(JSON.stringify(e).includes(ASSERT_ADMIN_ERROR_STR));
-      }
-    } catch (e) {
-      console.log("Error updating max round time:", e);
-      assert(false);
-    }
-  });
+  // it("Admin can update max round time (and non-admin cannot)", async () => {
+  //   let config = await getConfig();
+  //   const newMaxRoundTime = config.max_round_time + 1;
+  //   try {
+  //     await adminUpdateMaxRoundTime(alwaysAdminAccount, newMaxRoundTime);
+  //     config = await getConfig();
+  //     assert(config.max_round_time == newMaxRoundTime);
+  //     // non-admin cannot
+  //     try {
+  //       await adminUpdateMaxRoundTime(alwaysNOTAdminAccount, newMaxRoundTime);
+  //       assert(false);
+  //     } catch (e) {
+  //       assert(JSON.stringify(e).includes(ASSERT_ADMIN_ERROR_STR));
+  //     }
+  //   } catch (e) {
+  //     console.log("Error updating max round time:", e);
+  //     assert(false);
+  //   }
+  // });
 
-  it("Admin can update max application time (and non-admin cannot)", async () => {
-    let config = await getConfig();
-    const newMaxApplicationTime = config.max_application_time + 1;
-    try {
-      await adminUpdateMaxApplicationTime(
-        alwaysAdminAccount,
-        newMaxApplicationTime
-      );
-      config = await getConfig();
-      assert(config.max_application_time == newMaxApplicationTime);
-      // non-admin cannot
-      try {
-        await adminUpdateMaxApplicationTime(
-          alwaysNOTAdminAccount,
-          newMaxApplicationTime
-        );
-        assert(false);
-      } catch (e) {
-        assert(JSON.stringify(e).includes(ASSERT_ADMIN_ERROR_STR));
-      }
-    } catch (e) {
-      console.log("Error updating max application time:", e);
-      assert(false);
-    }
-  });
+  // it("Admin can update max application time (and non-admin cannot)", async () => {
+  //   let config = await getConfig();
+  //   const newMaxApplicationTime = config.max_application_time + 1;
+  //   try {
+  //     await adminUpdateMaxApplicationTime(
+  //       alwaysAdminAccount,
+  //       newMaxApplicationTime
+  //     );
+  //     config = await getConfig();
+  //     assert(config.max_application_time == newMaxApplicationTime);
+  //     // non-admin cannot
+  //     try {
+  //       await adminUpdateMaxApplicationTime(
+  //         alwaysNOTAdminAccount,
+  //         newMaxApplicationTime
+  //       );
+  //       assert(false);
+  //     } catch (e) {
+  //       assert(JSON.stringify(e).includes(ASSERT_ADMIN_ERROR_STR));
+  //     }
+  //   } catch (e) {
+  //     console.log("Error updating max application time:", e);
+  //     assert(false);
+  //   }
+  // });
 });

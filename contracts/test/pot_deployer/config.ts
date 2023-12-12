@@ -1,7 +1,7 @@
 import { utils } from "near-api-js";
 import { DEFAULT_PARENT_ACCOUNT_ID } from "../utils/constants";
 
-export const contractId = "1695237705.test-contracts.potlock.testnet";
+export const contractId = "1702394139.test-contracts.potlock.testnet";
 export const parentAccountId = DEFAULT_PARENT_ACCOUNT_ID;
 export const networkId = "testnet";
 export const nodeUrl = `https://rpc.${networkId}.near.org`;

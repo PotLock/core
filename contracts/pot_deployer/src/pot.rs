@@ -13,6 +13,28 @@ pub struct Pot {
     pub deployed_by: AccountId,
 }
 
+#[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct PotArgs {
+    owner: Option<AccountId>,
+    admins: Option<Vec<AccountId>>,
+    chef: Option<AccountId>,
+    pot_name: String,
+    pot_description: String,
+    max_projects: u32,
+    application_start_ms: TimestampMs,
+    application_end_ms: TimestampMs,
+    public_round_start_ms: TimestampMs,
+    public_round_end_ms: TimestampMs,
+    registry_provider: Option<ProviderId>,
+    sybil_wrapper_provider: Option<ProviderId>,
+    custom_sybil_checks: Option<Vec<CustomSybilCheck>>,
+    custom_min_threshold_score: Option<u32>,
+    patron_referral_fee_basis_points: u32,
+    public_round_referral_fee_basis_points: u32,
+    chef_fee_basis_points: u32,
+}
+
 #[near_bindgen]
 impl Contract {
     #[payable]

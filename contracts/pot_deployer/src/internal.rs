@@ -27,7 +27,7 @@ impl Contract {
 
     pub(crate) fn assert_admin_or_whitelisted_deployer(&self) {
         assert!(
-            self.is_admin() || self.is_whitelisted_deployer(),
+            self.is_owner() || self.is_admin() || self.is_whitelisted_deployer(),
             "Only contract admin or whitelisted deployer can call this method"
         );
     }

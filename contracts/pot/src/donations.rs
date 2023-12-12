@@ -31,6 +31,8 @@ pub struct Donation {
 
 pub const DONATION_ID_DELIMETER: &str = ":";
 
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
 pub struct ProtocolConfigProviderResult {
     pub basis_points: u32,
     pub account_id: AccountId,
