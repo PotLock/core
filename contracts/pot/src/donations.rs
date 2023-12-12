@@ -344,10 +344,6 @@ impl Contract {
         }
     }
 
-    // pub(crate) fn calculate_and_transfer_protocol_fee(&mut self, amount: u128) -> u128 {
-    //     let protocol_fee = self.calculate_protocol_fee(amount);
-    // }
-
     pub(crate) fn calculate_fee(&self, amount: u128, basis_points: u32) -> u128 {
         let total_basis_points = 10_000u128;
         let amount_per_basis_point = amount / total_basis_points;
@@ -373,12 +369,9 @@ impl Contract {
             let protocol_config_provider_result = call_result.unwrap();
             let protocol_fee_basis_points = protocol_config_provider_result.basis_points;
             let protocol_fee_recipient_account = protocol_config_provider_result.account_id;
-            // calculate protocol fee
+            // calculate protocol fee (don't transfer yet)
             let protocol_fee =
                 self.calculate_fee(env::attached_deposit(), protocol_fee_basis_points);
-            // transfer protocol fee
-            Promise::new(protocol_fee_recipient_account.clone()).transfer(protocol_fee);
-            let remainder = env::attached_deposit() - protocol_fee;
             self.process_donation(
                 protocol_fee,
                 Some(protocol_fee_recipient_account),
@@ -475,6 +468,7 @@ impl Contract {
 
         // transfer referrer fee
         if let Some(referrer_fee) = referrer_fee {
+            // it has already been established that referrer_id is Some
             Promise::new(referrer_id.unwrap()).transfer(referrer_fee.0);
         }
 
