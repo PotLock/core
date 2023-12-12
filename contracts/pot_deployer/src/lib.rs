@@ -116,7 +116,8 @@ pub struct PotArgs {
     sybil_wrapper_provider: Option<ProviderId>,
     custom_sybil_checks: Option<Vec<CustomSybilCheck>>,
     custom_min_threshold_score: Option<u32>,
-    referral_fee_basis_points: u32,
+    patron_referral_fee_basis_points: u32,
+    public_round_referral_fee_basis_points: u32,
     chef_fee_basis_points: u32,
 }
 
