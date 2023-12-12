@@ -148,10 +148,15 @@ impl Contract {
         self.total_donations
     }
 
-    pub(crate) fn calculate_referrer_fee(&self, amount: u128) -> u128 {
+    pub(crate) fn calculate_referrer_fee(&self, amount: u128, matching_pool: bool) -> u128 {
         let total_basis_points = 10_000u128;
         let amount_per_basis_point = amount / total_basis_points;
-        let referrer_amount = self.referral_fee_basis_points as u128 * amount_per_basis_point;
+        let multiplier = if matching_pool {
+            self.patron_referral_fee_basis_points
+        } else {
+            self.public_round_referral_fee_basis_points
+        };
+        let referrer_amount = multiplier as u128 * amount_per_basis_point;
         referrer_amount
     }
 
@@ -304,26 +309,38 @@ impl Contract {
         referrer_id: Option<AccountId>,
         matching_pool: bool,
     ) -> Promise {
-        if let Some(protocol_config_provider) = self.protocol_config_provider.get() {
-            let (contract_id, method_name) = protocol_config_provider.decompose();
-            let args = json!({}).to_string().into_bytes();
-            Promise::new(AccountId::new_unchecked(contract_id.clone()))
-                .function_call(method_name.clone(), args, 0, XCC_GAS)
-                .then(
-                    Self::ext(env::current_account_id())
-                        .with_static_gas(XCC_GAS)
-                        .handle_protocol_fee_callback(
-                            project_id,
-                            message,
-                            referrer_id,
-                            matching_pool,
-                        ),
-                )
+        let bypass_protocol_fee_promise = Self::ext(env::current_account_id())
+            .with_static_gas(XCC_GAS)
+            .bypass_protocol_fee(
+                project_id.clone(),
+                message.clone(),
+                referrer_id.clone(),
+                matching_pool,
+            );
+        if matching_pool {
+            // protocol fee is only paid for matching pool donations
+            if let Some(protocol_config_provider) = self.protocol_config_provider.get() {
+                let (contract_id, method_name) = protocol_config_provider.decompose();
+                let args = json!({}).to_string().into_bytes();
+                Promise::new(AccountId::new_unchecked(contract_id.clone()))
+                    .function_call(method_name.clone(), args, 0, XCC_GAS)
+                    .then(
+                        Self::ext(env::current_account_id())
+                            .with_static_gas(XCC_GAS)
+                            .handle_protocol_fee_callback(
+                                project_id,
+                                message,
+                                referrer_id,
+                                matching_pool,
+                            ),
+                    )
+            } else {
+                // bypass protocol fee
+                bypass_protocol_fee_promise
+            }
         } else {
             // bypass protocol fee
-            Self::ext(env::current_account_id())
-                .with_static_gas(XCC_GAS)
-                .bypass_protocol_fee(project_id, message, referrer_id, matching_pool)
+            bypass_protocol_fee_promise
         }
     }
 
@@ -396,22 +413,18 @@ impl Contract {
         matching_pool: bool,
     ) -> Donation {
         let initial_storage_usage = env::storage_usage();
-        // let donation_count_for_project = self
-        //     .donation_ids_by_project_id
-        //     .get(&project_id)
-        //     .map_or(0, |ids| ids.len());
         let attached_deposit = env::attached_deposit();
+
         // subtract protocol fee
         let mut remainder = attached_deposit.checked_sub(protocol_fee).expect(&format!(
             "Overflow occurred when calculating remainder ({} - {})",
             attached_deposit, protocol_fee,
         ));
-        // remainder -= protocol_fee;
 
         // subtract referrer fee
         let mut referrer_fee: Option<U128> = None;
         if let Some(_referrer_id) = referrer_id.clone() {
-            let referrer_fee_amount = self.calculate_referrer_fee(remainder);
+            let referrer_fee_amount = self.calculate_referrer_fee(remainder, matching_pool);
             referrer_fee = Some(U128::from(referrer_fee_amount));
             remainder = remainder.checked_sub(referrer_fee_amount).expect(&format!(
                 "Overflow occurred when calculating remainder ({} - {})",

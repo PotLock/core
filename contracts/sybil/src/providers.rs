@@ -24,7 +24,7 @@ pub struct Provider {
     pub name: String,
     /// Default weight for this provider, e.g. 100
     pub default_weight: u32,
-    // TODO: consider adding optional `gas`, `type`/`description` (e.g. "face scan", "twitter", "captcha", etc.)
+    // TODO: consider adding optional `gas`, `type`/`description` (e.g. "face scan", "twitter", "captcha", etc.), `icon`, `external_url`
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]

@@ -156,9 +156,20 @@ impl Contract {
         self.custom_min_threshold_score.remove();
     }
 
-    pub fn admin_set_referral_fee_basis_points(&mut self, referral_fee_basis_points: u32) {
+    pub fn admin_set_patron_referral_fee_basis_points(
+        &mut self,
+        patron_referral_fee_basis_points: u32,
+    ) {
         self.assert_owner_or_admin();
-        self.referral_fee_basis_points = referral_fee_basis_points;
+        self.patron_referral_fee_basis_points = patron_referral_fee_basis_points;
+    }
+
+    pub fn admin_set_public_round_referral_fee_basis_points(
+        &mut self,
+        public_round_referral_fee_basis_points: u32,
+    ) {
+        self.assert_owner_or_admin();
+        self.public_round_referral_fee_basis_points = public_round_referral_fee_basis_points;
     }
 
     pub fn admin_set_cooldown_period_complete(&mut self) {
