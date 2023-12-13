@@ -10,6 +10,17 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 near-sdk = "4.1.1"
 
+# [dev-dependencies]
+# anyhow = "1.0"
+# near-primitives = "0.5.0"
+# near-sdk = "4.0.0"
+# near-units = "0.2.0"
+# serde_json = "1.0"
+# tokio = { version = "1.14", features = ["full"] }
+# workspaces = "0.4.1"
+# # remember to include a line for each contract
+# fungible-token = { path = "./ft" } # TODO: UPDATE THIS AND THE BELOW
+# defi = { path = "./test-contract-defi" }
 [profile.release]
 codegen-units = 1
 # Tell `rustc` to optimize for small code size.
@@ -19,3 +30,6 @@ debug = false
 panic = "abort"
 # Opt into extra safety checks on arithmetic operations https://stackoverflow.com/a/64136471/249801
 overflow-checks = true
+# [workspace]
+# # remember to include a member for each contract
+# members = ["ft", "test-contract-defi"]

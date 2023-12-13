@@ -35,7 +35,7 @@ pub struct Contract {
     /// Admins, which can be added/removed by the owner
     admins: UnorderedSet<AccountId>,
     /// All Pot records
-    pots_by_id: UnorderedMap<PotId, Pot>,
+    pots_by_id: UnorderedMap<PotId, VersionedPot>,
     /// Config for protocol fees (% * 100)
     protocol_fee_basis_points: u32,
     /// Config for protocol fee recipient
@@ -46,6 +46,20 @@ pub struct Contract {
     whitelisted_deployers: UnorderedSet<AccountId>,
     /// Specifies whether a pot deployer is required to be whitelisted
     require_whitelist: bool,
+}
+
+#[derive(BorshSerialize, BorshDeserialize)]
+pub enum VersionedContract {
+    Current(Contract),
+}
+
+/// Convert VersionedContract to Contract
+impl From<VersionedContract> for Contract {
+    fn from(contract: VersionedContract) -> Self {
+        match contract {
+            VersionedContract::Current(current) => current,
+        }
+    }
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]

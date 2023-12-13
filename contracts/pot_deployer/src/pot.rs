@@ -8,9 +8,31 @@ pub type PotId = AccountId;
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Pot {
-    pub pot_id: AccountId,
     // pub on_chain_name: String,
     pub deployed_by: AccountId,
+    pub deployed_at_ms: TimestampMs,
+}
+
+#[derive(BorshSerialize, BorshDeserialize)]
+pub enum VersionedPot {
+    Current(Pot),
+}
+
+impl From<VersionedPot> for Pot {
+    fn from(pot: VersionedPot) -> Self {
+        match pot {
+            VersionedPot::Current(current) => current,
+        }
+    }
+}
+
+/// Ephemeral-only (used for views; not stored in contract)
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct ExternalPot {
+    id: PotId,
+    deployed_by: AccountId,
+    deployed_at_ms: TimestampMs,
 }
 
 #[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
@@ -51,16 +73,48 @@ impl Contract {
             pot_account_id_str
         );
         let pot_account_id = AccountId::new_unchecked(pot_account_id_str);
-        let required_deposit = self.get_min_deployment_deposit(&pot_args);
+
+        // check no pot exists with this id
+        assert!(
+            self.pots_by_id.get(&pot_account_id).is_none(),
+            "Pot with id {} already exists",
+            pot_account_id
+        );
+
+        let min_deployment_deposit = self.get_min_deployment_deposit(&pot_args);
+
+        // insert dummy record in advance to check required deposit
+        let pot = Pot {
+            deployed_by: env::signer_account_id(),
+            deployed_at_ms: env::block_timestamp_ms(),
+        };
 
         let initial_storage_usage = env::storage_usage();
 
-        let storage_balance_used =
-            Balance::from(env::storage_usage() - initial_storage_usage) * STORAGE_PRICE_PER_BYTE;
+        self.pots_by_id
+            .insert(&pot_account_id, &VersionedPot::Current(pot.clone())); // TODO: review this for race conditions
 
+        let deposit = env::attached_deposit();
+        let required_storage_deposit = calculate_required_storage_deposit(initial_storage_usage);
+
+        // total required deposit
+        let total_required_deposit = required_storage_deposit + min_deployment_deposit;
+
+        // assert total_required_deposit
+        assert!(
+            deposit >= total_required_deposit,
+            "Attached deposit of {} is less than required deposit of {}",
+            deposit,
+            total_required_deposit
+        );
+
+        // delete temporarily created pot
+        self.pots_by_id.remove(&pot_account_id);
+
+        // deploy pot
         Promise::new(pot_account_id.clone())
             .create_account()
-            .transfer(required_deposit - storage_balance_used)
+            .transfer(min_deployment_deposit)
             .deploy_contract(POT_WASM_CODE.to_vec())
             .function_call(
                 "new".to_string(),
@@ -71,7 +125,7 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(XCC_GAS)
-                    .deploy_pot_callback(pot_account_id.clone()),
+                    .deploy_pot_callback(pot_account_id.clone(), min_deployment_deposit, deposit),
             )
     }
 
@@ -79,24 +133,53 @@ impl Contract {
     pub fn deploy_pot_callback(
         &mut self,
         pot_id: AccountId,
+        min_deployment_deposit: Balance,
+        deposit: Balance,
         #[callback_result] call_result: Result<(), PromiseError>,
-    ) -> Pot {
+    ) -> Option<Pot> {
         if call_result.is_err() {
-            env::panic_str("There was an error deploying the Pot contract.");
+            let error_message = format!(
+                "There was an error deploying the Pot contract. Returning deposit to signer."
+            );
+            env::log_str(&error_message);
+            // return deposit to signer
+            Promise::new(env::signer_account_id()).transfer(deposit);
+            // don't panic or refund transfer won't occur! instead, return `None`
+            return None;
         }
+
         let pot = Pot {
-            pot_id: pot_id.clone(),
             deployed_by: env::signer_account_id(),
+            deployed_at_ms: env::block_timestamp_ms(),
         };
-        self.pots_by_id.insert(&pot_id, &pot);
-        pot
+
+        let initial_storage_usage = env::storage_usage();
+
+        self.pots_by_id
+            .insert(&pot_id, &VersionedPot::Current(pot.clone()));
+
+        let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
+        // env::storage_byte_cost() * Balance::from(storage_used);
+        let total_cost = required_deposit + min_deployment_deposit;
+        if deposit > total_cost {
+            Promise::new(env::signer_account_id()).transfer(deposit - total_cost);
+        }
+
+        Some(pot)
     }
 
-    pub fn get_pots(&self) -> Vec<Pot> {
+    pub fn get_pots(&self) -> Vec<ExternalPot> {
         self.pots_by_id
             .iter()
-            .map(|(_, pot)| pot)
-            .collect::<Vec<Pot>>()
+            .map(|(id, v)| {
+                let pot = Pot::from(v);
+                ExternalPot {
+                    id,
+                    deployed_by: pot.deployed_by.clone(),
+                    deployed_at_ms: pot.deployed_at_ms,
+                }
+            })
+            .collect()
     }
 
     pub fn get_min_deployment_deposit(&self, args: &PotArgs) -> u128 {
