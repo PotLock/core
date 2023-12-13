@@ -191,13 +191,16 @@ impl Contract {
         self.assert_cooldown_period_complete();
         // pay out each project
         // for each approved project...
-        for (project_id, application) in self.applications_by_project_id.iter() {
+        for (project_id, v_app) in self.applications_by_project_id.iter() {
+            // TODO: update this to only go through approved applications mapping
             self.assert_approved_application(&project_id);
+            let application = Application::from(v_app);
             // ...if there are payouts for the project...
             if let Some(payout_ids_for_project) = self.payout_ids_by_project_id.get(&project_id) {
                 // TODO: handle milestones (for now just paying out all payouts)
                 for payout_id in payout_ids_for_project.iter() {
-                    let payout = self.payouts_by_id.get(&payout_id).expect("no payout");
+                    let payout =
+                        Payout::from(self.payouts_by_id.get(&payout_id).expect("no payout"));
                     if payout.paid_at.is_none() {
                         // ...transfer funds...
                         Promise::new(application.project_id.clone())
@@ -218,7 +221,7 @@ impl Contract {
     #[private] // Public - but only callable by env::current_account_id()
     pub fn transfer_payout_callback(
         &mut self,
-        payout: Payout,
+        mut payout: Payout,
         #[callback_result] call_result: Result<(), PromiseError>,
     ) {
         if call_result.is_err() {
@@ -232,9 +235,10 @@ impl Contract {
                 payout.amount, payout.project_id
             ));
             // update payout to indicate that funds have been transferred
-            let mut payout_mut = payout.clone();
-            payout_mut.paid_at = Some(env::block_timestamp_ms());
-            self.payouts_by_id.insert(&payout.id, &payout_mut);
+            payout.paid_at = Some(env::block_timestamp_ms());
+            let payout_id = payout.id.clone();
+            self.payouts_by_id
+                .insert(&payout_id, &VersionedPayout::Current(payout));
         }
     }
 }

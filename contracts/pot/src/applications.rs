@@ -1,6 +1,6 @@
 use crate::*;
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub enum ApplicationStatus {
     Pending,
@@ -9,17 +9,11 @@ pub enum ApplicationStatus {
     InReview,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Application {
     // functions as unique identifier for application, since projects can only apply once per round
     pub project_id: ProjectId,
-    // /// ID of the individual or group that submitted the application. TODO: MUST be on the Potlock Registry (registry.potluck.[NETWORK])
-    // pub creator_id: AccountId,
-    // /// Name of the individual or group that submitted the application
-    // pub creator_name: Option<String>, // TODO: consider whether this should be required (currently optional)
-    /// Account ID that should receive payout funds  
-    // pub payout_to: AccountId, // TODO: consider whether this should exist here or on the registry contract, or on nearhorizons contract
     /// Status of the project application (Pending, Accepted, Rejected, InReview)
     pub status: ApplicationStatus,
     /// Timestamp for when the application was submitted
@@ -31,6 +25,19 @@ pub struct Application {
     pub updated_at: Option<TimestampMs>,
     /// Notes to be added by Chef when reviewing the application
     pub review_notes: Option<String>,
+}
+
+#[derive(BorshSerialize, BorshDeserialize)]
+pub enum VersionedApplication {
+    Current(Application),
+}
+
+impl From<VersionedApplication> for Application {
+    fn from(application: VersionedApplication) -> Self {
+        match application {
+            VersionedApplication::Current(current) => current,
+        }
+    }
 }
 
 #[near_bindgen]
@@ -97,18 +104,21 @@ impl Contract {
             review_notes: None,
         };
         // update mappings
-        self.applications_by_project_id
-            .insert(&application.project_id, &application);
+        self.applications_by_project_id.insert(
+            &application.project_id,
+            &VersionedApplication::Current(application.clone()),
+        );
         // return application
         application
     }
 
     pub fn unapply(&mut self) {
         let project_id = env::predecessor_account_id();
-        let application = self
-            .applications_by_project_id
-            .get(&project_id)
-            .expect("Application does not exist for calling project");
+        let application = Application::from(
+            self.applications_by_project_id
+                .get(&project_id)
+                .expect("Application does not exist for calling project"),
+        );
         // verify that application is pending
         // TODO: consider removing this check
         assert_eq!(
@@ -138,14 +148,16 @@ impl Contract {
             .iter()
             .skip(start_index as usize)
             .take(limit.try_into().unwrap())
-            .map(|(_account_id, application)| application)
+            .map(|(_account_id, application)| Application::from(application))
             .collect()
     }
 
     pub fn get_application_by_project_id(&self, project_id: ProjectId) -> Application {
-        self.applications_by_project_id
-            .get(&project_id)
-            .expect("Application does not exist")
+        Application::from(
+            self.applications_by_project_id
+                .get(&project_id)
+                .expect("Application does not exist"),
+        )
     }
 
     pub fn chef_set_application_status(
@@ -156,17 +168,20 @@ impl Contract {
     ) -> Application {
         self.assert_chef_or_greater();
         // verify that the application exists
-        let mut application = self
-            .applications_by_project_id
-            .get(&project_id)
-            .expect("Application does not exist");
+        let mut application = Application::from(
+            self.applications_by_project_id
+                .get(&project_id)
+                .expect("Application does not exist"),
+        );
         // verify that the application is pending
         application.status = status;
         application.updated_at = Some(env::block_timestamp_ms());
         application.review_notes = Some(notes);
         // update mapping
-        self.applications_by_project_id
-            .insert(&project_id, &application);
+        self.applications_by_project_id.insert(
+            &project_id,
+            &VersionedApplication::Current(application.clone()),
+        );
         application
     }
 

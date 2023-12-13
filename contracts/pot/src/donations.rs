@@ -1,6 +1,6 @@
 use crate::*;
 /// Donation (matching pool or public round)
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Donation {
     /// Unique identifier for the donation
@@ -26,7 +26,20 @@ pub struct Donation {
     pub protocol_fee: U128,
     // /// Amount added after fees
     // pub amount_after_fees: U128,
-    // TODO: consider adding matching_pool boolean for convenience, but not really necessary since as we have matching_pool_donation_ids
+    // TODO: consider adding matching_pool boolean for convenience, but not really necessary since we have matching_pool_donation_ids
+}
+
+#[derive(BorshSerialize, BorshDeserialize)]
+pub enum VersionedDonation {
+    Current(Donation),
+}
+
+impl From<VersionedDonation> for Donation {
+    fn from(donation: VersionedDonation) -> Self {
+        match donation {
+            VersionedDonation::Current(current) => current,
+        }
+    }
 }
 
 pub const DONATION_ID_DELIMETER: &str = ":";
@@ -54,7 +67,7 @@ impl Contract {
             .iter()
             .skip(start_index as usize)
             .take(limit)
-            .map(|(_, v)| v)
+            .map(|(_, v)| Donation::from(v))
             .collect()
     }
 
@@ -74,7 +87,7 @@ impl Contract {
             .iter()
             .skip(start_index as usize)
             .take(limit)
-            .map(|donation_id| self.donations_by_id.get(&donation_id).unwrap())
+            .map(|donation_id| Donation::from(self.donations_by_id.get(&donation_id).unwrap()))
             .collect()
     }
 
@@ -94,7 +107,7 @@ impl Contract {
             .iter()
             .skip(start_index as usize)
             .take(limit)
-            .map(|donation_id| self.donations_by_id.get(&donation_id).unwrap())
+            .map(|donation_id| Donation::from(self.donations_by_id.get(&donation_id).unwrap()))
             .collect()
     }
 
@@ -116,7 +129,7 @@ impl Contract {
             .iter()
             .skip(start_index as usize)
             .take(limit)
-            .map(|donation_id| self.donations_by_id.get(&donation_id).unwrap())
+            .map(|donation_id| Donation::from(self.donations_by_id.get(&donation_id).unwrap()))
             .collect()
     }
 
@@ -138,7 +151,7 @@ impl Contract {
             .iter()
             .skip(start_index as usize)
             .take(limit)
-            .map(|donation_id| self.donations_by_id.get(&donation_id).unwrap())
+            .map(|donation_id| Donation::from(self.donations_by_id.get(&donation_id).unwrap()))
             .collect()
     }
 
@@ -485,7 +498,8 @@ impl Contract {
 
     pub(crate) fn insert_donation_record(&mut self, donation: &Donation, matching_pool: bool) {
         // insert base donation record
-        self.donations_by_id.insert(&donation.id, &donation);
+        self.donations_by_id
+            .insert(&donation.id, &VersionedDonation::Current(donation.clone()));
 
         // if donation has a project_id, add to relevant mappings
         if let Some(project_id) = donation.project_id.clone() {

@@ -18,6 +18,19 @@ pub struct Payout {
     pub paid_at: Option<TimestampMs>,
 }
 
+#[derive(BorshSerialize, BorshDeserialize)]
+pub enum VersionedPayout {
+    Current(Payout),
+}
+
+impl From<VersionedPayout> for Payout {
+    fn from(payout: VersionedPayout) -> Self {
+        match payout {
+            VersionedPayout::Current(current) => current,
+        }
+    }
+}
+
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct PayoutInput {
@@ -99,13 +112,17 @@ impl Contract {
             payout_ids_for_application.insert(&payout_id);
             self.payout_ids_by_project_id
                 .insert(&payout.project_id, &payout_ids_for_application);
-            self.payouts_by_id.insert(&payout_id, &payout);
+            self.payouts_by_id
+                .insert(&payout_id, &VersionedPayout::Current(payout));
         }
     }
 
     pub fn get_payouts(&self) -> Vec<Payout> {
-        // could add pagination but not necessary initially
-        self.payouts_by_id.values().collect()
+        // TODO: could add pagination but not necessary initially
+        self.payouts_by_id
+            .iter()
+            .map(|(_payout_id, payout)| Payout::from(payout))
+            .collect()
     }
 
     // challenge_payouts (callable by anyone on ReFi Council)

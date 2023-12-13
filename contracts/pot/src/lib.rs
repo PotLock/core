@@ -169,7 +169,7 @@ pub struct Contract {
     pub public_round_referral_fee_basis_points: u32,
     /// Chef's fee for managing the round. Gets taken out of each donation as they come in and are paid out
     pub chef_fee_basis_points: u32,
-    // TODO: ADD MAX PROTOCOL FEE BASIS POINTS? or as const so it can't be without code deployment?
+    // TODO: ADD MAX PROTOCOL FEE BASIS POINTS? or as const so it can't be updated without code deployment?
 
     // FUNDS & BALANCES
     /// Amount of matching funds available
@@ -185,10 +185,10 @@ pub struct Contract {
 
     // MAPPINGS
     /// All application records
-    pub applications_by_project_id: UnorderedMap<ProjectId, Application>,
+    pub applications_by_project_id: UnorderedMap<ProjectId, VersionedApplication>,
     // TODO: add approved, rejected, pending application IDs?
     /// All donation records
-    pub donations_by_id: UnorderedMap<DonationId, Donation>,
+    pub donations_by_id: UnorderedMap<DonationId, VersionedDonation>,
     /// IDs of public round donations (made by donors who are not Patrons, during public round)
     pub public_round_donation_ids: UnorderedSet<DonationId>,
     /// IDs of matching pool donations (made by Patrons)
@@ -198,7 +198,7 @@ pub struct Contract {
     /// IDs of donations made by a given donor (user)
     pub donation_ids_by_donor_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
     // payouts
-    pub payouts_by_id: UnorderedMap<PayoutId, Payout>, // can iterate over this to get all payouts
+    pub payouts_by_id: UnorderedMap<PayoutId, VersionedPayout>, // can iterate over this to get all payouts
     pub payout_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<PayoutId>>,
 
     // OTHER

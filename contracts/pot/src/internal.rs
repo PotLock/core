@@ -70,10 +70,11 @@ impl Contract {
     }
 
     pub(crate) fn assert_approved_application(&self, project_id: &ProjectId) {
-        let application = self
-            .applications_by_project_id
-            .get(project_id)
-            .expect("Application does not exist");
+        let application = Application::from(
+            self.applications_by_project_id
+                .get(project_id)
+                .expect("Application does not exist"),
+        );
         assert!(
             application.status == ApplicationStatus::Approved,
             "Application is not approved"
@@ -109,8 +110,10 @@ impl Contract {
     }
 
     pub(crate) fn assert_max_projects_not_reached(&self) {
+        // TODO: fix this
         let mut approved_applications_count = 0;
-        for (project_id, application) in self.applications_by_project_id.iter() {
+        for (project_id, v_app) in self.applications_by_project_id.iter() {
+            let application = Application::from(v_app);
             if application.status == ApplicationStatus::Approved {
                 approved_applications_count += 1;
             }
