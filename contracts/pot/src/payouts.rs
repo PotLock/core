@@ -51,13 +51,14 @@ impl Contract {
             "Payouts have already been processed"
         );
         // clear any existing payouts (in case this is a reset, e.g. fixing an error)
-        for (project_id, application) in self.applications_by_project_id.iter() {
-            if let Some(payout_ids_for_application) = self.payout_ids_by_project_id.get(&project_id)
+        for (application_id) in self.approved_application_ids.iter() {
+            if let Some(payout_ids_for_application) =
+                self.payout_ids_by_project_id.get(&application_id)
             {
                 for payout_id in payout_ids_for_application.iter() {
                     self.payouts_by_id.remove(&payout_id);
                 }
-                self.payout_ids_by_project_id.remove(&project_id);
+                self.payout_ids_by_project_id.remove(&application_id);
             }
         }
         // get down to business

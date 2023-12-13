@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 type TimestampMs = u64;
 type ProjectId = AccountId;
-type ApplicationId = u64;
+type ApplicationId = ProjectId; // Applications are indexed by ProjectId
 type DonationId = u64; // TODO: change to Sring formatted as `"application_id:donation_id"`
 
 pub mod admin;
@@ -185,8 +185,9 @@ pub struct Contract {
 
     // MAPPINGS
     /// All application records
-    pub applications_by_project_id: UnorderedMap<ProjectId, VersionedApplication>,
-    // TODO: add approved, rejected, pending application IDs?
+    pub applications_by_id: UnorderedMap<ApplicationId, VersionedApplication>,
+    /// Approved application IDs
+    pub approved_application_ids: UnorderedSet<ApplicationId>,
     /// All donation records
     pub donations_by_id: UnorderedMap<DonationId, VersionedDonation>,
     /// IDs of public round donations (made by donors who are not Patrons, during public round)
@@ -218,10 +219,8 @@ pub enum StorageKey {
     CustomMinThresholdScore,
     CooldownEndMs,
     ProtocolConfigProvider,
-    ApplicationsByProjectId,
+    ApplicationsById,
     ApprovedApplicationIds,
-    RejectedApplicationIds,
-    PendingApplicationIds,
     DonationsById,
     PublicRoundDonationIds,
     MatchingPoolDonationIds,
@@ -323,7 +322,8 @@ impl Contract {
             all_paid_out: false,
 
             // mappings
-            applications_by_project_id: UnorderedMap::new(StorageKey::ApplicationsByProjectId),
+            applications_by_id: UnorderedMap::new(StorageKey::ApplicationsById),
+            approved_application_ids: UnorderedSet::new(StorageKey::ApprovedApplicationIds),
             donations_by_id: UnorderedMap::new(StorageKey::DonationsById),
             public_round_donation_ids: UnorderedSet::new(StorageKey::PublicRoundDonationIds),
             matching_pool_donation_ids: UnorderedSet::new(StorageKey::MatchingPoolDonationIds),
@@ -374,7 +374,8 @@ impl Default for Contract {
             total_donations: U128(0),
             cooldown_end_ms: LazyOption::new(StorageKey::CooldownEndMs, None),
             all_paid_out: false,
-            applications_by_project_id: UnorderedMap::new(StorageKey::ApplicationsByProjectId),
+            applications_by_id: UnorderedMap::new(StorageKey::ApplicationsById),
+            approved_application_ids: UnorderedSet::new(StorageKey::ApprovedApplicationIds),
             donations_by_id: UnorderedMap::new(StorageKey::DonationsById),
             public_round_donation_ids: UnorderedSet::new(StorageKey::PublicRoundDonationIds),
             matching_pool_donation_ids: UnorderedSet::new(StorageKey::MatchingPoolDonationIds),

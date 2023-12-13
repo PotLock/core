@@ -191,7 +191,7 @@ impl Contract {
         self.assert_cooldown_period_complete();
         // pay out each project
         // for each approved project...
-        for (project_id, v_app) in self.applications_by_project_id.iter() {
+        for (project_id, v_app) in self.applications_by_id.iter() {
             // TODO: update this to only go through approved applications mapping
             self.assert_approved_application(&project_id);
             let application = Application::from(v_app);

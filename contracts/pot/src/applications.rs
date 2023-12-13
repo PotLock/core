@@ -12,16 +12,14 @@ pub enum ApplicationStatus {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Application {
-    // functions as unique identifier for application, since projects can only apply once per round
+    /// functions as unique identifier for application, since projects can only apply once per round
+    // Don't technically need this, since we use the project_id as the key in the applications_by_id mapping, but it's possible that we'll want to change that in the future, so keeping this for now
     pub project_id: ProjectId,
     /// Status of the project application (Pending, Accepted, Rejected, InReview)
     pub status: ApplicationStatus,
     /// Timestamp for when the application was submitted
     pub submitted_at: TimestampMs,
-    // /// Timestamp for when the application was reviewed (if applicable)
-    // pub reviewed_at: Option<TimestampMs>,
-    /// Timestamp for when the project was updated
-    // TODO: should only be updateable before it is approved
+    /// Timestamp for when the application was last updated (e.g. status changed)
     pub updated_at: Option<TimestampMs>,
     /// Notes to be added by Chef when reviewing the application
     pub review_notes: Option<String>,
@@ -32,10 +30,20 @@ pub enum VersionedApplication {
     Current(Application),
 }
 
+// converts VersionedApplication to Application
 impl From<VersionedApplication> for Application {
     fn from(application: VersionedApplication) -> Self {
         match application {
             VersionedApplication::Current(current) => current,
+        }
+    }
+}
+
+// converts &VersionedApplication to Application
+impl From<&VersionedApplication> for Application {
+    fn from(application: &VersionedApplication) -> Self {
+        match application {
+            VersionedApplication::Current(current) => current.to_owned(),
         }
     }
 }
@@ -87,7 +95,7 @@ impl Contract {
 
     pub(crate) fn handle_apply(&mut self, project_id: ProjectId) -> Application {
         // check that application doesn't already exist for this project
-        if self.applications_by_project_id.get(&project_id).is_some() {
+        if self.applications_by_id.get(&project_id).is_some() {
             // application already exists
             env::panic_str("Application already exists for this project");
         }
@@ -104,7 +112,7 @@ impl Contract {
             review_notes: None,
         };
         // update mappings
-        self.applications_by_project_id.insert(
+        self.applications_by_id.insert(
             &application.project_id,
             &VersionedApplication::Current(application.clone()),
         );
@@ -115,7 +123,7 @@ impl Contract {
     pub fn unapply(&mut self) {
         let project_id = env::predecessor_account_id();
         let application = Application::from(
-            self.applications_by_project_id
+            self.applications_by_id
                 .get(&project_id)
                 .expect("Application does not exist for calling project"),
         );
@@ -128,33 +136,82 @@ impl Contract {
             application.status
         );
         // remove from mappings
-        self.applications_by_project_id.remove(&project_id);
+        self.applications_by_id.remove(&project_id);
         // TODO: emit event?
     }
 
+    // pub fn get_applications(
+    //     &self,
+    //     from_index: Option<U128>,
+    //     limit: Option<u64>,
+    // ) -> Vec<Application> {
+    //     let start_index: u128 = from_index.map(From::from).unwrap_or_default();
+    //     assert!(
+    //         (self.applications_by_id.len() as u128) >= start_index,
+    //         "Out of bounds, please use a smaller from_index."
+    //     );
+    //     let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
+    //     assert_ne!(limit, 0, "Cannot provide limit of 0.");
+    //     self.applications_by_id
+    //         .iter()
+    //         .skip(start_index as usize)
+    //         .take(limit.try_into().unwrap())
+    //         .map(|(_account_id, application)| Application::from(application))
+    //         .collect()
+    // }
+
     pub fn get_applications(
+        &self,
+        from_index: Option<u64>,
+        limit: Option<u64>,
+        status: Option<ApplicationStatus>,
+    ) -> Vec<Application> {
+        let start_index: u64 = from_index.unwrap_or_default();
+        assert!(
+            (self.applications_by_id.len() as u64) >= start_index,
+            "Out of bounds, please use a smaller from_index."
+        );
+        let limit = limit.unwrap_or(usize::MAX as u64);
+        assert_ne!(limit, 0, "Cannot provide limit of 0.");
+        let status = status.unwrap_or(ApplicationStatus::Pending);
+        self.applications_by_id
+            .iter()
+            .skip(start_index as usize)
+            .take(limit.try_into().unwrap())
+            .filter(|(_account_id, application)| Application::from(application).status == status)
+            .map(|(_account_id, application)| Application::from(application))
+            .collect()
+    }
+
+    pub fn get_approved_applications(
         &self,
         from_index: Option<U128>,
         limit: Option<u64>,
     ) -> Vec<Application> {
         let start_index: u128 = from_index.map(From::from).unwrap_or_default();
         assert!(
-            (self.applications_by_project_id.len() as u128) >= start_index,
+            (self.approved_application_ids.len() as u128) >= start_index,
             "Out of bounds, please use a smaller from_index."
         );
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
         assert_ne!(limit, 0, "Cannot provide limit of 0.");
-        self.applications_by_project_id
+        self.approved_application_ids
             .iter()
             .skip(start_index as usize)
             .take(limit.try_into().unwrap())
-            .map(|(_account_id, application)| Application::from(application))
+            .map(|project_id| {
+                Application::from(
+                    self.applications_by_id
+                        .get(&project_id)
+                        .expect("Application does not exist"),
+                )
+            })
             .collect()
     }
 
     pub fn get_application_by_project_id(&self, project_id: ProjectId) -> Application {
         Application::from(
-            self.applications_by_project_id
+            self.applications_by_id
                 .get(&project_id)
                 .expect("Application does not exist"),
         )
@@ -169,19 +226,29 @@ impl Contract {
         self.assert_chef_or_greater();
         // verify that the application exists
         let mut application = Application::from(
-            self.applications_by_project_id
+            self.applications_by_id
                 .get(&project_id)
                 .expect("Application does not exist"),
         );
+        let previous_status = application.status.clone();
         // verify that the application is pending
         application.status = status;
         application.updated_at = Some(env::block_timestamp_ms());
         application.review_notes = Some(notes);
         // update mapping
-        self.applications_by_project_id.insert(
+        self.applications_by_id.insert(
             &project_id,
             &VersionedApplication::Current(application.clone()),
         );
+        // insert into approved applications mapping if approved
+        if application.status == ApplicationStatus::Approved {
+            self.approved_application_ids.insert(&project_id);
+        } else {
+            // setting application status as something other than Approved; if it was previously approved, remove from approved mapping
+            if previous_status == ApplicationStatus::Approved {
+                self.approved_application_ids.remove(&project_id);
+            }
+        }
         application
     }
 
