@@ -109,6 +109,14 @@ impl Contract {
         self.registry_provider.remove();
     }
 
+    pub fn admin_set_min_matching_pool_donation_amount(
+        &mut self,
+        min_matching_pool_donation_amount: U128,
+    ) {
+        self.assert_owner_or_admin();
+        self.min_matching_pool_donation_amount = min_matching_pool_donation_amount;
+    }
+
     pub fn admin_set_sybil_wrapper_provider(
         &mut self,
         contract_id: AccountId,

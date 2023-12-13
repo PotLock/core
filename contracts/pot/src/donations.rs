@@ -204,11 +204,13 @@ impl Contract {
                 );
             }
         }
-        self.assert_caller_can_donate(project_id, message, referrer_id, is_matching_pool)
+        let deposit = env::attached_deposit();
+        self.assert_caller_can_donate(deposit, project_id, message, referrer_id, is_matching_pool)
     }
 
     pub(crate) fn assert_caller_can_donate(
         &mut self,
+        deposit: Balance,
         project_id: Option<ProjectId>,
         message: Option<String>,
         referrer_id: Option<AccountId>,
@@ -217,6 +219,7 @@ impl Contract {
         let always_allow_cb_promise = Self::ext(env::current_account_id())
             .with_static_gas(XCC_GAS)
             .sybil_always_allow_callback(
+                deposit,
                 project_id.clone(),
                 message.clone(),
                 referrer_id.clone(),
@@ -224,7 +227,11 @@ impl Contract {
             );
 
         if matching_pool {
-            // TODO: ADD MIN MATCHING POOL DONATION AMOUNT & CORRESPONDING CHECK HERE
+            assert!(
+                deposit >= self.min_matching_pool_donation_amount.0,
+                "Matching pool donations must be at least {} yoctoNEAR",
+                self.min_matching_pool_donation_amount.0
+            );
             // matching pool donations not subject to sybil checks, so go to always_allow callback
             always_allow_cb_promise
         } else {
@@ -239,6 +246,7 @@ impl Contract {
                         Self::ext(env::current_account_id())
                             .with_static_gas(XCC_GAS)
                             .sybil_callback(
+                                deposit,
                                 project_id.clone(),
                                 message.clone(),
                                 referrer_id.clone(),
@@ -257,6 +265,7 @@ impl Contract {
         &mut self,
         // caller_id: AccountId,
         // amount: u128,
+        deposit: Balance,
         project_id: Option<ProjectId>,
         message: Option<String>,
         referrer_id: Option<AccountId>,
@@ -265,6 +274,7 @@ impl Contract {
         self.handle_protocol_fee(
             // caller_id,
             // amount,
+            deposit,
             project_id,
             message,
             referrer_id,
@@ -277,6 +287,7 @@ impl Contract {
         &mut self,
         // caller_id: AccountId,
         // amount: u128,
+        deposit: Balance,
         project_id: Option<ProjectId>,
         message: Option<String>,
         referrer_id: Option<AccountId>,
@@ -309,6 +320,7 @@ impl Contract {
             self.handle_protocol_fee(
                 // caller_id,
                 // amount,
+                deposit,
                 project_id,
                 message,
                 referrer_id,
@@ -319,6 +331,7 @@ impl Contract {
 
     pub(crate) fn handle_protocol_fee(
         &mut self,
+        deposit: Balance,
         project_id: Option<ProjectId>,
         message: Option<String>,
         referrer_id: Option<AccountId>,
@@ -327,6 +340,7 @@ impl Contract {
         let bypass_protocol_fee_promise = Self::ext(env::current_account_id())
             .with_static_gas(XCC_GAS)
             .bypass_protocol_fee(
+                deposit,
                 project_id.clone(),
                 message.clone(),
                 referrer_id.clone(),
@@ -343,6 +357,7 @@ impl Contract {
                         Self::ext(env::current_account_id())
                             .with_static_gas(XCC_GAS)
                             .handle_protocol_fee_callback(
+                                deposit,
                                 project_id,
                                 message,
                                 referrer_id,
@@ -369,6 +384,7 @@ impl Contract {
     #[private]
     pub fn handle_protocol_fee_callback(
         &mut self,
+        deposit: Balance,
         project_id: Option<ProjectId>,
         message: Option<String>,
         referrer_id: Option<AccountId>,
@@ -379,7 +395,15 @@ impl Contract {
             log!(format!(
                 "Error getting protocol fee; continuing with donation",
             ));
-            self.process_donation(0, None, project_id, message, referrer_id, matching_pool)
+            self.process_donation(
+                deposit,
+                0,
+                None,
+                project_id,
+                message,
+                referrer_id,
+                matching_pool,
+            )
         } else {
             let protocol_config_provider_result = call_result.unwrap();
             let protocol_fee_basis_points = protocol_config_provider_result.basis_points;
@@ -388,6 +412,7 @@ impl Contract {
             let protocol_fee =
                 self.calculate_fee(env::attached_deposit(), protocol_fee_basis_points);
             self.process_donation(
+                deposit,
                 protocol_fee,
                 Some(protocol_fee_recipient_account),
                 project_id,
@@ -401,16 +426,26 @@ impl Contract {
     #[private]
     pub fn bypass_protocol_fee(
         &mut self,
+        deposit: Balance,
         project_id: Option<ProjectId>,
         message: Option<String>,
         referrer_id: Option<AccountId>,
         matching_pool: bool,
     ) -> Donation {
-        self.process_donation(0, None, project_id, message, referrer_id, matching_pool)
+        self.process_donation(
+            deposit,
+            0,
+            None,
+            project_id,
+            message,
+            referrer_id,
+            matching_pool,
+        )
     }
 
     pub(crate) fn process_donation(
         &mut self,
+        deposit: Balance,
         protocol_fee: u128,
         protocol_fee_recipient_account: Option<AccountId>,
         // caller_id: AccountId,
@@ -421,12 +456,11 @@ impl Contract {
         matching_pool: bool,
     ) -> Donation {
         let initial_storage_usage = env::storage_usage();
-        let attached_deposit = env::attached_deposit();
 
         // subtract protocol fee
-        let mut remainder = attached_deposit.checked_sub(protocol_fee).expect(&format!(
+        let mut remainder = deposit.checked_sub(protocol_fee).expect(&format!(
             "Overflow occurred when calculating remainder ({} - {})",
-            attached_deposit, protocol_fee,
+            deposit, protocol_fee,
         ));
 
         // subtract referrer fee
@@ -444,7 +478,7 @@ impl Contract {
         let donation = Donation {
             id: (self.donations_by_id.len() + 1) as DonationId,
             donor_id: env::signer_account_id(),
-            total_amount: U128::from(attached_deposit),
+            total_amount: U128::from(deposit),
             message,
             donated_at: env::block_timestamp(),
             project_id: project_id.clone(),

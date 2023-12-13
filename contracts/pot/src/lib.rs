@@ -153,6 +153,8 @@ pub struct Contract {
     /// Contract ID + method name of registry provider that should be queried when projects apply to round. Method specified must receive "account_id" and return bool indicating registration status.
     /// * Optional because not all Pots will require registration, and those that do might set after deployment.
     pub registry_provider: LazyOption<ProviderId>,
+    /// Minimum amount that can be donated to the matching pool
+    pub min_matching_pool_donation_amount: U128,
 
     // SYBIL RESISTANCE
     /// Sybil contract address & method name that will be called to verify humanness. If `None`, no checks will be made.
@@ -250,7 +252,8 @@ impl Contract {
         application_end_ms: TimestampMs,
         public_round_start_ms: TimestampMs,
         public_round_end_ms: TimestampMs,
-        registry_provider: Option<ProviderId>, // TODO: may need to change type here
+        registry_provider: Option<ProviderId>,
+        min_matching_pool_donation_amount: Option<U128>,
 
         // sybil resistance
         sybil_wrapper_provider: Option<ProviderId>,
@@ -293,6 +296,7 @@ impl Contract {
                 StorageKey::RegistryProvider,
                 registry_provider.as_ref(),
             ),
+            min_matching_pool_donation_amount: min_matching_pool_donation_amount.unwrap_or(U128(1)), // default to 1 YoctoNEAR
 
             // sybil resistance
             sybil_wrapper_provider: LazyOption::new(
@@ -364,6 +368,7 @@ impl Default for Contract {
             public_round_end_ms: 0,
             deployed_by: env::signer_account_id(),
             registry_provider: LazyOption::new(StorageKey::RegistryProvider, None),
+            min_matching_pool_donation_amount: U128(1),
             sybil_wrapper_provider: LazyOption::new(StorageKey::SybilContractId, None),
             custom_sybil_checks: LazyOption::new(StorageKey::CustomSybilChecks, None),
             custom_min_threshold_score: LazyOption::new(StorageKey::CustomMinThresholdScore, None),
