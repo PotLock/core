@@ -29,7 +29,7 @@ impl From<VersionedPot> for Pot {
 /// Ephemeral-only (used for views; not stored in contract)
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
-pub struct ExternalPot {
+pub struct PotExternal {
     id: PotId,
     deployed_by: AccountId,
     deployed_at_ms: TimestampMs,
@@ -168,12 +168,12 @@ impl Contract {
         Some(pot)
     }
 
-    pub fn get_pots(&self) -> Vec<ExternalPot> {
+    pub fn get_pots(&self) -> Vec<PotExternal> {
         self.pots_by_id
             .iter()
             .map(|(id, v)| {
                 let pot = Pot::from(v);
-                ExternalPot {
+                PotExternal {
                     id,
                     deployed_by: pot.deployed_by.clone(),
                     deployed_at_ms: pot.deployed_at_ms,

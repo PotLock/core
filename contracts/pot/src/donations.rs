@@ -3,9 +3,6 @@ use crate::*;
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Donation {
-    /// Unique identifier for the donation
-    // TODO: don't actually need to store this in the Donation itself, since it's the key in the map
-    pub id: DonationId,
     /// ID of the donor               
     pub donor_id: AccountId,
     /// Amount donated         
@@ -14,9 +11,7 @@ pub struct Donation {
     pub message: Option<String>,
     /// Timestamp when the donation was made
     pub donated_at: TimestampMs,
-    /// ID of the project receiving the donation, if applicable
-    /// * Matching pool donations will contain `None`
-    /// * Public round donations will contain `Some(project_id)`
+    /// ID of the project receiving the donation, if applicable (matching pool donations will contain `None`)
     pub project_id: Option<ProjectId>,
     /// Referrer ID
     pub referrer_id: Option<AccountId>,
@@ -24,9 +19,6 @@ pub struct Donation {
     pub referrer_fee: Option<U128>,
     /// Protocol fee
     pub protocol_fee: U128,
-    // /// Amount added after fees
-    // pub amount_after_fees: U128,
-    // TODO: consider adding matching_pool boolean for convenience, but not really necessary since we have matching_pool_donation_ids
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -42,6 +34,32 @@ impl From<VersionedDonation> for Donation {
     }
 }
 
+/// Ephemeral-only (used in views)
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct DonationExternal {
+    /// ID of the donation
+    pub id: DonationId,
+    /// ID of the donor               
+    pub donor_id: AccountId,
+    /// Amount donated         
+    pub total_amount: U128,
+    /// Optional message from the donor          
+    pub message: Option<String>,
+    /// Timestamp when the donation was made
+    pub donated_at: TimestampMs,
+    /// ID of the project receiving the donation, if applicable (matching pool donations will contain `None`)
+    pub project_id: Option<ProjectId>,
+    /// Referrer ID
+    pub referrer_id: Option<AccountId>,
+    /// Referrer fee
+    pub referrer_fee: Option<U128>,
+    /// Protocol fee
+    pub protocol_fee: U128,
+    /// Indicates whether this is matching pool donation
+    pub matching_pool: bool,
+}
+
 pub const DONATION_ID_DELIMETER: &str = ":";
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
@@ -55,7 +73,11 @@ pub struct ProtocolConfigProviderResult {
 impl Contract {
     // GETTERS
 
-    pub fn get_donations(&self, from_index: Option<u128>, limit: Option<u64>) -> Vec<Donation> {
+    pub fn get_donations(
+        &self,
+        from_index: Option<u128>,
+        limit: Option<u64>,
+    ) -> Vec<DonationExternal> {
         let start_index: u128 = from_index.unwrap_or_default();
         assert!(
             (self.donations_by_id.len() as u128) >= start_index,
@@ -67,7 +89,9 @@ impl Contract {
             .iter()
             .skip(start_index as usize)
             .take(limit)
-            .map(|(_, v)| Donation::from(v))
+            .map(|(id, v)| {
+                self.format_donation(&Donation::from(self.donations_by_id.get(&id).unwrap()), id)
+            })
             .collect()
     }
 
@@ -75,7 +99,7 @@ impl Contract {
         &self,
         from_index: Option<u128>,
         limit: Option<u64>,
-    ) -> Vec<Donation> {
+    ) -> Vec<DonationExternal> {
         let start_index: u128 = from_index.unwrap_or_default();
         assert!(
             (self.public_round_donation_ids.len() as u128) >= start_index,
@@ -87,7 +111,9 @@ impl Contract {
             .iter()
             .skip(start_index as usize)
             .take(limit)
-            .map(|donation_id| Donation::from(self.donations_by_id.get(&donation_id).unwrap()))
+            .map(|id| {
+                self.format_donation(&Donation::from(self.donations_by_id.get(&id).unwrap()), id)
+            })
             .collect()
     }
 
@@ -95,7 +121,7 @@ impl Contract {
         &self,
         from_index: Option<u128>,
         limit: Option<u64>,
-    ) -> Vec<Donation> {
+    ) -> Vec<DonationExternal> {
         let start_index: u128 = from_index.unwrap_or_default();
         assert!(
             (self.matching_pool_donation_ids.len() as u128) >= start_index,
@@ -107,7 +133,9 @@ impl Contract {
             .iter()
             .skip(start_index as usize)
             .take(limit)
-            .map(|donation_id| Donation::from(self.donations_by_id.get(&donation_id).unwrap()))
+            .map(|id| {
+                self.format_donation(&Donation::from(self.donations_by_id.get(&id).unwrap()), id)
+            })
             .collect()
     }
 
@@ -116,7 +144,7 @@ impl Contract {
         project_id: ProjectId,
         from_index: Option<u128>,
         limit: Option<u64>,
-    ) -> Vec<Donation> {
+    ) -> Vec<DonationExternal> {
         let start_index: u128 = from_index.unwrap_or_default();
         assert!(
             (self.donations_by_id.len() as u128) >= start_index,
@@ -129,7 +157,9 @@ impl Contract {
             .iter()
             .skip(start_index as usize)
             .take(limit)
-            .map(|donation_id| Donation::from(self.donations_by_id.get(&donation_id).unwrap()))
+            .map(|id| {
+                self.format_donation(&Donation::from(self.donations_by_id.get(&id).unwrap()), id)
+            })
             .collect()
     }
 
@@ -138,7 +168,7 @@ impl Contract {
         donor_id: AccountId,
         from_index: Option<u128>,
         limit: Option<u64>,
-    ) -> Vec<Donation> {
+    ) -> Vec<DonationExternal> {
         let start_index: u128 = from_index.unwrap_or_default();
         assert!(
             (self.donations_by_id.len() as u128) >= start_index,
@@ -151,7 +181,9 @@ impl Contract {
             .iter()
             .skip(start_index as usize)
             .take(limit)
-            .map(|donation_id| Donation::from(self.donations_by_id.get(&donation_id).unwrap()))
+            .map(|id| {
+                self.format_donation(&Donation::from(self.donations_by_id.get(&id).unwrap()), id)
+            })
             .collect()
     }
 
@@ -174,12 +206,6 @@ impl Contract {
         let referrer_amount = multiplier as u128 * amount_per_basis_point;
         referrer_amount
     }
-
-    // #[payable] // TODO: UPDATE THIS
-    // pub fn chef_set_donation_requirement(&mut self, donation_requirement: Option<SBTRequirement>) {
-    //     self.assert_chef();
-    //     self.donation_requirement = donation_requirement;
-    // }
 
     // WRITE METHODS
 
@@ -263,8 +289,6 @@ impl Contract {
     #[private] // Public - but only callable by env::current_account_id()
     pub fn sybil_always_allow_callback(
         &mut self,
-        // caller_id: AccountId,
-        // amount: u128,
         deposit: Balance,
         project_id: Option<ProjectId>,
         message: Option<String>,
@@ -285,8 +309,6 @@ impl Contract {
     #[private] // Public - but only callable by env::current_account_id()
     pub fn sybil_callback(
         &mut self,
-        // caller_id: AccountId,
-        // amount: u128,
         deposit: Balance,
         project_id: Option<ProjectId>,
         message: Option<String>,
@@ -390,7 +412,7 @@ impl Contract {
         referrer_id: Option<AccountId>,
         matching_pool: bool,
         #[callback_result] call_result: Result<ProtocolConfigProviderResult, PromiseError>,
-    ) -> Donation {
+    ) -> DonationExternal {
         if call_result.is_err() {
             log!(format!(
                 "Error getting protocol fee; continuing with donation",
@@ -431,7 +453,7 @@ impl Contract {
         message: Option<String>,
         referrer_id: Option<AccountId>,
         matching_pool: bool,
-    ) -> Donation {
+    ) -> DonationExternal {
         self.process_donation(
             deposit,
             0,
@@ -448,13 +470,11 @@ impl Contract {
         deposit: Balance,
         protocol_fee: u128,
         protocol_fee_recipient_account: Option<AccountId>,
-        // caller_id: AccountId,
-        // amount: u128,
         project_id: Option<ProjectId>,
         message: Option<String>,
         referrer_id: Option<AccountId>,
         matching_pool: bool,
-    ) -> Donation {
+    ) -> DonationExternal {
         let initial_storage_usage = env::storage_usage();
 
         // subtract protocol fee
@@ -475,8 +495,8 @@ impl Contract {
         }
 
         // insert mappings
+        let donation_id = (self.donations_by_id.len() + 1) as DonationId;
         let donation = Donation {
-            id: (self.donations_by_id.len() + 1) as DonationId,
             donor_id: env::signer_account_id(),
             total_amount: U128::from(deposit),
             message,
@@ -486,7 +506,7 @@ impl Contract {
             referrer_id: referrer_id.clone(),
             referrer_fee,
         };
-        self.insert_donation_record(&donation, matching_pool);
+        self.insert_donation_record(&donation_id, &donation, matching_pool);
         self.total_donations = U128::from(self.total_donations.0.checked_add(remainder).expect(
             &format!(
                 "Overflow occurred when calculating self.donations_balance ({} + {})",
@@ -526,14 +546,19 @@ impl Contract {
             Promise::new(project_id.clone()).transfer(remainder);
         }
 
-        // return donation
-        donation
+        // return formatted donation
+        self.format_donation(&donation, donation_id)
     }
 
-    pub(crate) fn insert_donation_record(&mut self, donation: &Donation, matching_pool: bool) {
+    pub(crate) fn insert_donation_record(
+        &mut self,
+        donation_id: &DonationId,
+        donation: &Donation,
+        matching_pool: bool,
+    ) {
         // insert base donation record
         self.donations_by_id
-            .insert(&donation.id, &VersionedDonation::Current(donation.clone()));
+            .insert(donation_id, &VersionedDonation::Current(donation.clone()));
 
         // if donation has a project_id, add to relevant mappings
         if let Some(project_id) = donation.project_id.clone() {
@@ -546,7 +571,7 @@ impl Contract {
                     project_id: project_id.clone(),
                 })
             };
-            donation_ids_by_project_set.insert(&donation.id);
+            donation_ids_by_project_set.insert(donation_id);
             self.donation_ids_by_project_id
                 .insert(&project_id, &donation_ids_by_project_set);
         }
@@ -561,16 +586,31 @@ impl Contract {
                 donor_id: donation.donor_id.clone(),
             })
         };
-        donation_ids_by_donor_set.insert(&donation.id);
+        donation_ids_by_donor_set.insert(donation_id);
         self.donation_ids_by_donor_id
             .insert(&donation.donor_id, &donation_ids_by_donor_set);
 
         // add to public round or matching pool donation ids
         // TODO: consider determining this based on Donation.project_id instead of matching_pool boolean
         if matching_pool {
-            self.matching_pool_donation_ids.insert(&donation.id);
+            self.matching_pool_donation_ids.insert(donation_id);
         } else {
-            self.public_round_donation_ids.insert(&donation.id);
+            self.public_round_donation_ids.insert(donation_id);
+        }
+    }
+
+    pub fn format_donation(&self, donation: &Donation, id: DonationId) -> DonationExternal {
+        DonationExternal {
+            id,
+            donor_id: donation.donor_id.clone(),
+            total_amount: donation.total_amount,
+            message: donation.message.clone(),
+            donated_at: donation.donated_at,
+            project_id: donation.project_id.clone(),
+            referrer_id: donation.referrer_id.clone(),
+            referrer_fee: donation.referrer_fee.clone(),
+            protocol_fee: donation.protocol_fee,
+            matching_pool: self.matching_pool_donation_ids.contains(&id),
         }
     }
 }
