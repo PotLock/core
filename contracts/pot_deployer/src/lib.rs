@@ -30,21 +30,21 @@ pub const XCC_SUCCESS: u64 = 1;
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Contract {
-    /// Contract superuser
+    /// Contract superuser (should be a DAO, but no restrictions made at the contract level on this matter)
     owner: AccountId,
     /// Admins, which can be added/removed by the owner
     admins: UnorderedSet<AccountId>,
-    /// All Pot records
+    /// Records of all Pots deployed by this Factory, indexed at their account ID, versioned for easy upgradeability
     pots_by_id: UnorderedMap<PotId, VersionedPot>,
     /// Config for protocol fees (% * 100)
     protocol_fee_basis_points: u32,
-    /// Config for protocol fee recipient
+    /// Config for protocol fees recipient
     protocol_fee_recipient_account: AccountId,
     /// Default chef fee (% * 100)
     default_chef_fee_basis_points: u32,
-    /// Accounts that are allowed to deploy pots
+    /// Accounts that are allowed to deploy Pots
     whitelisted_deployers: UnorderedSet<AccountId>,
-    /// Specifies whether a pot deployer is required to be whitelisted
+    /// Specifies whether a Pot deployer is required to be whitelisted
     require_whitelist: bool,
 }
 
@@ -62,6 +62,7 @@ impl From<VersionedContract> for Contract {
     }
 }
 
+/// Ephemeral-only (used in views)
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct ContractConfigExternal {
@@ -81,6 +82,7 @@ pub enum StorageKey {
     WhitelistedDeployers,
 }
 
+/// Ephemeral-only (used in views) - intended as the result type for Pots querying for protocol fees configuration
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct ProtocolConfig {
@@ -103,7 +105,7 @@ pub struct ProtocolConfig {
 #[serde(crate = "near_sdk::serde")]
 pub struct ProviderId(pub String);
 
-pub const PROVIDER_ID_DELIMITER: &str = ":"; // separates contract_id and method_name in ProviderId // TODO: move to constants.rs?
+pub const PROVIDER_ID_DELIMITER: &str = ":"; // separates contract_id and method_name in ProviderId
 
 // Generate ProviderId ("{CONTRACT_ADDRESS}:{METHOD_NAME}") from contract_id and method_name
 impl ProviderId {
@@ -123,10 +125,10 @@ impl ProviderId {
     }
 }
 
-/// Sybil provider weight
+/// Weighting for a given CustomSybilCheck
 type SybilProviderWeight = u32;
 
-// Ephemeral-only (used in custom_sybil_checks for setting and viewing)
+/// Ephemeral-only (used in custom_sybil_checks for setting on Pot deployment, but not stored in this contract; rather, stored in Pot contract)
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct CustomSybilCheck {
@@ -180,6 +182,7 @@ impl Contract {
         }
     }
 
+    /// Method intended for use by Pot contract querying for protocol fee configuration
     pub fn get_protocol_config(&self) -> ProtocolConfig {
         ProtocolConfig {
             basis_points: self.protocol_fee_basis_points,
@@ -188,7 +191,6 @@ impl Contract {
     }
 }
 
-// TODO: not sure why this is necessary
 impl Default for Contract {
     fn default() -> Self {
         Self {

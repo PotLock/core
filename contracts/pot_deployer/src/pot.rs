@@ -8,7 +8,6 @@ pub type PotId = AccountId;
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Pot {
-    // pub on_chain_name: String,
     pub deployed_by: AccountId,
     pub deployed_at_ms: TimestampMs,
 }
@@ -35,6 +34,7 @@ pub struct PotExternal {
     deployed_at_ms: TimestampMs,
 }
 
+/// Arguments that must be provided to deploy a new Pot; these must be kept up-to-date with the Pot contract
 #[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct PotArgs {
@@ -60,6 +60,7 @@ pub struct PotArgs {
 
 #[near_bindgen]
 impl Contract {
+    /// Deploy a new Pot. A `None` response indicates an unsuccessful deployment.
     #[payable]
     pub fn deploy_pot(&mut self, mut pot_args: PotArgs) -> Promise {
         self.assert_admin_or_whitelisted_deployer();
@@ -81,6 +82,12 @@ impl Contract {
             "Pot with id {} already exists",
             pot_account_id
         );
+
+        // add protocol config provider to pot args
+        pot_args.protocol_config_provider = Some(ProviderId::new(
+            env::current_account_id().to_string(),
+            "get_protocol_config".to_string(),
+        ));
 
         let min_deployment_deposit = self.get_min_deployment_deposit(&pot_args);
 
@@ -112,12 +119,6 @@ impl Contract {
         // delete temporarily created pot
         self.pots_by_id.remove(&pot_account_id);
 
-        // add protocol config provider to pot args
-        pot_args.protocol_config_provider = Some(ProviderId::new(
-            env::current_account_id().to_string(),
-            "get_protocol_config".to_string(),
-        ));
-
         // deploy pot
         Promise::new(pot_account_id.clone())
             .create_account()
@@ -144,7 +145,7 @@ impl Contract {
         min_deployment_deposit: Balance,
         deposit: Balance,
         #[callback_result] call_result: Result<(), PromiseError>,
-    ) -> Option<Pot> {
+    ) -> Option<PotExternal> {
         if call_result.is_err() {
             let error_message = format!(
                 "There was an error deploying the Pot contract. Returning deposit to signer."
@@ -173,7 +174,11 @@ impl Contract {
             Promise::new(env::signer_account_id()).transfer(deposit - total_cost);
         }
 
-        Some(pot)
+        Some(PotExternal {
+            id: pot_id,
+            deployed_by: pot.deployed_by,
+            deployed_at_ms: pot.deployed_at_ms,
+        })
     }
 
     pub fn get_pots(&self) -> Vec<PotExternal> {
