@@ -9,7 +9,7 @@ const READ_METHODS = {
   IS_ROUND_ACTIVE: "is_round_active",
   GET_APPLICATIONS: "get_applications",
   GET_APPLICATION_BY_PROJECT_ID: "get_application_by_project_id",
-  GET_POT_CONFIG: "get_pot_config",
+  GET_CONFIG: "get_config",
   GET_DONATIONS_BALANCE: "get_total_donations",
   GET_MATCHING_POOL_BALANCE: "get_matching_pool_balance",
   GET_MATCHING_POOL_DONATIONS: "get_matching_pool_donations",
@@ -122,7 +122,7 @@ export const initializeContract = async (
 
 export const getPotConfig = async (): Promise<PotConfig> => {
   return contractView({
-    methodName: READ_METHODS.GET_POT_CONFIG,
+    methodName: READ_METHODS.GET_CONFIG,
   });
 };
 

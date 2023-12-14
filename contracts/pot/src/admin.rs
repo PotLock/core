@@ -26,38 +26,38 @@ impl Contract {
 
     // CHEF
     pub fn admin_set_chef(&mut self, chef: AccountId) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         self.chef.set(&chef);
     }
 
     pub fn admin_remove_chef(&mut self) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         self.chef.remove();
     }
 
     pub fn admin_set_chef_fee_basis_points(&mut self, chef_fee_basis_points: u32) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         self.chef_fee_basis_points = chef_fee_basis_points;
     }
 
     // POT CONFIG
     pub fn admin_set_pot_name(&mut self, pot_name: String) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         self.pot_name = pot_name;
     }
 
     pub fn admin_set_pot_description(&mut self, pot_description: String) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         self.pot_description = pot_description;
     }
 
     pub fn admin_set_max_projects(&mut self, max_projects: u32) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         self.max_projects = max_projects;
     }
 
     pub fn admin_set_base_currency(&mut self, base_currency: AccountId) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         // only "near" allowed for now
         assert_eq!(
             base_currency,
@@ -68,44 +68,44 @@ impl Contract {
     }
 
     pub fn admin_set_application_start_ms(&mut self, application_start_ms: u64) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         self.application_start_ms = application_start_ms;
     }
 
     pub fn admin_set_application_end_ms(&mut self, application_end_ms: u64) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         self.application_end_ms = application_end_ms;
     }
 
     pub fn admin_set_public_round_start_ms(&mut self, public_round_start_ms: u64) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         self.public_round_start_ms = public_round_start_ms;
     }
 
     pub fn admin_set_public_round_end_ms(&mut self, public_round_end_ms: u64) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         self.public_round_end_ms = public_round_end_ms;
     }
 
-    pub fn admin_set_round_open(&mut self, public_round_end_ms: TimestampMs) {
-        self.assert_owner_or_admin();
+    pub fn admin_set_public_round_open(&mut self, public_round_end_ms: TimestampMs) {
+        self.assert_admin_or_greater();
         self.public_round_start_ms = env::block_timestamp_ms();
         self.public_round_end_ms = public_round_end_ms;
     }
 
-    pub fn admin_set_round_closed(&mut self) {
-        self.assert_owner_or_admin();
+    pub fn admin_set_public_round_closed(&mut self) {
+        self.assert_admin_or_greater();
         self.public_round_end_ms = env::block_timestamp_ms();
     }
 
     pub fn admin_set_registry_provider(&mut self, contract_id: AccountId, method_name: String) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         let provider_id = ProviderId::new(contract_id.to_string(), method_name);
         self.registry_provider.set(&provider_id);
     }
 
     pub fn admin_remove_registry_provider(&mut self) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         self.registry_provider.remove();
     }
 
@@ -113,7 +113,7 @@ impl Contract {
         &mut self,
         min_matching_pool_donation_amount: U128,
     ) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         self.min_matching_pool_donation_amount = min_matching_pool_donation_amount;
     }
 
@@ -122,18 +122,18 @@ impl Contract {
         contract_id: AccountId,
         method_name: String,
     ) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         let provider_id = ProviderId::new(contract_id.to_string(), method_name);
         self.sybil_wrapper_provider.set(&provider_id);
     }
 
     pub fn admin_remove_sybil_wrapper_provider(&mut self) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         self.sybil_wrapper_provider.remove();
     }
 
     pub fn admin_set_custom_sybil_checks(&mut self, custom_sybil_checks: Vec<CustomSybilCheck>) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         let formatted_custom_sybil_checks: HashMap<ProviderId, SybilProviderWeight> =
             custom_sybil_checks
                 .into_iter()
@@ -149,18 +149,18 @@ impl Contract {
     }
 
     pub fn admin_remove_custom_sybil_checks(&mut self) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         self.custom_sybil_checks.remove();
     }
 
     pub fn admin_set_custom_min_threshold_score(&mut self, custom_min_threshold_score: u32) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         self.custom_min_threshold_score
             .set(&custom_min_threshold_score);
     }
 
     pub fn admin_remove_custom_min_threshold_score(&mut self) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         self.custom_min_threshold_score.remove();
     }
 
@@ -168,7 +168,7 @@ impl Contract {
         &mut self,
         patron_referral_fee_basis_points: u32,
     ) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         self.patron_referral_fee_basis_points = patron_referral_fee_basis_points;
     }
 
@@ -176,18 +176,18 @@ impl Contract {
         &mut self,
         public_round_referral_fee_basis_points: u32,
     ) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         self.public_round_referral_fee_basis_points = public_round_referral_fee_basis_points;
     }
 
     pub fn admin_set_cooldown_period_complete(&mut self) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         self.cooldown_end_ms.set(&env::block_timestamp_ms());
     }
 
     // PAYOUTS
     pub fn admin_process_payouts(&mut self) {
-        self.assert_owner_or_admin();
+        self.assert_admin_or_greater();
         // verify that the round has closed
         self.assert_round_closed();
         // verify that payouts have not already been processed

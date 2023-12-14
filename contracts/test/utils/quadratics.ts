@@ -1,14 +1,9 @@
-// USING BN:
 // taken from https://github.com/gitcoinco/quadratic-funding/blob/master/quadratic-funding/clr.py
 const BN = require("big.js");
 
 type YoctoBN = typeof BN;
 type UserId = AccountId;
 
-// type ProjectContribution = {
-//   projectId: ProjectId;
-//   contributions: Array<{ [key: AccountId]: YoctoBN }>;
-// };
 type ProjectContribution = [ProjectId, UserId, YoctoBN];
 
 let CLR_PERCENTAGE_DISTRIBUTED = 0;
@@ -45,27 +40,6 @@ export function convertDonationsToProjectContributions(
   }
   return projectContributionsList;
 }
-
-// // This function takes the grant data as input and produces a list of
-// // contributions with the format [projectId, userId, contributionAmount].
-// // Essentially, it's flattening the data structure to make it more manageable.
-// function translateData(
-//   grantsData: ProjectContribution[]
-// ): [ProjectId, UserId, BN][] {
-//   let grantsList: [ProjectId, UserId, YoctoBN][] = [];
-//   for (const g of grantsData) {
-//     const grantId = g.projectId;
-//     for (const c of g.contributions) {
-//       const val: [ProjectId, UserId, YoctoBN] = [
-//         grantId,
-//         Object.keys(c)[0],
-//         Object.values(c)[0],
-//       ];
-//       grantsList.push(val);
-//     }
-//   }
-//   return grantsList;
-// }
 
 // This function takes the flattened list of contributions and aggregates
 // the amounts contributed by each user to each project.
@@ -182,7 +156,6 @@ export function calculateQuadraticPayouts(
   threshold: typeof BN,
   totalPot: YoctoBN
 ): PayoutInput[] {
-  //   const contribData = translateData(projectContribsCurr);
   const contributions = aggregateContributions(projectContribsCurr);
   const pairTotals = getTotalsByPair(contributions);
   const totals = calculateClr(contributions, pairTotals, threshold, totalPot);

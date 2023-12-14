@@ -1,10 +1,10 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap, UnorderedSet};
-use near_sdk::json_types::{Base64VecU8, U128, U64};
+use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
-    env, ext_contract, log, near_bindgen, require, serde_json::json, AccountId, Balance,
-    BorshStorageKey, Gas, Promise, PromiseError,
+    env, log, near_bindgen, require, serde_json::json, AccountId, Balance, BorshStorageKey, Gas,
+    Promise, PromiseError,
 };
 use std::collections::HashMap;
 
@@ -65,8 +65,6 @@ impl ProviderId {
         (parts[0].to_string(), parts[1].to_string())
     }
 }
-
-const MAX_PROTOCOL_FEE_BASIS_POINTS: u32 = 1000; // 10% max protocol fee
 
 // #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 // #[serde(crate = "near_sdk::serde")]
@@ -174,10 +172,12 @@ pub struct Contract {
     // TODO: ADD MAX PROTOCOL FEE BASIS POINTS? or as const so it can't be updated without code deployment?
 
     // FUNDS & BALANCES
-    /// Amount of matching funds available
+    /// Total matching pool donations
+    pub total_matching_pool_donations: U128,
+    /// Amount of matching funds available (not yet paid out)
     pub matching_pool_balance: U128,
-    /// Total amount donated
-    pub total_donations: U128,
+    /// Total public donations
+    pub total_public_donations: U128,
 
     // PAYOUTS
     /// Cooldown period starts when Chef sets payouts
@@ -318,8 +318,9 @@ impl Contract {
             chef_fee_basis_points,
 
             // funds and balances
+            total_matching_pool_donations: U128(0),
             matching_pool_balance: U128(0),
-            total_donations: U128(0),
+            total_public_donations: U128(0),
 
             // payouts
             cooldown_end_ms: LazyOption::new(StorageKey::CooldownEndMs, None),
@@ -375,8 +376,9 @@ impl Default for Contract {
             patron_referral_fee_basis_points: 0,
             public_round_referral_fee_basis_points: 0,
             chef_fee_basis_points: 0,
+            total_matching_pool_donations: U128(0),
             matching_pool_balance: U128(0),
-            total_donations: U128(0),
+            total_public_donations: U128(0),
             cooldown_end_ms: LazyOption::new(StorageKey::CooldownEndMs, None),
             all_paid_out: false,
             applications_by_id: UnorderedMap::new(StorageKey::ApplicationsById),

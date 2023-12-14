@@ -103,6 +103,10 @@ impl Contract {
         ))
     }
 
+    pub fn is_registered(&self, account_id: ProjectId) -> bool {
+        self.project_ids.contains(&account_id)
+    }
+
     pub(crate) fn format_project(&self, project_internal: ProjectInternal) -> ProjectExternal {
         ProjectExternal {
             id: project_internal.id.clone(),

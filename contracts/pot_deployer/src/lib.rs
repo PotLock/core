@@ -84,8 +84,8 @@ pub enum StorageKey {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct ProtocolConfig {
-    pub protocol_fee_basis_points: u32,
-    pub protocol_fee_recipient_account: AccountId,
+    pub basis_points: u32,
+    pub account_id: AccountId,
 }
 
 #[derive(
@@ -102,6 +102,26 @@ pub struct ProtocolConfig {
 )]
 #[serde(crate = "near_sdk::serde")]
 pub struct ProviderId(pub String);
+
+pub const PROVIDER_ID_DELIMITER: &str = ":"; // separates contract_id and method_name in ProviderId // TODO: move to constants.rs?
+
+// Generate ProviderId ("{CONTRACT_ADDRESS}:{METHOD_NAME}") from contract_id and method_name
+impl ProviderId {
+    fn new(contract_id: String, method_name: String) -> Self {
+        ProviderId(format!(
+            "{}{}{}",
+            contract_id, PROVIDER_ID_DELIMITER, method_name
+        ))
+    }
+
+    pub fn decompose(&self) -> (String, String) {
+        let parts: Vec<&str> = self.0.split(PROVIDER_ID_DELIMITER).collect();
+        if parts.len() != 2 {
+            panic!("Invalid provider ID format. Expected 'contract_id:method_name'.");
+        }
+        (parts[0].to_string(), parts[1].to_string())
+    }
+}
 
 /// Sybil provider weight
 type SybilProviderWeight = u32;
@@ -162,8 +182,8 @@ impl Contract {
 
     pub fn get_protocol_config(&self) -> ProtocolConfig {
         ProtocolConfig {
-            protocol_fee_basis_points: self.protocol_fee_basis_points,
-            protocol_fee_recipient_account: self.protocol_fee_recipient_account.clone(),
+            basis_points: self.protocol_fee_basis_points,
+            account_id: self.protocol_fee_recipient_account.clone(),
         }
     }
 }

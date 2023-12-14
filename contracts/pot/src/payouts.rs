@@ -51,7 +51,7 @@ impl Contract {
             "Payouts have already been processed"
         );
         // clear any existing payouts (in case this is a reset, e.g. fixing an error)
-        for (application_id) in self.approved_application_ids.iter() {
+        for application_id in self.approved_application_ids.iter() {
             if let Some(payout_ids_for_application) =
                 self.payout_ids_by_project_id.get(&application_id)
             {
@@ -63,31 +63,12 @@ impl Contract {
         }
         // get down to business
         let mut running_total: u128 = 0;
-        let balance_available = self
-            .matching_pool_balance
-            .0
-            .checked_add(self.total_donations.0)
-            .expect(&format!(
-                "Overflow occurred when calculating balance available ({} + {})",
-                self.matching_pool_balance.0, self.total_donations.0,
-            ));
         // for each payout:
         for payout in payouts.iter() {
-            // 1. verify that the project exists and is approved
+            // verify that the project exists and is approved
             self.assert_approved_application(&payout.project_id);
-            // 2. verify that the project is not already paid out
-            let existing_payout = self.payout_ids_by_project_id.get(&payout.project_id);
-            assert!(
-                existing_payout.is_none(),
-                "Project has already been paid out"
-            );
-            // 3. add amount to running total
+            // add amount to running total
             running_total += payout.amount.0;
-            // error if running total exceeds round total
-            assert!(
-                running_total <= balance_available,
-                "Payouts exceed available balance"
-            );
             // set cooldown_end to now + 1 week (?)
             self.cooldown_end_ms
                 .set(&(env::block_timestamp_ms() + ONE_WEEK_MS));
@@ -116,12 +97,25 @@ impl Contract {
             self.payouts_by_id
                 .insert(&payout_id, &VersionedPayout::Current(payout));
         }
+        // error if running total is not equal to matching_pool_balance (NB: this logic will change once milestones are supported)
+        assert!(
+            running_total == self.matching_pool_balance.0,
+            "Total payouts must equal matching pool balance"
+        );
     }
 
-    pub fn get_payouts(&self) -> Vec<Payout> {
-        // TODO: could add pagination but not necessary initially
+    pub fn get_payouts(&self, from_index: Option<u64>, limit: Option<u64>) -> Vec<Payout> {
+        let start_index: u64 = from_index.unwrap_or_default();
+        assert!(
+            (self.applications_by_id.len() as u64) >= start_index,
+            "Out of bounds, please use a smaller from_index."
+        );
+        let limit = limit.unwrap_or(usize::MAX as u64);
+        assert_ne!(limit, 0, "Cannot provide limit of 0.");
         self.payouts_by_id
             .iter()
+            .skip(start_index as usize)
+            .take(limit as usize)
             .map(|(_payout_id, payout)| Payout::from(payout))
             .collect()
     }

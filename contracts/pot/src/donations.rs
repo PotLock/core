@@ -19,6 +19,7 @@ pub struct Donation {
     pub referrer_fee: Option<U128>,
     /// Protocol fee
     pub protocol_fee: U128,
+    // TODO: add chef fee? chef ID? this is getting pretty hefty though for something intended to be small (could cost 0.01N just to store the Donation)
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -58,6 +59,7 @@ pub struct DonationExternal {
     pub protocol_fee: U128,
     /// Indicates whether this is matching pool donation
     pub matching_pool: bool,
+    // TODO: add chef fee?
 }
 
 pub const DONATION_ID_DELIMETER: &str = ":";
@@ -89,7 +91,7 @@ impl Contract {
             .iter()
             .skip(start_index as usize)
             .take(limit)
-            .map(|(id, v)| {
+            .map(|(id, _v)| {
                 self.format_donation(&Donation::from(self.donations_by_id.get(&id).unwrap()), id)
             })
             .collect()
@@ -187,14 +189,6 @@ impl Contract {
             .collect()
     }
 
-    pub fn get_matching_pool_balance(&self) -> U128 {
-        self.matching_pool_balance
-    }
-
-    pub fn get_total_donations(&self) -> U128 {
-        self.total_donations
-    }
-
     pub(crate) fn calculate_referrer_fee(&self, amount: u128, matching_pool: bool) -> u128 {
         let total_basis_points = 10_000u128;
         let amount_per_basis_point = amount / total_basis_points;
@@ -242,16 +236,6 @@ impl Contract {
         referrer_id: Option<AccountId>,
         matching_pool: bool,
     ) -> Promise {
-        let always_allow_cb_promise = Self::ext(env::current_account_id())
-            .with_static_gas(XCC_GAS)
-            .sybil_always_allow_callback(
-                deposit,
-                project_id.clone(),
-                message.clone(),
-                referrer_id.clone(),
-                matching_pool,
-            );
-
         if matching_pool {
             assert!(
                 deposit >= self.min_matching_pool_donation_amount.0,
@@ -259,7 +243,15 @@ impl Contract {
                 self.min_matching_pool_donation_amount.0
             );
             // matching pool donations not subject to sybil checks, so go to always_allow callback
-            always_allow_cb_promise
+            Self::ext(env::current_account_id())
+                .with_static_gas(XCC_GAS)
+                .sybil_always_allow_callback(
+                    deposit,
+                    project_id.clone(),
+                    message.clone(),
+                    referrer_id.clone(),
+                    matching_pool,
+                )
         } else {
             if let Some(sybil_wrapper_provider) = self.sybil_wrapper_provider.get() {
                 let (contract_id, method_name) = sybil_wrapper_provider.decompose();
@@ -267,7 +259,7 @@ impl Contract {
                     .to_string()
                     .into_bytes();
                 Promise::new(AccountId::new_unchecked(contract_id.clone()))
-                    .function_call(method_name, args, 0, XCC_GAS)
+                    .function_call(method_name, args, 0, Gas(TGAS * 50))
                     .then(
                         Self::ext(env::current_account_id())
                             .with_static_gas(XCC_GAS)
@@ -281,7 +273,15 @@ impl Contract {
                     )
             } else {
                 // no sybil wrapper provider, so go to always_allow callback
-                always_allow_cb_promise
+                Self::ext(env::current_account_id())
+                    .with_static_gas(XCC_GAS)
+                    .sybil_always_allow_callback(
+                        deposit,
+                        project_id.clone(),
+                        message.clone(),
+                        referrer_id.clone(),
+                        matching_pool,
+                    )
             }
         }
     }
@@ -295,15 +295,7 @@ impl Contract {
         referrer_id: Option<AccountId>,
         matching_pool: bool,
     ) -> Promise {
-        self.handle_protocol_fee(
-            // caller_id,
-            // amount,
-            deposit,
-            project_id,
-            message,
-            referrer_id,
-            matching_pool,
-        )
+        self.handle_protocol_fee(deposit, project_id, message, referrer_id, matching_pool)
     }
 
     #[private] // Public - but only callable by env::current_account_id()
@@ -317,13 +309,12 @@ impl Contract {
         #[callback_result] call_result: Result<bool, PromiseError>,
     ) -> Promise {
         let caller_id = env::predecessor_account_id();
-        let amount = env::attached_deposit();
         if call_result.is_err() {
             log!(format!(
                 "Error verifying sybil check; returning donation {} to donor {}",
-                amount, caller_id
+                deposit, caller_id
             ));
-            Promise::new(caller_id).transfer(amount);
+            Promise::new(caller_id).transfer(deposit);
             env::panic_str(
                 "There was an error querying sybil check. Donation has been returned to donor.",
             );
@@ -332,22 +323,14 @@ impl Contract {
         if !is_human {
             log!(format!(
                 "Sybil provider wrapper check returned false; returning donation {} to donor {}",
-                amount, caller_id
+                deposit, caller_id
             ));
-            Promise::new(caller_id).transfer(amount);
+            Promise::new(caller_id).transfer(deposit);
             env::panic_str(
                 "Sybil provider wrapper check returned false. Donation has been returned to donor.",
             );
         } else {
-            self.handle_protocol_fee(
-                // caller_id,
-                // amount,
-                deposit,
-                project_id,
-                message,
-                referrer_id,
-                matching_pool,
-            )
+            self.handle_protocol_fee(deposit, project_id, message, referrer_id, matching_pool)
         }
     }
 
@@ -359,15 +342,6 @@ impl Contract {
         referrer_id: Option<AccountId>,
         matching_pool: bool,
     ) -> Promise {
-        let bypass_protocol_fee_promise = Self::ext(env::current_account_id())
-            .with_static_gas(XCC_GAS)
-            .bypass_protocol_fee(
-                deposit,
-                project_id.clone(),
-                message.clone(),
-                referrer_id.clone(),
-                matching_pool,
-            );
         if matching_pool {
             // protocol fee is only paid for matching pool donations
             if let Some(protocol_config_provider) = self.protocol_config_provider.get() {
@@ -388,11 +362,27 @@ impl Contract {
                     )
             } else {
                 // bypass protocol fee
-                bypass_protocol_fee_promise
+                Self::ext(env::current_account_id())
+                    .with_static_gas(XCC_GAS)
+                    .bypass_protocol_fee(
+                        deposit,
+                        project_id.clone(),
+                        message.clone(),
+                        referrer_id.clone(),
+                        matching_pool,
+                    )
             }
         } else {
             // bypass protocol fee
-            bypass_protocol_fee_promise
+            Self::ext(env::current_account_id())
+                .with_static_gas(XCC_GAS)
+                .bypass_protocol_fee(
+                    deposit,
+                    project_id.clone(),
+                    message.clone(),
+                    referrer_id.clone(),
+                    matching_pool,
+                )
         }
     }
 
@@ -431,8 +421,7 @@ impl Contract {
             let protocol_fee_basis_points = protocol_config_provider_result.basis_points;
             let protocol_fee_recipient_account = protocol_config_provider_result.account_id;
             // calculate protocol fee (don't transfer yet)
-            let protocol_fee =
-                self.calculate_fee(env::attached_deposit(), protocol_fee_basis_points);
+            let protocol_fee = self.calculate_fee(deposit, protocol_fee_basis_points);
             self.process_donation(
                 deposit,
                 protocol_fee,
@@ -507,12 +496,29 @@ impl Contract {
             referrer_fee,
         };
         self.insert_donation_record(&donation_id, &donation, matching_pool);
-        self.total_donations = U128::from(self.total_donations.0.checked_add(remainder).expect(
-            &format!(
-                "Overflow occurred when calculating self.donations_balance ({} + {})",
-                self.total_donations.0, remainder,
-            ),
-        ));
+
+        // update totals
+        if matching_pool {
+            self.total_matching_pool_donations = U128::from(
+                self.total_matching_pool_donations
+                    .0
+                    .checked_add(remainder)
+                    .expect(&format!(
+                        "Overflow occurred when calculating self.total_matching_pool_donations ({} + {})",
+                        self.total_matching_pool_donations.0, remainder,
+                    )),
+            );
+        } else {
+            self.total_public_donations = U128::from(
+                self.total_public_donations
+                    .0
+                    .checked_add(remainder)
+                    .expect(&format!(
+                        "Overflow occurred when calculating self.total_public_donations ({} + {})",
+                        self.total_public_donations.0, remainder,
+                    )),
+            );
+        }
 
         // assert that donation after fees > storage cost
         let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
@@ -591,7 +597,6 @@ impl Contract {
             .insert(&donation.donor_id, &donation_ids_by_donor_set);
 
         // add to public round or matching pool donation ids
-        // TODO: consider determining this based on Donation.project_id instead of matching_pool boolean
         if matching_pool {
             self.matching_pool_donation_ids.insert(donation_id);
         } else {

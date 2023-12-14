@@ -52,7 +52,7 @@ impl From<&VersionedApplication> for Application {
 impl Contract {
     #[payable]
     pub fn apply(&mut self) -> Promise {
-        let project_id = env::predecessor_account_id(); // TODO: consider renaming to "applicant_id" to make it less opinionated
+        let project_id = env::predecessor_account_id(); // TODO: consider renaming to "applicant_id" to make it less opinionated (e.g. maybe developers are applying, and they are not exactly a "project")
         if let Some(registry_provider) = self.registry_provider.get() {
             // decompose registry provider
             let (contract_id, method_name) = registry_provider.decompose();
@@ -111,11 +111,15 @@ impl Contract {
             updated_at: None,
             review_notes: None,
         };
+        // charge for storage
+        let initial_storage_usage = env::storage_usage();
         // update mappings
         self.applications_by_id.insert(
             &application.project_id,
             &VersionedApplication::Current(application.clone()),
         );
+        // refund excess deposit
+        refund_deposit(initial_storage_usage);
         // return application
         application
     }
@@ -128,37 +132,20 @@ impl Contract {
                 .expect("Application does not exist for calling project"),
         );
         // verify that application is pending
-        // TODO: consider removing this check
+        // TODO: consider whether this check is necessary
         assert_eq!(
             application.status,
             ApplicationStatus::Pending,
             "Application status is {:?}. Only pending applications can be removed",
             application.status
         );
+        // get current storage usage
+        let initial_storage_usage = env::storage_usage();
         // remove from mappings
         self.applications_by_id.remove(&project_id);
-        // TODO: emit event?
+        // refund for storage freed
+        refund_deposit(initial_storage_usage);
     }
-
-    // pub fn get_applications(
-    //     &self,
-    //     from_index: Option<U128>,
-    //     limit: Option<u64>,
-    // ) -> Vec<Application> {
-    //     let start_index: u128 = from_index.map(From::from).unwrap_or_default();
-    //     assert!(
-    //         (self.applications_by_id.len() as u128) >= start_index,
-    //         "Out of bounds, please use a smaller from_index."
-    //     );
-    //     let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
-    //     assert_ne!(limit, 0, "Cannot provide limit of 0.");
-    //     self.applications_by_id
-    //         .iter()
-    //         .skip(start_index as usize)
-    //         .take(limit.try_into().unwrap())
-    //         .map(|(_account_id, application)| Application::from(application))
-    //         .collect()
-    // }
 
     pub fn get_applications(
         &self,
@@ -173,24 +160,34 @@ impl Contract {
         );
         let limit = limit.unwrap_or(usize::MAX as u64);
         assert_ne!(limit, 0, "Cannot provide limit of 0.");
-        let status = status.unwrap_or(ApplicationStatus::Pending);
-        self.applications_by_id
-            .iter()
-            .skip(start_index as usize)
-            .take(limit.try_into().unwrap())
-            .filter(|(_account_id, application)| Application::from(application).status == status)
-            .map(|(_account_id, application)| Application::from(application))
-            .collect()
+        if let Some(status) = status {
+            self.applications_by_id
+                .iter()
+                .skip(start_index as usize)
+                .take(limit.try_into().unwrap())
+                .filter(|(_account_id, application)| {
+                    Application::from(application).status == status
+                })
+                .map(|(_account_id, application)| Application::from(application))
+                .collect()
+        } else {
+            self.applications_by_id
+                .iter()
+                .skip(start_index as usize)
+                .take(limit.try_into().unwrap())
+                .map(|(_account_id, application)| Application::from(application))
+                .collect()
+        }
     }
 
     pub fn get_approved_applications(
         &self,
-        from_index: Option<U128>,
+        from_index: Option<u64>,
         limit: Option<u64>,
     ) -> Vec<Application> {
-        let start_index: u128 = from_index.map(From::from).unwrap_or_default();
+        let start_index: u64 = from_index.unwrap_or_default();
         assert!(
-            (self.approved_application_ids.len() as u128) >= start_index,
+            (self.approved_application_ids.len() as u64) >= start_index,
             "Out of bounds, please use a smaller from_index."
         );
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);

@@ -19,15 +19,8 @@ impl Contract {
 
     pub(crate) fn assert_admin_or_greater(&self) {
         assert!(
-            self.is_admin() || self.is_owner(),
-            "Only contract admin or owner can call this method"
-        );
-    }
-
-    pub(crate) fn assert_owner_or_admin(&self) {
-        assert!(
             self.is_owner_or_admin(),
-            "Only contract owner or admin can call this method"
+            "Only contract admin or owner can call this method"
         );
     }
 
@@ -101,7 +94,7 @@ impl Contract {
     }
 
     pub(crate) fn assert_round_active(&self) {
-        assert!(self.is_round_active(), "Round is not active");
+        assert!(self.is_round_active(), "Public round is not active");
     }
 
     pub(crate) fn assert_max_projects_not_reached(&self) {

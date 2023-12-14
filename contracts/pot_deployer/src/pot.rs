@@ -55,12 +55,13 @@ pub struct PotArgs {
     patron_referral_fee_basis_points: u32,
     public_round_referral_fee_basis_points: u32,
     chef_fee_basis_points: u32,
+    protocol_config_provider: Option<ProviderId>,
 }
 
 #[near_bindgen]
 impl Contract {
     #[payable]
-    pub fn deploy_pot(&mut self, pot_args: PotArgs) -> Promise {
+    pub fn deploy_pot(&mut self, mut pot_args: PotArgs) -> Promise {
         self.assert_admin_or_whitelisted_deployer();
         let pot_account_id_str = format!(
             "{}.{}",
@@ -111,11 +112,18 @@ impl Contract {
         // delete temporarily created pot
         self.pots_by_id.remove(&pot_account_id);
 
+        // add protocol config provider to pot args
+        pot_args.protocol_config_provider = Some(ProviderId::new(
+            env::current_account_id().to_string(),
+            "get_protocol_config".to_string(),
+        ));
+
         // deploy pot
         Promise::new(pot_account_id.clone())
             .create_account()
             .transfer(min_deployment_deposit)
             .deploy_contract(POT_WASM_CODE.to_vec())
+            .add_full_access_key(env::signer_account_pk()) // TODO: REMOVE THIS AFTER TESTING
             .function_call(
                 "new".to_string(),
                 serde_json::to_vec(&pot_args).unwrap(),
