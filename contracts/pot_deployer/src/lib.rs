@@ -107,8 +107,8 @@ pub struct ProviderId(pub String);
 
 pub const PROVIDER_ID_DELIMITER: &str = ":"; // separates contract_id and method_name in ProviderId
 
-// Generate ProviderId ("{CONTRACT_ADDRESS}:{METHOD_NAME}") from contract_id and method_name
 impl ProviderId {
+    /// Generate ProviderId (`"{CONTRACT_ADDRESS}:{METHOD_NAME}"`) from contract_id and method_name
     fn new(contract_id: String, method_name: String) -> Self {
         ProviderId(format!(
             "{}{}{}",
@@ -116,6 +116,7 @@ impl ProviderId {
         ))
     }
 
+    /// Decompose ProviderId into contract_id and method_name
     pub fn decompose(&self) -> (String, String) {
         let parts: Vec<&str> = self.0.split(PROVIDER_ID_DELIMITER).collect();
         if parts.len() != 2 {

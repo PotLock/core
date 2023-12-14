@@ -33,6 +33,12 @@ impl Contract {
     }
 
     #[payable]
+    pub fn owner_clear_admins(&mut self) {
+        self.assert_owner();
+        self.admins.clear();
+    }
+
+    #[payable]
     pub fn admin_set_protocol_fee_basis_points(&mut self, protocol_fee_basis_points: u32) {
         self.assert_admin_or_greater();
         self.protocol_fee_basis_points = protocol_fee_basis_points;
@@ -65,17 +71,17 @@ impl Contract {
     }
 
     #[payable]
-    pub fn admin_add_whitelisted_deployers(&mut self, account_ids: Vec<AccountId>) {
+    pub fn admin_add_whitelisted_deployers(&mut self, whitelisted_deployers: Vec<AccountId>) {
         self.assert_admin_or_greater();
-        for account_id in account_ids {
+        for account_id in whitelisted_deployers {
             self.whitelisted_deployers.insert(&account_id);
         }
     }
 
     #[payable]
-    pub fn admin_remove_whitelisted_deployers(&mut self, account_ids: Vec<AccountId>) {
+    pub fn admin_remove_whitelisted_deployers(&mut self, whitelisted_deployers: Vec<AccountId>) {
         self.assert_admin_or_greater();
-        for account_id in account_ids {
+        for account_id in whitelisted_deployers {
             self.whitelisted_deployers.remove(&account_id);
         }
     }

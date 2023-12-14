@@ -6,14 +6,7 @@ The PotFactory contract allows any end user (or a whitelisted user, depending on
 
 The PotFactory also serves as the provider of protocol configurations, namely the basis points and recipient account for the protocol fee, to be queried by individual Pot contracts.
 
-## Contract Structure
-
-### General Types
-
-```rs
-type ProjectId = AccountId;
-type TimestampMs = u64;
-```
+## Contract Types / Structure
 
 ### Contract
 
@@ -68,8 +61,8 @@ pub struct ProviderId(pub String);
 
 pub const PROVIDER_ID_DELIMITER: &str = ":"; // separates contract_id and method_name in ProviderId
 
-// Generate ProviderId ("{CONTRACT_ADDRESS}:{METHOD_NAME}") from contract_id and method_name
 impl ProviderId {
+    /// Generate ProviderId ("`{CONTRACT_ADDRESS}:{METHOD_NAME}`") from contract_id and method_name
     fn new(contract_id: String, method_name: String) -> Self {
         ProviderId(format!(
             "{}{}{}",
@@ -77,6 +70,7 @@ impl ProviderId {
         ))
     }
 
+    /// Decompose ProviderId into contract_id and method_name
     pub fn decompose(&self) -> (String, String) {
         let parts: Vec<&str> = self.0.split(PROVIDER_ID_DELIMITER).collect();
         if parts.len() != 2 {
@@ -96,8 +90,6 @@ A Sybil Provider can be used to enhance sybil resistance in the Pot contracts. T
 type SybilProviderWeight = u32;
 
 /// Ephemeral-only (used in custom_sybil_checks for setting on Pot deployment, but not stored in this contract; rather, stored in Pot contract)
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[serde(crate = "near_sdk::serde")]
 pub struct CustomSybilCheck {
     contract_id: AccountId,
     method_name: String,
@@ -155,6 +147,7 @@ pub struct PotArgs {
 // POTS
 
 /// Deploy a new Pot. A `None` response indicates an unsuccessful deployment.
+#[payable]
 pub fn deploy_pot(&mut self, mut pot_args: PotArgs) -> Option<PotExternal>
 
 
@@ -164,13 +157,16 @@ pub fn deploy_pot(&mut self, mut pot_args: PotArgs) -> Option<PotExternal>
 pub fn owner_change_owner(&mut self, owner: AccountId) -> ()
 
 #[payable]
-pub fn owner_set_admins(&mut self, account_ids: Vec<AccountId>) -> ()
-
-#[payable]
 pub fn owner_add_admins(&mut self, admins: Vec<AccountId>) -> ()
 
 #[payable]
 pub fn owner_remove_admins(&mut self, admins: Vec<AccountId>) -> ()
+
+#[payable]
+pub fn owner_set_admins(&mut self, account_ids: Vec<AccountId>) -> ()
+
+#[payable]
+pub fn owner_clear_admins(&mut self) -> ()
 
 #[payable]
 pub fn admin_set_protocol_fee_basis_points(&mut self, protocol_fee_basis_points: u32) -> ()
@@ -185,10 +181,10 @@ pub fn admin_set_protocol_config(&mut self, protocol_fee_basis_points: u32, prot
 pub fn admin_set_default_chef_fee_basis_points(&mut self, default_chef_fee_basis_points: u32) -> ()
 
 #[payable]
-pub fn admin_add_whitelisted_deployers(&mut self, account_ids: Vec<AccountId>) -> ()
+pub fn admin_add_whitelisted_deployers(&mut self, whitelisted_deployers: Vec<AccountId>) -> ()
 
 #[payable]
-pub fn admin_remove_whitelisted_deployers(&mut self, account_ids: Vec<AccountId>) -> ()
+pub fn admin_remove_whitelisted_deployers(&mut self, whitelisted_deployers: Vec<AccountId>) -> ()
 
 #[payable]
 pub fn admin_set_require_whitelist(&mut self, require_whitelist: bool) -> ()
