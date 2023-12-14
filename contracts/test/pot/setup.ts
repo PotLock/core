@@ -1,7 +1,7 @@
 import { KeyPair, Near, Account, Contract, keyStores } from "near-api-js";
 import { DEFAULT_PROJECT_ID, contractId, networkId, nodeUrl } from "./config";
 import { loadCredentials } from "../utils/helpers";
-import { POT_DEPLOYER_ALWAYS_ADMIN_ID } from "../pot_deployer/config";
+import { POT_DEPLOYER_ALWAYS_ADMIN_ID } from "../pot_factory/config";
 import {
   DEFAULT_NEW_ACCOUNT_AMOUNT,
   DEFAULT_PARENT_ACCOUNT_ID,

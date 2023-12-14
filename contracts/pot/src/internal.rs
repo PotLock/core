@@ -40,14 +40,6 @@ impl Contract {
         );
     }
 
-    // pub(crate) fn assert_pot_deployer_admin(&self) {
-    //     assert!(
-    //         self.pot_deployer_admins
-    //             .contains(&env::predecessor_account_id()),
-    //         "Only the pot deployer admin can call this method"
-    //     );
-    // }
-
     pub(crate) fn assert_round_closed(&self) {
         assert!(
             env::block_timestamp_ms() >= self.public_round_end_ms,

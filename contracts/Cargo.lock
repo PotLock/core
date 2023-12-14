@@ -860,7 +860,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "potlock-pot-deployer"
+name = "potlock-pot-factory"
 version = "0.1.0"
 dependencies = [
  "near-sdk",

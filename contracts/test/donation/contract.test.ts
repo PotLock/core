@@ -3,7 +3,7 @@ import BN from "bn.js";
 import { Account } from "near-api-js";
 import { contractId } from "./config";
 import { contractId as registryContractId } from "../registry/config";
-import { contractId as potDeployerContractId } from "../pot_deployer/config";
+import { contractId as potDeployerContractId } from "../pot_factory/config";
 import {
   contractAccount,
   // getChefAccount,
@@ -18,7 +18,7 @@ import {
   DEFAULT_REFERRAL_FEE_BASIS_POINTS,
 } from "../utils/constants";
 import { registerProject } from "../registry/utils";
-import { POT_DEPLOYER_ALWAYS_ADMIN_ID } from "../pot_deployer/config";
+import { POT_FACTORY_ALWAYS_ADMIN_ID } from "../pot_factory/config";
 import { parseNearAmount } from "near-api-js/lib/utils/format";
 import {
   convertDonationsToProjectContributions,
