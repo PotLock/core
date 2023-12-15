@@ -8,7 +8,7 @@ Welcome to the home of public goods funding on NEAR! ✨🫕 Read more on our mi
 
 The Potlock stack contains 5 main contracts:
 
-### [PotFactory](pot_factory)
+### [Pot Factory](pot_factory)
 
 A Factory contract that deploys Pots.
 
