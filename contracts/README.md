@@ -8,7 +8,7 @@ Welcome to the home of public goods funding on NEAR! ✨🫕
 
 The Potlock stack contains 5 contracts:
 
-### Donation
+### [Donation](donation)
 
 Provides a means to donate NEAR or FTs to any account, with a protocol fee taken out
 
