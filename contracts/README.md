@@ -16,7 +16,7 @@ A Factory contract that deploys Pots.
 
 A configurable, flexible yet secure contract that manages a funding round.
 
-### [Sybil]
+### [Sybil](sybil)
 
 A contract that provides a single wrapper method `is_human` that wraps configurable individual sybil providers, calculating weights and returning a boolean.
 
