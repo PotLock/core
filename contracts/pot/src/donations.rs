@@ -1,4 +1,7 @@
 use crate::*;
+
+pub type DonationId = u64;
+
 /// Donation (matching pool or public round)
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
@@ -189,15 +192,19 @@ impl Contract {
             .collect()
     }
 
-    pub(crate) fn calculate_referrer_fee(&self, amount: u128, matching_pool: bool) -> u128 {
+    pub(crate) fn calculate_fee(&self, amount: u128, basis_points: u32) -> u128 {
         let total_basis_points = 10_000u128;
         let amount_per_basis_point = amount / total_basis_points;
+        basis_points as u128 * amount_per_basis_point
+    }
+
+    pub(crate) fn calculate_referrer_fee(&self, amount: u128, matching_pool: bool) -> u128 {
         let multiplier = if matching_pool {
             self.patron_referral_fee_basis_points
         } else {
             self.public_round_referral_fee_basis_points
         };
-        let referrer_amount = multiplier as u128 * amount_per_basis_point;
+        let referrer_amount = self.calculate_fee(amount, multiplier);
         referrer_amount
     }
 
@@ -224,6 +231,7 @@ impl Contract {
                 );
             }
         }
+        // TODO: may want to prohibit additions to matching pool once public round has closed?
         let deposit = env::attached_deposit();
         self.assert_caller_can_donate(deposit, project_id, message, referrer_id, is_matching_pool)
     }
@@ -386,12 +394,6 @@ impl Contract {
         }
     }
 
-    pub(crate) fn calculate_fee(&self, amount: u128, basis_points: u32) -> u128 {
-        let total_basis_points = 10_000u128;
-        let amount_per_basis_point = amount / total_basis_points;
-        basis_points as u128 * amount_per_basis_point
-    }
-
     // calculate protocol fee callback
     #[private]
     pub fn handle_protocol_fee_callback(
@@ -472,6 +474,21 @@ impl Contract {
             deposit, protocol_fee,
         ));
 
+        // subtract chef fee
+        // TODO: consider adding to Donation struct
+        let mut chef_fee: Option<U128> = None;
+        if self.chef.get().is_some() {
+            // chef fee only applies to public round donations
+            if !matching_pool {
+                let chef_fee_amount = self.calculate_fee(remainder, self.chef_fee_basis_points);
+                chef_fee = Some(U128::from(chef_fee_amount));
+                remainder = remainder.checked_sub(chef_fee_amount).expect(&format!(
+                    "Overflow occurred when calculating remainder ({} - {})",
+                    remainder, chef_fee_amount,
+                ));
+            }
+        }
+
         // subtract referrer fee
         let mut referrer_fee: Option<U128> = None;
         if let Some(_referrer_id) = referrer_id.clone() {
@@ -539,6 +556,12 @@ impl Contract {
         // transfer protocol fee
         if let Some(protocol_fee_recipient_account) = protocol_fee_recipient_account {
             Promise::new(protocol_fee_recipient_account.clone()).transfer(protocol_fee);
+        }
+
+        // transfer chef fee
+        if let Some(chef_fee) = chef_fee {
+            // it has already been established that chef is Some
+            Promise::new(self.chef.get().unwrap()).transfer(chef_fee.0);
         }
 
         // transfer referrer fee

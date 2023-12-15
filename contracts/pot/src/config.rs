@@ -23,7 +23,7 @@ pub struct PotConfig {
     pub custom_min_threshold_score: Option<u32>,
     pub patron_referral_fee_basis_points: u32,
     pub public_round_referral_fee_basis_points: u32,
-    pub chef_fee_basis_points: u32, // TODO: should this be basis points or a fixed amount?
+    pub chef_fee_basis_points: u32,
     pub matching_pool_balance: U128,
     pub total_public_donations: U128,
     pub cooldown_end_ms: Option<TimestampMs>,

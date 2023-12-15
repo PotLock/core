@@ -9,9 +9,6 @@ use near_sdk::{
 use std::collections::HashMap;
 
 type TimestampMs = u64;
-type ProjectId = AccountId;
-type ApplicationId = ProjectId; // Applications are indexed by ProjectId
-type DonationId = u64; // TODO: change to Sring formatted as `"application_id:donation_id"`
 
 pub mod admin;
 pub mod applications;

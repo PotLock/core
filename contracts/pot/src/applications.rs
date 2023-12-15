@@ -1,5 +1,8 @@
 use crate::*;
 
+pub type ProjectId = AccountId;
+pub type ApplicationId = ProjectId; // Applications are indexed by ProjectId
+
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub enum ApplicationStatus {

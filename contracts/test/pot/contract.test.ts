@@ -55,7 +55,7 @@ import {
   DEFAULT_CHEF_FEE_BASIS_POINTS,
 } from "../utils/constants";
 import { registerProject } from "../registry/utils";
-import { POT_DEPLOYER_ALWAYS_ADMIN_ID } from "../pot_factory/config";
+import { POT_FACTORY_ALWAYS_ADMIN_ID } from "../pot_factory/config";
 import { parseNearAmount } from "near-api-js/lib/utils/format";
 import {
   convertDonationsToProjectContributions,
@@ -108,7 +108,7 @@ describe("Pot Contract Tests", async () => {
   let projectAccounts: Account[];
   // let chefId: AccountId; // TODO:
   let chefAccount: Account;
-  let potDeployerAdminId: AccountId = POT_DEPLOYER_ALWAYS_ADMIN_ID;
+  let potDeployerAdminId: AccountId = POT_FACTORY_ALWAYS_ADMIN_ID;
   let potDeployerAdminAccount: Account;
   let patronAccount: Account;
 

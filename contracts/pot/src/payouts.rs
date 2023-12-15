@@ -31,6 +31,7 @@ impl From<VersionedPayout> for Payout {
     }
 }
 
+/// Ephemeral-only; used for setting payouts
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct PayoutInput {
@@ -71,8 +72,8 @@ impl Contract {
             running_total += payout.amount.0;
             // set cooldown_end to now + 1 week (?)
             self.cooldown_end_ms
-                .set(&(env::block_timestamp_ms() + ONE_WEEK_MS));
-            // add payout to payouts
+                .set(&(env::block_timestamp_ms() + ONE_WEEK_MS)); // TODO: remove hardcoding to one week, allow owner/admin to configure
+                                                                  // add payout to payouts
             let mut payout_ids_for_application = self
                 .payout_ids_by_project_id
                 .get(&payout.project_id)
@@ -118,6 +119,70 @@ impl Contract {
             .take(limit as usize)
             .map(|(_payout_id, payout)| Payout::from(payout))
             .collect()
+    }
+
+    pub fn admin_process_payouts(&mut self) {
+        self.assert_admin_or_greater();
+        // verify that the round has closed
+        self.assert_round_closed();
+        // verify that payouts have not already been processed
+        assert!(
+            self.all_paid_out == false,
+            "Payouts have already been processed"
+        );
+        // verify that the cooldown period has passed
+        self.assert_cooldown_period_complete();
+        // pay out each project
+        // for each approved project...
+        for (project_id, v_app) in self.applications_by_id.iter() {
+            // TODO: update this to only go through approved applications mapping
+            self.assert_approved_application(&project_id);
+            let application = Application::from(v_app);
+            // ...if there are payouts for the project...
+            if let Some(payout_ids_for_project) = self.payout_ids_by_project_id.get(&project_id) {
+                // TODO: handle milestones (for now just paying out all payouts)
+                for payout_id in payout_ids_for_project.iter() {
+                    let payout =
+                        Payout::from(self.payouts_by_id.get(&payout_id).expect("no payout"));
+                    if payout.paid_at.is_none() {
+                        // ...transfer funds...
+                        Promise::new(application.project_id.clone())
+                            .transfer(payout.amount.0)
+                            .then(
+                                Self::ext(env::current_account_id())
+                                    .with_static_gas(XCC_GAS)
+                                    .transfer_payout_callback(payout),
+                            );
+                    }
+                }
+            }
+        }
+        self.all_paid_out = true;
+    }
+
+    /// Verifies whether payout transfer completed successfully & updates payout record accordingly
+    #[private] // Public - but only callable by env::current_account_id()
+    pub fn transfer_payout_callback(
+        &mut self,
+        mut payout: Payout,
+        #[callback_result] call_result: Result<(), PromiseError>,
+    ) {
+        if call_result.is_err() {
+            log!(format!(
+                "Error paying out amount {:#?} to project {}",
+                payout.amount, payout.project_id
+            ));
+        } else {
+            log!(format!(
+                "Successfully paid out amount {:#?} to project {}",
+                payout.amount, payout.project_id
+            ));
+            // update payout to indicate that funds have been transferred
+            payout.paid_at = Some(env::block_timestamp_ms());
+            let payout_id = payout.id.clone();
+            self.payouts_by_id
+                .insert(&payout_id, &VersionedPayout::Current(payout));
+        }
     }
 
     // challenge_payouts (callable by anyone on ReFi Council)
