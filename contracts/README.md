@@ -29,7 +29,7 @@ Projects that wish to apply for a Pot (funding round) may be required to be regi
 Provides a means to donate NEAR or FTs (soon) to any account.
 
 
-### [Sybil Provider Simulator][sybil_provider_simulator]
+### [Sybil Provider Simulator](sybil_provider_simulator)
 
 Not technically a part of the PotLock stack, this contract simulates a 3rd-party Sybil Resistance Provider with two functions, `assert_true` and `assert_false`, that take an `account_id` parameter and return a boolean.
 
