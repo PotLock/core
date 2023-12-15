@@ -86,6 +86,17 @@ pub struct ContractSourceMetadata {
 ### Write Methods
 
 ```rs
+// INIT
+
+pub fn new(
+    owner: AccountId,
+    protocol_fee_basis_points: u32,
+    referral_fee_basis_points: u32,
+    protocol_fee_recipient_account: AccountId,
+    source_metadata: ContractSourceMetadata,
+) -> Self
+
+
 // DONATIONS
 
 #[payable]

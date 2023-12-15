@@ -325,6 +325,41 @@ pub struct ContractSourceMetadata {
 ### Write Methods
 
 ```rs
+// INIT
+
+pub fn new(
+    // permissioned accounts
+    owner: Option<AccountId>, // defaults to signer account if not provided
+    admins: Option<Vec<AccountId>>,
+    chef: Option<AccountId>,
+
+    // pot config
+    pot_name: String,
+    pot_description: String,
+    max_projects: u32,
+    application_start_ms: TimestampMs,
+    application_end_ms: TimestampMs,
+    public_round_start_ms: TimestampMs,
+    public_round_end_ms: TimestampMs,
+    registry_provider: Option<ProviderId>,
+    min_matching_pool_donation_amount: Option<U128>,
+
+    // sybil resistance
+    sybil_wrapper_provider: Option<ProviderId>,
+    custom_sybil_checks: Option<HashMap<ProviderId, SybilProviderWeight>>,
+    custom_min_threshold_score: Option<u32>,
+
+    // fees
+    patron_referral_fee_basis_points: u32, // this could be optional with a default, but better to set explicitly for now
+    public_round_referral_fee_basis_points: u32, // this could be optional with a default, but better to set explicitly for now
+    chef_fee_basis_points: u32,
+
+    // other
+    protocol_config_provider: Option<ProviderId>,
+    source_metadata: ContractSourceMetadata,
+) -> Self
+
+
 // APPLICATIONS
 
 /// The calling account should be the project/account that is applying

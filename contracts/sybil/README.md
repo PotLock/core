@@ -82,6 +82,15 @@ pub struct ContractSourceMetadata {
 ### Write Methods (must be owner or admin)
 
 ```rs
+// INIT
+
+pub fn new(
+    source_metadata: Option<ContractSourceMetadata>,
+    owner: AccountId,
+    admins: Option<Vec<AccountId>>,
+) -> Self
+
+
 // PROVIDERS
 
 #[payable]

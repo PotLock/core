@@ -66,6 +66,15 @@ pub struct ProjectExternal {
 ### Write Methods
 
 ```rs
+// INIT
+
+pub fn new(
+    owner: AccountId,
+    admins: Vec<AccountId>,
+    source_metadata: ContractSourceMetadata,
+) -> Self
+
+
 // PROJECTS
 
 #[payable]

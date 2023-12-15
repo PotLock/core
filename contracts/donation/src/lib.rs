@@ -81,18 +81,14 @@ pub enum StorageKey {
 impl Contract {
     #[init]
     pub fn new(
-        source_metadata: ContractSourceMetadata,
         owner: AccountId,
         protocol_fee_basis_points: u32,
         referral_fee_basis_points: u32,
         protocol_fee_recipient_account: AccountId,
+        source_metadata: ContractSourceMetadata,
     ) -> Self {
         assert!(!env::state_exists(), "Already initialized");
         Self {
-            contract_source_metadata: LazyOption::new(
-                StorageKey::SourceMetadata,
-                Some(&VersionedContractSourceMetadata::Current(source_metadata)),
-            ),
             owner,
             protocol_fee_basis_points,
             referral_fee_basis_points,
@@ -101,6 +97,10 @@ impl Contract {
             donation_ids_by_recipient_id: LookupMap::new(StorageKey::DonationIdsByRecipientId),
             donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
             donation_ids_by_ft_id: LookupMap::new(StorageKey::DonationIdsByFtId),
+            contract_source_metadata: LazyOption::new(
+                StorageKey::SourceMetadata,
+                Some(&VersionedContractSourceMetadata::Current(source_metadata)),
+            ),
         }
     }
 
@@ -117,6 +117,14 @@ impl Contract {
 impl Default for Contract {
     fn default() -> Self {
         Self {
+            owner: AccountId::new_unchecked("".to_string()),
+            protocol_fee_basis_points: 0,
+            referral_fee_basis_points: 0,
+            protocol_fee_recipient_account: AccountId::new_unchecked("".to_string()),
+            donations_by_id: UnorderedMap::new(StorageKey::DonationsById),
+            donation_ids_by_recipient_id: LookupMap::new(StorageKey::DonationIdsByRecipientId),
+            donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
+            donation_ids_by_ft_id: LookupMap::new(StorageKey::DonationIdsByFtId),
             contract_source_metadata: LazyOption::new(
                 StorageKey::SourceMetadata,
                 Some(&VersionedContractSourceMetadata::Current(
@@ -127,14 +135,6 @@ impl Default for Contract {
                     },
                 )),
             ),
-            owner: AccountId::new_unchecked("".to_string()),
-            protocol_fee_basis_points: 0,
-            referral_fee_basis_points: 0,
-            protocol_fee_recipient_account: AccountId::new_unchecked("".to_string()),
-            donations_by_id: UnorderedMap::new(StorageKey::DonationsById),
-            donation_ids_by_recipient_id: LookupMap::new(StorageKey::DonationIdsByRecipientId),
-            donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
-            donation_ids_by_ft_id: LookupMap::new(StorageKey::DonationIdsByFtId),
         }
     }
 }
