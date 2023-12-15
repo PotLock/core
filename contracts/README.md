@@ -52,4 +52,5 @@ In the meantime, these contracts have been thoroughly tested manually and via th
 - FTs not yet supported
 - Milestones not yet supported (Pot)
 - Additional funding mechanisms other than Quadratic Funding not yet supported (Pot)
+- Sybil contract `is_human` method not yet customizable
 
