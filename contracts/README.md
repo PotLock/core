@@ -1,6 +1,6 @@
 # Potlock Contracts
 
-Welcome to the home of public goods funding on NEAR! ✨🫕 Read more on our mission and roadmap [here](https://potlock.io)
+Welcome to the home of public goods funding on NEAR! ✨🫕 Read more on our mission and roadmap [here](https://potlock.io).
 
 ## Introduction
 
@@ -48,5 +48,8 @@ In the meantime, these contracts have been thoroughly tested manually and via th
 
 ## Known Issues
 
-TBC
+- Some TODO's need to be addressed
+- FTs not yet supported
+- Milestones not yet supported (Pot)
+- Additional funding mechanisms other than Quadratic Funding not yet supported (Pot)
 
