@@ -29,6 +29,8 @@ pub struct Contract {
     whitelisted_deployers: UnorderedSet<AccountId>,
     /// Specifies whether a Pot deployer is required to be whitelisted
     require_whitelist: bool,
+    /// Contract "source" metadata, as specified in NEP 0330 (https://github.com/near/NEPs/blob/master/neps/nep-0330.md), with addition of `commit_hash`
+    contract_source_metadata: LazyOption<VersionedContractSourceMetadata>,
 }
 
 /// Ephemeral-only external struct (used in views)
@@ -139,6 +141,21 @@ pub struct PotArgs {
 }
 ```
 
+### Contract Source Metadata
+
+_NB: Below implemented as per NEP 0330 (https://github.com/near/NEPs/blob/master/neps/nep-0330.md), with addition of `commit_hash`_
+
+```rs
+pub struct ContractSourceMetadata {
+    /// Version of source code, e.g. "v1.0.0", could correspond to Git tag
+    pub version: String,
+    /// Git commit hash of currently deployed contract code
+    pub commit_hash: String,
+    /// GitHub repo url for currently deployed contract code
+    pub link: String,
+}
+```
+
 ## Methods
 
 ### Write Methods
@@ -188,6 +205,11 @@ pub fn admin_remove_whitelisted_deployers(&mut self, whitelisted_deployers: Vec<
 
 #[payable]
 pub fn admin_set_require_whitelist(&mut self, require_whitelist: bool) -> ()
+
+
+// SOURCE METADATA
+
+pub fn self_set_source_metadata(&mut self, source_metadata: ContractSourceMetadata) // only callable by the contract account (reasoning is that this should be able to be updated by the same account that can deploy code to the account)
 ```
 
 ### Read Methods
@@ -197,6 +219,7 @@ pub fn admin_set_require_whitelist(&mut self, require_whitelist: bool) -> ()
 
 pub fn get_config(&self) -> ContractConfigExternal
 
+
 // POTS
 
 pub fn get_pots(&self) -> Vec<PotExternal>
@@ -205,4 +228,9 @@ pub fn get_min_deployment_deposit(&self, args: &PotArgs) -> u128
 
 /// Method intended for use by Pot contract querying for protocol fee configuration
 pub fn get_protocol_config(&self) -> ProtocolConfig
+
+
+// SOURCE METADATA
+
+pub fn get_contract_source_metadata(&self) -> Option<ContractSourceMetadata>
 ```

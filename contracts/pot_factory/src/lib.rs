@@ -1,30 +1,28 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet};
+use near_sdk::collections::{LazyOption, UnorderedMap, UnorderedSet};
 use near_sdk::env::STORAGE_PRICE_PER_BYTE;
-use near_sdk::json_types::{Base64VecU8, U128, U64};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
-    env, ext_contract, log, near_bindgen, require, serde_json, AccountId, Balance, BorshStorageKey,
-    Gas, Promise, PromiseError,
+    env, log, near_bindgen, require, serde_json, serde_json::json, AccountId, Balance,
+    BorshStorageKey, Gas, PanicOnDefault, Promise, PromiseError,
 };
 
 type TimestampMs = u64;
 
 pub mod admin;
 pub mod constants;
+pub mod events;
 pub mod internal;
 pub mod pot;
+pub mod source;
 pub mod utils;
 pub use crate::admin::*;
 pub use crate::constants::*;
+pub use crate::events::*;
 pub use crate::internal::*;
 pub use crate::pot::*;
+pub use crate::source::*;
 pub use crate::utils::*;
-
-pub const TGAS: u64 = 1_000_000_000_000; // 1 TGAS
-pub const XCC_GAS: Gas = Gas(TGAS * 5);
-pub const NO_DEPOSIT: u128 = 0;
-pub const XCC_SUCCESS: u64 = 1;
 
 /// Pot Factory Contract
 #[near_bindgen]
@@ -46,6 +44,8 @@ pub struct Contract {
     whitelisted_deployers: UnorderedSet<AccountId>,
     /// Specifies whether a Pot deployer is required to be whitelisted
     require_whitelist: bool,
+    /// Contract "source" metadata, as specified in NEP 0330 (https://github.com/near/NEPs/blob/master/neps/nep-0330.md), with addition of `commit_hash`
+    contract_source_metadata: LazyOption<VersionedContractSourceMetadata>,
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -79,6 +79,7 @@ pub struct ContractConfigExternal {
 pub enum StorageKey {
     Admins,
     PotsById,
+    SourceMetadata,
     WhitelistedDeployers,
 }
 
@@ -149,6 +150,7 @@ impl Contract {
         default_chef_fee_basis_points: u32,
         whitelisted_deployers: Vec<AccountId>,
         require_whitelist: bool,
+        source_metadata: ContractSourceMetadata,
     ) -> Self {
         assert!(!env::state_exists(), "Already initialized");
         let mut admins_set = UnorderedSet::new(StorageKey::Admins);
@@ -168,6 +170,10 @@ impl Contract {
             default_chef_fee_basis_points,
             whitelisted_deployers: whitelisted_deployers_set,
             require_whitelist,
+            contract_source_metadata: LazyOption::new(
+                StorageKey::SourceMetadata,
+                Some(&VersionedContractSourceMetadata::Current(source_metadata)),
+            ),
         }
     }
 
@@ -203,6 +209,7 @@ impl Default for Contract {
             default_chef_fee_basis_points: 0,
             whitelisted_deployers: UnorderedSet::new(StorageKey::WhitelistedDeployers),
             require_whitelist: false,
+            contract_source_metadata: LazyOption::new(StorageKey::SourceMetadata, None),
         }
     }
 }

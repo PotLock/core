@@ -56,6 +56,7 @@ pub struct PotArgs {
     public_round_referral_fee_basis_points: u32,
     chef_fee_basis_points: u32,
     protocol_config_provider: Option<ProviderId>,
+    source_metadata: ContractSourceMetadata,
 }
 
 #[near_bindgen]

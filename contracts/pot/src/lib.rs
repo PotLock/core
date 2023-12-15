@@ -122,96 +122,96 @@ pub struct CustomSybilCheck {
 pub struct Contract {
     // PERMISSIONED ACCOUNTS
     /// Owner of the contract
-    pub owner: AccountId,
+    owner: AccountId,
     /// Admins of the contract (Owner, which should in most cases be DAO, might want to delegate admin rights to other accounts)
-    pub admins: UnorderedSet<AccountId>,
+    admins: UnorderedSet<AccountId>,
     /// Address (ID) of Pot manager ("chef"). This account is responsible for managing the Pot, e.g. reviewing applications, setting payouts, etc.
     /// Optional because it may be set after deployment.
-    pub chef: LazyOption<AccountId>,
+    chef: LazyOption<AccountId>,
 
     // POT CONFIG
     /// User-facing name for this Pot
-    pub pot_name: String,
+    pot_name: String,
     /// User-facing description for this Pot
-    pub pot_description: String,
+    pot_description: String,
     /// Maximum number of projects that can be approved for the round. Considerations include gas limits for payouts, etc.
-    pub max_projects: u32,
+    max_projects: u32,
     /// Base currency for the round
     /// * NB: currently only `"near"` is supported
-    pub base_currency: AccountId,
+    base_currency: AccountId,
     /// MS Timestamp when applications can be submitted from
-    pub application_start_ms: TimestampMs,
+    application_start_ms: TimestampMs,
     /// MS Timestamp when applications can be submitted until
-    pub application_end_ms: TimestampMs,
+    application_end_ms: TimestampMs,
     /// MS Timestamp when the public round starts
-    pub public_round_start_ms: TimestampMs,
+    public_round_start_ms: TimestampMs,
     /// MS Timestamp when the round ends
-    pub public_round_end_ms: TimestampMs,
+    public_round_end_ms: TimestampMs,
     /// Account ID that deployed this Pot contract (set at deployment, cannot be updated)
-    pub deployed_by: AccountId,
+    deployed_by: AccountId,
     /// Contract ID + method name of registry provider that should be queried when projects apply to round. Method specified must receive "account_id" and return bool indicating registration status.
     /// * Optional because not all Pots will require registration, and those that do might set after deployment.
-    pub registry_provider: LazyOption<ProviderId>,
+    registry_provider: LazyOption<ProviderId>,
     /// Minimum amount that can be donated to the matching pool
-    pub min_matching_pool_donation_amount: U128,
+    min_matching_pool_donation_amount: U128,
 
     // SYBIL RESISTANCE
     /// Sybil contract address & method name that will be called to verify humanness. If `None`, no checks will be made.
-    pub sybil_wrapper_provider: LazyOption<ProviderId>,
+    sybil_wrapper_provider: LazyOption<ProviderId>,
     /// Sybil checks (if using custom sybil config)
-    pub custom_sybil_checks: LazyOption<HashMap<ProviderId, SybilProviderWeight>>,
+    custom_sybil_checks: LazyOption<HashMap<ProviderId, SybilProviderWeight>>,
     /// Minimum threshold score for Sybil checks (if using custom sybil config)
-    pub custom_min_threshold_score: LazyOption<u32>,
+    custom_min_threshold_score: LazyOption<u32>,
 
     // FEES
     /// Basis points (1/100 of a percent) that should be paid to an account that refers a Patron (paid at the point when the matching pool donation comes in)
-    pub patron_referral_fee_basis_points: u32,
+    patron_referral_fee_basis_points: u32,
     /// Basis points (1/100 of a percent) that should be paid to an account that refers a donor (paid at the point when the donation comes in)
-    pub public_round_referral_fee_basis_points: u32,
+    public_round_referral_fee_basis_points: u32,
     /// Chef's fee for managing the round. Gets taken out of each donation as they come in and are paid out
-    pub chef_fee_basis_points: u32,
+    chef_fee_basis_points: u32,
     // TODO: ADD MAX PROTOCOL FEE BASIS POINTS? or as const so it can't be updated without code deployment?
 
     // FUNDS & BALANCES
     /// Total matching pool donations
-    pub total_matching_pool_donations: U128,
+    total_matching_pool_donations: U128,
     /// Amount of matching funds available (not yet paid out)
-    pub matching_pool_balance: U128,
+    matching_pool_balance: U128,
     /// Total public donations
-    pub total_public_donations: U128,
+    total_public_donations: U128,
 
     // PAYOUTS
     /// Cooldown period starts when Chef sets payouts
-    pub cooldown_end_ms: LazyOption<TimestampMs>,
+    cooldown_end_ms: LazyOption<TimestampMs>,
     /// Indicates whether all projects been paid out (this would be considered the "end-of-lifecycle" for the Pot)
-    pub all_paid_out: bool,
+    all_paid_out: bool,
 
     // MAPPINGS
     /// All application records
-    pub applications_by_id: UnorderedMap<ApplicationId, VersionedApplication>,
+    applications_by_id: UnorderedMap<ApplicationId, VersionedApplication>,
     /// Approved application IDs
-    pub approved_application_ids: UnorderedSet<ApplicationId>,
+    approved_application_ids: UnorderedSet<ApplicationId>,
     /// All donation records
-    pub donations_by_id: UnorderedMap<DonationId, VersionedDonation>,
+    donations_by_id: UnorderedMap<DonationId, VersionedDonation>,
     /// IDs of public round donations (made by donors who are not Patrons, during public round)
-    pub public_round_donation_ids: UnorderedSet<DonationId>,
+    public_round_donation_ids: UnorderedSet<DonationId>,
     /// IDs of matching pool donations (made by Patrons)
-    pub matching_pool_donation_ids: UnorderedSet<DonationId>,
+    matching_pool_donation_ids: UnorderedSet<DonationId>,
     /// IDs of donations made to a given project
-    pub donation_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<DonationId>>,
+    donation_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<DonationId>>,
     /// IDs of donations made by a given donor (user)
-    pub donation_ids_by_donor_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
+    donation_ids_by_donor_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
     // payouts
-    pub payouts_by_id: UnorderedMap<PayoutId, VersionedPayout>, // can iterate over this to get all payouts
-    pub payout_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<PayoutId>>,
+    payouts_by_id: UnorderedMap<PayoutId, VersionedPayout>, // can iterate over this to get all payouts
+    payout_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<PayoutId>>,
 
     // OTHER
     /// contract ID + method name of protocol config provider that should be queried for protocol fee basis points and protocol fee recipient account.
     /// Method specified must receive no requried args and return struct containing protocol_fee_basis_points and protocol_fee_recipient_account.
     /// Set by deployer and cannot be changed by Pot owner/admins.
-    pub protocol_config_provider: LazyOption<ProviderId>,
+    protocol_config_provider: LazyOption<ProviderId>,
     /// Contract "source" metadata, as specified in NEP 0330 (https://github.com/near/NEPs/blob/master/neps/nep-0330.md), with addition of `commit_hash`
-    pub contract_source_metadata: LazyOption<VersionedContractSourceMetadata>,
+    contract_source_metadata: LazyOption<VersionedContractSourceMetadata>,
 }
 
 #[derive(BorshSerialize, BorshStorageKey)]
