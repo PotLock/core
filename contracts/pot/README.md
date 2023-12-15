@@ -115,6 +115,8 @@ pub struct Contract {
     /// Method specified must receive no requried args and return struct containing protocol_fee_basis_points and protocol_fee_recipient_account.
     /// Set by deployer and cannot be changed by Pot owner/admins.
     pub protocol_config_provider: LazyOption<ProviderId>,
+    /// Contract "source" metadata, as specified in NEP 0330 (https://github.com/near/NEPs/blob/master/neps/nep-0330.md), with addition of `commit_hash`
+    pub contract_source_metadata: LazyOption<VersionedContractSourceMetadata>,
 }
 
 /// Ephemeral-only external struct (used in views)
@@ -303,6 +305,21 @@ pub struct CustomSybilCheck {
 }
 ```
 
+### Contract Source Metadata
+
+_NB: Below implemented as per NEP 0330 (https://github.com/near/NEPs/blob/master/neps/nep-0330.md), with addition of `commit_hash`_
+
+```rs
+pub struct ContractSourceMetadata {
+    /// Version of source code, e.g. "v1.0.0", could correspond to Git tag
+    pub version: String,
+    /// Git commit hash of currently deployed contract code
+    pub commit_hash: String,
+    /// GitHub repo url for currently deployed contract code
+    pub link: String,
+}
+```
+
 ## Methods
 
 ### Write Methods
@@ -444,6 +461,11 @@ pub fn admin_set_public_round_referral_fee_basis_points(
 
 pub fn admin_set_cooldown_period_complete(&mut self) -> ()
 
+
+// SOURCE METADATA
+
+pub fn self_set_source_metadata(&mut self, source_metadata: ContractSourceMetadata) // only callable by the contract account (reasoning is that this should be able to be updated by the same account that can deploy code to the account)
+
 ```
 
 ### Read Methods
@@ -511,5 +533,10 @@ pub fn get_donations_for_donor(
 // PAYOUTS
 
 pub fn get_payouts(&self, from_index: Option<u64>, limit: Option<u64>) -> Vec<Payout>
+
+
+// SOURCE METADATA
+
+pub fn get_contract_source_metadata(&self) -> Option<ContractSourceMetadata>
 
 ```

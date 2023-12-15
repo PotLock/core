@@ -4,7 +4,7 @@ use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, log, near_bindgen, require, serde_json::json, AccountId, Balance, BorshStorageKey, Gas,
-    Promise, PromiseError,
+    PanicOnDefault, Promise, PromiseError,
 };
 use std::collections::HashMap;
 
@@ -15,16 +15,20 @@ pub mod applications;
 pub mod config;
 pub mod constants;
 pub mod donations;
+pub mod events;
 pub mod internal;
 pub mod payouts;
+pub mod source;
 pub mod utils;
 pub use crate::admin::*;
 pub use crate::applications::*;
 pub use crate::config::*;
 pub use crate::constants::*;
 pub use crate::donations::*;
+pub use crate::events::*;
 pub use crate::internal::*;
 pub use crate::payouts::*;
+pub use crate::source::*;
 pub use crate::utils::*;
 
 // TODO: move Provider stuff elsewhere?
@@ -206,6 +210,8 @@ pub struct Contract {
     /// Method specified must receive no requried args and return struct containing protocol_fee_basis_points and protocol_fee_recipient_account.
     /// Set by deployer and cannot be changed by Pot owner/admins.
     pub protocol_config_provider: LazyOption<ProviderId>,
+    /// Contract "source" metadata, as specified in NEP 0330 (https://github.com/near/NEPs/blob/master/neps/nep-0330.md), with addition of `commit_hash`
+    pub contract_source_metadata: LazyOption<VersionedContractSourceMetadata>,
 }
 
 #[derive(BorshSerialize, BorshStorageKey)]
@@ -218,6 +224,7 @@ pub enum StorageKey {
     CustomMinThresholdScore,
     CooldownEndMs,
     ProtocolConfigProvider,
+    SourceMetadata,
     ApplicationsById,
     ApprovedApplicationIds,
     DonationsById,
@@ -264,6 +271,7 @@ impl Contract {
 
         // other
         protocol_config_provider: Option<ProviderId>,
+        source_metadata: ContractSourceMetadata,
     ) -> Self {
         assert!(!env::state_exists(), "Already initialized");
         Self {
@@ -339,6 +347,10 @@ impl Contract {
                 StorageKey::ProtocolConfigProvider,
                 protocol_config_provider.as_ref(),
             ),
+            contract_source_metadata: LazyOption::new(
+                StorageKey::SourceMetadata,
+                Some(&VersionedContractSourceMetadata::Current(source_metadata)),
+            ),
         }
     }
 
@@ -388,6 +400,7 @@ impl Default for Contract {
             payout_ids_by_project_id: LookupMap::new(StorageKey::PayoutIdsByProjectId),
             payouts_by_id: UnorderedMap::new(StorageKey::PayoutsById),
             protocol_config_provider: LazyOption::new(StorageKey::ProtocolConfigProvider, None),
+            contract_source_metadata: LazyOption::new(StorageKey::SourceMetadata, None),
         }
     }
 }

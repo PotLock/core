@@ -25,9 +25,6 @@ pub use crate::utils::*;
 type DonationId = u64;
 type TimestampMs = u64;
 
-/// log prefix constant
-pub const EVENT_JSON_PREFIX: &str = "EVENT_JSON:";
-
 /// Registry Contract
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]

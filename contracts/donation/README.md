@@ -96,6 +96,7 @@ pub fn donate(
     referrer_id: Option<AccountId>,
 ) -> Donation
 
+
 // OWNER
 
 #[payable]
@@ -106,6 +107,7 @@ pub fn owner_set_protocol_fee_basis_points(&mut self, protocol_fee_basis_points:
 pub fn owner_set_referral_fee_basis_points(&mut self, referral_fee_basis_points: u32)
 
 pub fn owner_set_protocol_fee_recipient_account(&mut self, protocol_fee_recipient_account: AccountId)
+
 
 // SOURCE METADATA
 
