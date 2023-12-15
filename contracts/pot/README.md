@@ -16,7 +16,7 @@ The typical flow / lifetime of a Pot is as follows:
 - During the **application period** (between `application_start_ms` and `application_end_ms`), projects may apply to the funding round. Depending on the registration requirement set by the owner/admin via `registry_provider`, projects may be required to be registered on an external registry contract before they can apply.
 - During the **public round** (between `public_round_start_ms` and `public_round_end_ms`), end users may donate to approved projects. A `project_id` must be specified with the donation. Similarly to matching pool donations, a `referrer_id` may be provided; the referral fee percentage for public donations is set by the owner/admin via `public_round_referral_fee_basis_points`. Sybil resistance checks may be implemented for public donations by the Pot owner/admin. If a chef is specified on the contract, they will receive a percentage of the donation as specified by `chef_fee_basis_points`. If a `protocol_config_provider` is specified, a cross-contract (CC) call to this provider will be made to retrieve the percentage and recipient account for the protocol fee, and this amount will also be taken out of the donation. The donation must be large enough to cover its own storage _after_ all fees have been subtracted.
 - Once the public round is over, **payouts** may be calculated. This occurs off-chain as it is a computationally-expensive operation due to pairwise square root calculations. This calculation logic, however, will live on-chain in a BOS component. It can currently be found in [`test/utils/quadratics.ts`](../test/utils/quadratics.ts). Its required inputs are the total matching pool amount, and all individual donations, which can be fetched via paginated calls to `get_donations`. Once payouts have been calculated off-chain, they should be set on the Pot contract by the chef (or owner/admin). During this process, an error will occur if the total payout amount is not consistent with the matching pool balance.
-- Once payouts are set, a **cooldown period** starts (currently hardcoded to one week, but **_this should be changed to allow a customizable period_**). The intention of the cooldown period is to allow a public audit of the payouts and allow challenges. Once the cooldown period is complete (after `cooldown_end_ms`), payouts can be processed and payments will be made from the matching pool to individual projects.
+- Once payouts are set, a **cooldown period** starts (currently hardcoded to one week). The end of the cooldown period is specified by `cooldown_end_ms`, and this can be updated by owner/admin. The intention of the cooldown period is to allow a public audit of the payouts and allow challenges. Once the cooldown period is complete, payouts can be processed and payments will be made from the matching pool to individual projects.
 - Once payouts have all been processed and paid out, without errors, `all_paid_out` is set to `true` and this is considered the end of life for the Pot.
 
 ## Contract Types / Structure
@@ -310,10 +310,11 @@ pub struct CustomSybilCheck {
 ```rs
 // APPLICATIONS
 
+/// The calling account should be the project/account that is applying
 #[payable]
 pub fn apply(&mut self) -> Application
 
-/// Only allowed for projects that are in Pending status
+/// Only allowed for projects/applications that are in Pending status
 pub fn unapply(&mut self) -> ()
 
 pub fn chef_set_application_status(
