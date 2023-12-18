@@ -2,12 +2,12 @@ use crate::*;
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
-pub struct StampId(pub String);
+pub struct StampId(pub String); // "{USER_ID}#{PROVIDER_ID}"
 
 const STAMP_ID_DELIMITER: &str = "#"; // separates user_id and provider_id in StampId. * NB: should not be the same as PROVIDER_ID_DELIMITER (currently set to ":")
 
-// Generate StampId ("{USER_ID}#{PROVIDER_ID}") from user_id and provider_id
 impl StampId {
+    // Generate StampId ("{USER_ID}#{PROVIDER_ID}") from user_id and provider_id
     fn new(user_id: AccountId, provider_id: ProviderId) -> Self {
         StampId(format!(
             "{}{}{}",
@@ -36,6 +36,7 @@ impl From<VersionedStamp> for Stamp {
     }
 }
 
+/// Ephermal stamp data returned to user (not stored in contract)
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
 pub struct StampExternal {

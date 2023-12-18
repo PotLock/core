@@ -85,4 +85,40 @@ impl Contract {
             env::panic_str("Provider does not exist");
         }
     }
+
+    // config
+
+    #[payable]
+    pub fn admin_set_default_providers(&mut self, provider_ids: Vec<ProviderId>) {
+        // only contract owner or admin can call this method
+        self.assert_owner_or_admin();
+        let initial_storage_usage = env::storage_usage();
+        // clear existing default providers
+        self.default_provider_ids.clear();
+        // add new default providers
+        for provider_id in provider_ids {
+            self.default_provider_ids.insert(&provider_id);
+        }
+        // refund any unused deposit
+        refund_deposit(initial_storage_usage);
+    }
+
+    #[payable]
+    pub fn admin_add_default_providers(&mut self, provider_id: ProviderId) {
+        // only contract owner or admin can call this method
+        self.assert_owner_or_admin();
+        let initial_storage_usage = env::storage_usage();
+        // add new default provider
+        self.default_provider_ids.insert(&provider_id);
+        // refund any unused deposit
+        refund_deposit(initial_storage_usage);
+    }
+
+    #[payable]
+    pub fn admin_set_default_human_threshold(&mut self, default_human_threshold: u32) {
+        // only contract owner or admin can call this method
+        self.assert_owner_or_admin();
+        // set default human threshold
+        self.default_human_threshold = default_human_threshold;
+    }
 }

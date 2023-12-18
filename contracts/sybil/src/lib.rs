@@ -42,10 +42,14 @@ pub struct Contract {
     providers_by_id: UnorderedMap<ProviderId, VersionedProvider>,
     default_provider_ids: UnorderedSet<ProviderId>,
     default_human_threshold: u32,
-    // NEW
+    // MAPPINGS
+    // Stores all Stamp records, versioned for easy upgradeability
     stamps_by_id: UnorderedMap<StampId, VersionedStamp>,
+    // Enables fetching of all stamps for a user
     provider_ids_for_user: LookupMap<AccountId, UnorderedSet<ProviderId>>,
+    // Enables fetching of all users with given stamp (provider ID)
     user_ids_for_provider: LookupMap<ProviderId, UnorderedSet<AccountId>>,
+    // Enables fetching of providers that a user has submitted (e.g. if user has submitted one malicious provider, they are likely to submit more and you'll want to be able to fetch these or filter them out of results)
     provider_ids_for_submitter: LookupMap<AccountId, UnorderedSet<ProviderId>>,
 }
 
@@ -69,7 +73,6 @@ pub enum StorageKey {
     Admins,
     ProvidersById,
     DefaultProviderIds,
-    // NEW
     StampsById,
     ProviderIdsForUser,
     ProviderIdsForUserInner { user_id: AccountId },
