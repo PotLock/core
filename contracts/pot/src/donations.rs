@@ -22,7 +22,10 @@ pub struct Donation {
     pub referrer_fee: Option<U128>,
     /// Protocol fee
     pub protocol_fee: U128,
-    // TODO: add chef fee? chef ID? this is getting pretty hefty though for something intended to be small (could cost 0.01N just to store the Donation)
+    /// Chef ID
+    pub chef_id: Option<AccountId>,
+    /// Chef fee
+    pub chef_fee: Option<U128>,
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -62,7 +65,10 @@ pub struct DonationExternal {
     pub protocol_fee: U128,
     /// Indicates whether this is matching pool donation
     pub matching_pool: bool,
-    // TODO: add chef fee?
+    /// Chef ID
+    pub chef_id: Option<AccountId>,
+    /// Chef fee
+    pub chef_fee: Option<U128>,
 }
 
 pub const DONATION_ID_DELIMETER: &str = ":";
@@ -350,36 +356,22 @@ impl Contract {
         referrer_id: Option<AccountId>,
         matching_pool: bool,
     ) -> Promise {
-        if matching_pool {
-            // protocol fee is only paid for matching pool donations
-            if let Some(protocol_config_provider) = self.protocol_config_provider.get() {
-                let (contract_id, method_name) = protocol_config_provider.decompose();
-                let args = json!({}).to_string().into_bytes();
-                Promise::new(AccountId::new_unchecked(contract_id.clone()))
-                    .function_call(method_name.clone(), args, 0, XCC_GAS)
-                    .then(
-                        Self::ext(env::current_account_id())
-                            .with_static_gas(XCC_GAS)
-                            .handle_protocol_fee_callback(
-                                deposit,
-                                project_id,
-                                message,
-                                referrer_id,
-                                matching_pool,
-                            ),
-                    )
-            } else {
-                // bypass protocol fee
-                Self::ext(env::current_account_id())
-                    .with_static_gas(XCC_GAS)
-                    .bypass_protocol_fee(
-                        deposit,
-                        project_id.clone(),
-                        message.clone(),
-                        referrer_id.clone(),
-                        matching_pool,
-                    )
-            }
+        if let Some(protocol_config_provider) = self.protocol_config_provider.get() {
+            let (contract_id, method_name) = protocol_config_provider.decompose();
+            let args = json!({}).to_string().into_bytes();
+            Promise::new(AccountId::new_unchecked(contract_id.clone()))
+                .function_call(method_name.clone(), args, 0, XCC_GAS)
+                .then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(XCC_GAS)
+                        .handle_protocol_fee_callback(
+                            deposit,
+                            project_id,
+                            message,
+                            referrer_id,
+                            matching_pool,
+                        ),
+                )
         } else {
             // bypass protocol fee
             Self::ext(env::current_account_id())
@@ -477,11 +469,13 @@ impl Contract {
         // subtract chef fee
         // TODO: consider adding to Donation struct
         let mut chef_fee: Option<U128> = None;
-        if self.chef.get().is_some() {
+        let mut chef_id: Option<AccountId> = None;
+        if let Some(chef) = self.chef.get() {
             // chef fee only applies to public round donations
             if !matching_pool {
                 let chef_fee_amount = self.calculate_fee(remainder, self.chef_fee_basis_points);
                 chef_fee = Some(U128::from(chef_fee_amount));
+                chef_id = Some(chef);
                 remainder = remainder.checked_sub(chef_fee_amount).expect(&format!(
                     "Overflow occurred when calculating remainder ({} - {})",
                     remainder, chef_fee_amount,
@@ -511,6 +505,8 @@ impl Contract {
             protocol_fee: U128::from(protocol_fee),
             referrer_id: referrer_id.clone(),
             referrer_fee,
+            chef_id: chef_id.clone(),
+            chef_fee,
         };
         self.insert_donation_record(&donation_id, &donation, matching_pool);
 
@@ -561,13 +557,13 @@ impl Contract {
         // transfer chef fee
         if let Some(chef_fee) = chef_fee {
             // it has already been established that chef is Some
-            Promise::new(self.chef.get().unwrap()).transfer(chef_fee.0);
+            Promise::new(chef_id.expect("no chef ID")).transfer(chef_fee.0);
         }
 
         // transfer referrer fee
         if let Some(referrer_fee) = referrer_fee {
             // it has already been established that referrer_id is Some
-            Promise::new(referrer_id.unwrap()).transfer(referrer_fee.0);
+            Promise::new(referrer_id.expect("no referrer ID")).transfer(referrer_fee.0);
         }
 
         // transfer remainder to project
@@ -639,6 +635,8 @@ impl Contract {
             referrer_fee: donation.referrer_fee.clone(),
             protocol_fee: donation.protocol_fee,
             matching_pool: self.matching_pool_donation_ids.contains(&id),
+            chef_id: donation.chef_id.clone(),
+            chef_fee: donation.chef_fee.clone(),
         }
     }
 }
