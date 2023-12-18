@@ -85,6 +85,10 @@ impl Contract {
 
     pub fn admin_set_application_end_ms(&mut self, application_end_ms: u64) {
         self.assert_admin_or_greater();
+        assert!(
+            application_end_ms <= self.public_round_end_ms,
+            "Application end must be before public round end"
+        );
         self.application_end_ms = application_end_ms;
     }
 
