@@ -7,12 +7,12 @@ impl Contract {
     pub fn is_human(&self, account_id: String) -> Promise {
         // TODO: add option for caller to specify providers
         let mut current_promise: Option<Promise> = None;
-        let mut providers: Vec<ProviderJson> = Vec::new();
+        let mut providers: Vec<ProviderExternal> = Vec::new();
 
         for provider_id in self.default_provider_ids.iter() {
             if let Some(versioned_provider) = self.providers_by_id.get(&provider_id) {
                 let provider = Provider::from(versioned_provider);
-                let provider_json = ProviderJson::from_provider_id(&provider_id.0, provider);
+                let provider_json = ProviderExternal::from_provider_id(&provider_id.0, provider);
 
                 let args = json!({ "account_id": account_id }).to_string().into_bytes();
 
@@ -40,7 +40,7 @@ impl Contract {
     }
 
     #[private]
-    pub fn is_human_callback(&self, providers: Vec<ProviderJson>) -> bool {
+    pub fn is_human_callback(&self, providers: Vec<ProviderExternal>) -> bool {
         let mut total_score = 0;
 
         for index in 0..providers.len() {

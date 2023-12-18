@@ -1,6 +1,6 @@
 use crate::*;
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
 pub struct ProviderId(pub String);
 
@@ -14,17 +14,46 @@ impl ProviderId {
             contract_id, PROVIDER_ID_DELIMITER, method_name
         ))
     }
+
+    pub fn decompose(&self) -> (String, String) {
+        let parts: Vec<&str> = self.0.split(PROVIDER_ID_DELIMITER).collect();
+        if parts.len() != 2 {
+            panic!("Invalid provider ID format. Expected 'contract_id:method_name'.");
+        }
+        (parts[0].to_string(), parts[1].to_string())
+    }
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Provider {
     // NB: contract address/ID and method name are contained in the Provider's ID (see `ProviderId`) so do not need to be stored here
     /// Name of the provider, e.g. "I Am Human"
     pub name: String,
+    /// Description of the provider
+    pub description: Option<String>,
+    /// Whether this provider is active (updated by admin)
+    pub is_active: bool,
+    /// Whether this provider is flagged (updated by admin)
+    pub is_flagged: bool,
+    /// Admin notes, e.g. reason for flagging or marking inactive
+    pub admin_notes: Option<String>,
     /// Default weight for this provider, e.g. 100
     pub default_weight: u32,
-    // TODO: consider adding optional `gas`, `type`/`description` (e.g. "face scan", "twitter", "captcha", etc.), `icon`, `external_url`
+    /// Custom gas amount required
+    pub gas: Option<u64>,
+    /// Optional tags
+    pub tags: Option<Vec<String>>,
+    /// Optional icon URL
+    pub icon_url: Option<String>,
+    /// Optional external URL
+    pub external_url: Option<String>,
+    /// User who submitted this provider
+    pub submitted_by: AccountId,
+    /// Timestamp of when this provider was submitted
+    pub submitted_at_ms: TimestampMs,
+    /// Total number of times this provider has been used successfully
+    pub stamp_count: u64,
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -41,21 +70,45 @@ impl From<VersionedProvider> for Provider {
 }
 
 // external/ephemeral Provider that contains contract_id and method_name
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
+#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
-pub struct ProviderJson {
+pub struct ProviderExternal {
+    /// Provider ID
+    pub provider_id: ProviderId,
     /// Contract ID of the external contract that is the source of this provider
     pub contract_id: String,
     /// Method name of the external contract that is the source of this provider
     pub method_name: String,
     /// Name of the provider, e.g. "I Am Human"
     pub name: String,
+    /// Description of the provider
+    pub description: Option<String>,
+    /// Whether this provider is active (updated by admin)
+    pub is_active: bool,
+    /// Whether this provider is flagged (updated by admin)
+    pub is_flagged: bool,
+    /// Admin notes, e.g. reason for flagging or marking inactive
+    pub admin_notes: Option<String>,
     /// Default weight for this provider, e.g. 100
     pub default_weight: u32,
+    /// Custom gas amount required
+    pub gas: Option<u64>,
+    /// Optional tags
+    pub tags: Option<Vec<String>>,
+    /// Optional icon URL
+    pub icon_url: Option<String>,
+    /// Optional external URL
+    pub external_url: Option<String>,
+    /// User who submitted this provider
+    pub submitted_by: AccountId,
+    /// Timestamp of when this provider was submitted
+    pub submitted_at_ms: TimestampMs,
+    /// Total number of times this provider has been used successfully
+    pub stamp_count: u64,
 }
 
-impl ProviderJson {
-    /// Creates a `ProviderJson` (view-only representation of a Provider) from a provider ID string + Provider.
+impl ProviderExternal {
+    /// Creates a `ProviderExternal` (view-only representation of a Provider) from a provider ID string + Provider.
     ///
     /// # Arguments
     ///
@@ -65,18 +118,30 @@ impl ProviderJson {
     ///
     /// # Returns
     ///
-    /// * `ProviderJson` object.
+    /// * `ProviderExternal` object.
     pub fn from_provider_id(provider_id: &str, provider: Provider) -> Self {
         let parts: Vec<&str> = provider_id.split(':').collect();
         if parts.len() != 2 {
             panic!("Invalid provider ID format. Expected 'contract_id:method_name'.");
         }
 
-        ProviderJson {
+        ProviderExternal {
+            provider_id: ProviderId(provider_id.to_string()),
             contract_id: parts[0].to_string(),
             method_name: parts[1].to_string(),
             name: provider.name,
             default_weight: provider.default_weight,
+            description: provider.description,
+            is_active: provider.is_active,
+            is_flagged: provider.is_flagged,
+            admin_notes: provider.admin_notes,
+            gas: provider.gas,
+            tags: provider.tags,
+            icon_url: provider.icon_url,
+            external_url: provider.external_url,
+            submitted_by: provider.submitted_by,
+            submitted_at_ms: provider.submitted_at_ms,
+            stamp_count: provider.stamp_count,
         }
     }
 }
@@ -84,24 +149,46 @@ impl ProviderJson {
 #[near_bindgen]
 impl Contract {
     #[payable]
-    pub fn add_provider(
+    pub fn register_provider(
         &mut self,
         contract_id: String,
         method_name: String,
         name: String,
-        default_weight: u32,
-    ) -> ProviderId {
-        // only contract owner or admin can call this method
-        self.assert_owner_or_admin();
+        description: Option<String>,
+        gas: Option<u64>,
+        tags: Option<Vec<String>>,
+        icon_url: Option<String>,
+        external_url: Option<String>,
+    ) -> Provider {
+        // Get initial storage usage so user can pay for what they use
         let initial_storage_usage = env::storage_usage();
+
         // generate provider ID
         let provider_id = ProviderId::new(contract_id, method_name);
+
+        // check that provider doesn't already exist
+        if let Some(_) = self.providers_by_id.get(&provider_id) {
+            env::panic_str(&format!("Provider {:#?} already exists", provider_id));
+        }
+
         // create provider
         let provider = Provider {
             name,
-            default_weight,
+            description,
+            is_active: false,
+            is_flagged: false,
+            admin_notes: None,
+            default_weight: 100,
+            gas,
+            tags,
+            icon_url,
+            external_url,
+            submitted_by: env::signer_account_id(),
+            submitted_at_ms: env::block_timestamp() / 1000000,
+            stamp_count: 0,
         };
-        // store provider
+
+        // create & store provider
         self.providers_by_id.insert(
             &provider_id,
             &VersionedProvider::from(VersionedProvider::Current(provider.clone())),
@@ -112,8 +199,8 @@ impl Contract {
         // refund any unused deposit
         refund_deposit(initial_storage_usage);
 
-        // return provider ID
-        provider_id
+        // return provider
+        provider
     }
 
     #[payable]
@@ -152,11 +239,15 @@ impl Contract {
 
     // * VIEW METHODS *
 
-    pub fn get_provider(&self, contract_id: String, method_name: String) -> Option<ProviderJson> {
+    pub fn get_provider(
+        &self,
+        contract_id: String,
+        method_name: String,
+    ) -> Option<ProviderExternal> {
         let provider_id = ProviderId::new(contract_id, method_name);
         let provider = self.providers_by_id.get(&provider_id);
         if let Some(provider) = provider {
-            Some(ProviderJson::from_provider_id(
+            Some(ProviderExternal::from_provider_id(
                 &provider_id.0,
                 Provider::from(provider),
             ))
@@ -165,20 +256,20 @@ impl Contract {
         }
     }
 
-    pub fn get_providers(&self) -> Vec<ProviderJson> {
+    pub fn get_providers(&self) -> Vec<ProviderExternal> {
         self.providers_by_id
             .iter()
             .map(|(provider_id, provider)| {
-                ProviderJson::from_provider_id(&provider_id.0, Provider::from(provider))
+                ProviderExternal::from_provider_id(&provider_id.0, Provider::from(provider))
             })
             .collect()
     }
 
-    pub fn get_default_providers(&self) -> Vec<ProviderJson> {
+    pub fn get_default_providers(&self) -> Vec<ProviderExternal> {
         self.default_provider_ids
             .iter()
             .map(|provider_id| {
-                ProviderJson::from_provider_id(
+                ProviderExternal::from_provider_id(
                     &provider_id.0,
                     Provider::from(self.providers_by_id.get(&provider_id).unwrap()),
                 )
