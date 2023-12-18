@@ -86,6 +86,17 @@ pub struct ContractSourceMetadata {
 ### Write Methods
 
 ```rs
+// INIT
+
+pub fn new(
+    owner: AccountId,
+    protocol_fee_basis_points: u32,
+    referral_fee_basis_points: u32,
+    protocol_fee_recipient_account: AccountId,
+    source_metadata: ContractSourceMetadata,
+) -> Self
+
+
 // DONATIONS
 
 #[payable]
@@ -95,6 +106,7 @@ pub fn donate(
     message: Option<String>,
     referrer_id: Option<AccountId>,
 ) -> Donation
+
 
 // OWNER
 
@@ -106,6 +118,7 @@ pub fn owner_set_protocol_fee_basis_points(&mut self, protocol_fee_basis_points:
 pub fn owner_set_referral_fee_basis_points(&mut self, referral_fee_basis_points: u32)
 
 pub fn owner_set_protocol_fee_recipient_account(&mut self, protocol_fee_recipient_account: AccountId)
+
 
 // SOURCE METADATA
 

@@ -9,10 +9,10 @@ const READ_METHODS = {
   IS_ROUND_ACTIVE: "is_round_active",
   GET_APPLICATIONS: "get_applications",
   GET_APPLICATION_BY_PROJECT_ID: "get_application_by_project_id",
-  GET_POT_CONFIG: "get_pot_config",
-  GET_DONATIONS_BALANCE: "get_donations_balance",
+  GET_CONFIG: "get_config",
+  GET_DONATIONS_BALANCE: "get_total_donations",
   GET_MATCHING_POOL_BALANCE: "get_matching_pool_balance",
-  GET_PATRON_DONATIONS: "get_patron_donations",
+  GET_MATCHING_POOL_DONATIONS: "get_matching_pool_donations",
   GET_DONATIONS: "get_donations",
   GET_PAYOUTS: "get_payouts",
 };
@@ -31,7 +31,7 @@ const WRITE_METHODS = {
   DONATE: "donate",
   CHEF_SET_PAYOUTS: "chef_set_payouts",
   ADMIN_PROCESS_PAYOUTS: "admin_process_payouts",
-  ADMIN_CLOSE_ROUND: "admin_close_round",
+  ADMIN_SET_ROUND_CLOSED: "admin_set_round_closed",
   ADMIN_SET_ROUND_OPEN: "admin_set_round_open",
   ADMIN_SET_COOLDOWN_PERIOD_COMPLETE: "admin_set_cooldown_period_complete",
 };
@@ -122,7 +122,7 @@ export const initializeContract = async (
 
 export const getPotConfig = async (): Promise<PotConfig> => {
   return contractView({
-    methodName: READ_METHODS.GET_POT_CONFIG,
+    methodName: READ_METHODS.GET_CONFIG,
   });
 };
 
@@ -213,7 +213,7 @@ export const adminSetChef = async (
     callerAccount: adminAccount,
     contractId: _contractId,
     methodName: WRITE_METHODS.ADMIN_SET_CHEF,
-    args: { chef_id: chefId },
+    args: { chef: chefId },
   });
 };
 
@@ -256,7 +256,7 @@ export const patronDonateToMatchingPool = async ({
 
 export const getPatronDonations = async (): Promise<PatronDonation[]> => {
   return contractView({
-    methodName: READ_METHODS.GET_PATRON_DONATIONS,
+    methodName: READ_METHODS.GET_MATCHING_POOL_DONATIONS,
   });
 };
 
@@ -334,7 +334,7 @@ export const adminCloseRound = async (adminAccount: Account) => {
   return contractCall({
     callerAccount: adminAccount,
     contractId: _contractId,
-    methodName: WRITE_METHODS.ADMIN_CLOSE_ROUND,
+    methodName: WRITE_METHODS.ADMIN_SET_ROUND_CLOSED,
   });
 };
 
@@ -346,7 +346,7 @@ export const adminSetRoundOpen = async (
     callerAccount: adminAccount,
     contractId: _contractId,
     methodName: WRITE_METHODS.ADMIN_SET_ROUND_OPEN,
-    args: { round_end_ms: roundEndMs },
+    args: { public_round_end_ms: roundEndMs },
   });
 };
 

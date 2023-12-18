@@ -2,7 +2,7 @@
 members = [
     "donation",
     "pot",
-    "pot_deployer",
+    "pot_factory",
     "registry",
     "sybil",
     "sybil_provider_simulator"

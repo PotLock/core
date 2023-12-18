@@ -5,9 +5,9 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-echo ">> Deploying PotDeployer contract!"
+echo ">> Deploying PotFactory contract!"
 
-# NB: Not using near dev-deploy here because the PotDeployer contract creates subaccounts of itself, and account IDs created via near dev-deploy cannot be subaccounted.
+# NB: Not using near dev-deploy here because the PotFactory contract creates subaccounts of itself, and account IDs created via near dev-deploy cannot be subaccounted.
 
 MASTER_ACCOUNT_NAME="test-contracts.potlock.testnet"
 

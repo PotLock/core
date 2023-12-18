@@ -1,10 +1,11 @@
 use crate::*;
-/// End-user donation
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+
+pub type DonationId = u64;
+
+/// Donation (matching pool or public round)
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Donation {
-    /// Unique identifier for the donation
-    pub id: DonationId,
     /// ID of the donor               
     pub donor_id: AccountId,
     /// Amount donated         
@@ -13,47 +14,81 @@ pub struct Donation {
     pub message: Option<String>,
     /// Timestamp when the donation was made
     pub donated_at: TimestampMs,
-    /// ID of the project receiving the donation  
-    pub project_id: ProjectId,
-    // pub application_id: ApplicationId,
-    /// Protocol fee
-    pub protocol_fee: U128,
-    /// Amount added after fees
-    pub amount_after_fees: U128,
-}
-
-/// Matching pool / patron donation
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
-#[serde(crate = "near_sdk::serde")]
-pub struct PatronDonation {
-    /// Unique identifier for the donation
-    pub id: DonationId,
-    /// ID of the donor               
-    pub donor_id: AccountId,
-    /// Amount donated         
-    pub total_amount: U128,
-    /// Optional message from the donor          
-    pub message: Option<String>,
-    /// Timestamp when the donation was made
-    pub donated_at: TimestampMs,
+    /// ID of the project receiving the donation, if applicable (matching pool donations will contain `None`)
+    pub project_id: Option<ProjectId>,
     /// Referrer ID
     pub referrer_id: Option<AccountId>,
-    /// Protocol fee
-    pub protocol_fee: U128,
     /// Referrer fee
     pub referrer_fee: Option<U128>,
-    /// Amount added to matching pool after fees
-    pub amount_after_fees: U128,
+    /// Protocol fee
+    pub protocol_fee: U128,
+    /// Chef ID
+    pub chef_id: Option<AccountId>,
+    /// Chef fee
+    pub chef_fee: Option<U128>,
+}
+
+#[derive(BorshSerialize, BorshDeserialize)]
+pub enum VersionedDonation {
+    Current(Donation),
+}
+
+impl From<VersionedDonation> for Donation {
+    fn from(donation: VersionedDonation) -> Self {
+        match donation {
+            VersionedDonation::Current(current) => current,
+        }
+    }
+}
+
+/// Ephemeral-only (used in views)
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct DonationExternal {
+    /// ID of the donation
+    pub id: DonationId,
+    /// ID of the donor               
+    pub donor_id: AccountId,
+    /// Amount donated         
+    pub total_amount: U128,
+    /// Optional message from the donor          
+    pub message: Option<String>,
+    /// Timestamp when the donation was made
+    pub donated_at: TimestampMs,
+    /// ID of the project receiving the donation, if applicable (matching pool donations will contain `None`)
+    pub project_id: Option<ProjectId>,
+    /// Referrer ID
+    pub referrer_id: Option<AccountId>,
+    /// Referrer fee
+    pub referrer_fee: Option<U128>,
+    /// Protocol fee
+    pub protocol_fee: U128,
+    /// Indicates whether this is matching pool donation
+    pub matching_pool: bool,
+    /// Chef ID
+    pub chef_id: Option<AccountId>,
+    /// Chef fee
+    pub chef_fee: Option<U128>,
 }
 
 pub const DONATION_ID_DELIMETER: &str = ":";
 
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct ProtocolConfigProviderResult {
+    pub basis_points: u32,
+    pub account_id: AccountId,
+}
+
 #[near_bindgen]
 impl Contract {
     // GETTERS
-    // get_donations
-    // get_matching_pool_balance
-    pub fn get_donations(&self, from_index: Option<u128>, limit: Option<u64>) -> Vec<Donation> {
+
+    pub fn get_donations(
+        &self,
+        from_index: Option<u128>,
+        limit: Option<u64>,
+    ) -> Vec<DonationExternal> {
         let start_index: u128 = from_index.unwrap_or_default();
         assert!(
             (self.donations_by_id.len() as u128) >= start_index,
@@ -65,27 +100,53 @@ impl Contract {
             .iter()
             .skip(start_index as usize)
             .take(limit)
-            .map(|(_, v)| v)
+            .map(|(id, _v)| {
+                self.format_donation(&Donation::from(self.donations_by_id.get(&id).unwrap()), id)
+            })
             .collect()
     }
 
-    pub fn get_patron_donations(
+    pub fn get_public_round_donations(
         &self,
         from_index: Option<u128>,
         limit: Option<u64>,
-    ) -> Vec<PatronDonation> {
+    ) -> Vec<DonationExternal> {
         let start_index: u128 = from_index.unwrap_or_default();
         assert!(
-            (self.patron_donations_by_id.len() as u128) >= start_index,
+            (self.public_round_donation_ids.len() as u128) >= start_index,
             "Out of bounds, please use a smaller from_index."
         );
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
         assert_ne!(limit, 0, "Cannot provide limit of 0.");
-        self.patron_donations_by_id
+        self.public_round_donation_ids
             .iter()
             .skip(start_index as usize)
             .take(limit)
-            .map(|(_, v)| v)
+            .map(|id| {
+                self.format_donation(&Donation::from(self.donations_by_id.get(&id).unwrap()), id)
+            })
+            .collect()
+    }
+
+    pub fn get_matching_pool_donations(
+        &self,
+        from_index: Option<u128>,
+        limit: Option<u64>,
+    ) -> Vec<DonationExternal> {
+        let start_index: u128 = from_index.unwrap_or_default();
+        assert!(
+            (self.matching_pool_donation_ids.len() as u128) >= start_index,
+            "Out of bounds, please use a smaller from_index."
+        );
+        let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
+        assert_ne!(limit, 0, "Cannot provide limit of 0.");
+        self.matching_pool_donation_ids
+            .iter()
+            .skip(start_index as usize)
+            .take(limit)
+            .map(|id| {
+                self.format_donation(&Donation::from(self.donations_by_id.get(&id).unwrap()), id)
+            })
             .collect()
     }
 
@@ -94,7 +155,7 @@ impl Contract {
         project_id: ProjectId,
         from_index: Option<u128>,
         limit: Option<u64>,
-    ) -> Vec<Donation> {
+    ) -> Vec<DonationExternal> {
         let start_index: u128 = from_index.unwrap_or_default();
         assert!(
             (self.donations_by_id.len() as u128) >= start_index,
@@ -107,7 +168,9 @@ impl Contract {
             .iter()
             .skip(start_index as usize)
             .take(limit)
-            .map(|donation_id| self.donations_by_id.get(&donation_id).unwrap())
+            .map(|id| {
+                self.format_donation(&Donation::from(self.donations_by_id.get(&id).unwrap()), id)
+            })
             .collect()
     }
 
@@ -116,7 +179,7 @@ impl Contract {
         donor_id: AccountId,
         from_index: Option<u128>,
         limit: Option<u64>,
-    ) -> Vec<Donation> {
+    ) -> Vec<DonationExternal> {
         let start_index: u128 = from_index.unwrap_or_default();
         assert!(
             (self.donations_by_id.len() as u128) >= start_index,
@@ -129,290 +192,416 @@ impl Contract {
             .iter()
             .skip(start_index as usize)
             .take(limit)
-            .map(|donation_id| self.donations_by_id.get(&donation_id).unwrap())
+            .map(|id| {
+                self.format_donation(&Donation::from(self.donations_by_id.get(&id).unwrap()), id)
+            })
             .collect()
     }
 
-    pub fn get_matching_pool_balance(&self) -> U128 {
-        self.matching_pool_balance
-    }
-
-    pub fn get_donations_balance(&self) -> U128 {
-        self.donations_balance
-    }
-
-    pub(crate) fn calculate_protocol_fee(&self, amount: u128) -> u128 {
+    pub(crate) fn calculate_fee(&self, amount: u128, basis_points: u32) -> u128 {
         let total_basis_points = 10_000u128;
         let amount_per_basis_point = amount / total_basis_points;
-        self.protocol_fee_basis_points as u128 * amount_per_basis_point
+        basis_points as u128 * amount_per_basis_point
     }
 
-    pub(crate) fn calculate_referrer_fee(&self, amount: u128) -> u128 {
-        let total_basis_points = 10_000u128;
-        let amount_per_basis_point = amount / total_basis_points;
-        let mut referrer_amount =
-            self.patron_referral_fee_basis_points as u128 * amount_per_basis_point;
-        if referrer_amount > self.max_patron_referral_fee.0 {
-            referrer_amount = self.max_patron_referral_fee.0;
-        }
+    pub(crate) fn calculate_referrer_fee(&self, amount: u128, matching_pool: bool) -> u128 {
+        let multiplier = if matching_pool {
+            self.patron_referral_fee_basis_points
+        } else {
+            self.public_round_referral_fee_basis_points
+        };
+        let referrer_amount = self.calculate_fee(amount, multiplier);
         referrer_amount
     }
 
-    #[payable]
-    pub fn chef_set_donation_requirement(&mut self, donation_requirement: Option<SBTRequirement>) {
-        self.assert_chef();
-        self.donation_requirement = donation_requirement;
-    }
+    // WRITE METHODS
 
     #[payable]
-    pub fn donate(&mut self, project_id: Option<ProjectId>, message: Option<String>) -> Promise {
+    pub fn donate(
+        &mut self,
+        project_id: Option<ProjectId>,
+        message: Option<String>,
+        referrer_id: Option<AccountId>,
+        matching_pool: Option<bool>,
+    ) -> Promise {
         if let Some(project_id) = project_id.clone() {
             self.assert_approved_application(&project_id);
         };
-        self.assert_round_active();
-        self.assert_caller_can_donate(project_id, message)
-    }
-
-    /// Adds attached deposit to matching pool, adds mappings & returns PatronDonation
-    #[payable]
-    pub fn patron_donate_to_matching_pool(
-        &mut self,
-        message: Option<String>,
-        referrer_id: Option<AccountId>,
-    ) {
-        self.assert_round_not_closed();
-        let deposit = env::attached_deposit();
-        // calculate fees
-        let mut remainder = deposit;
-        let protocol_fee = self.calculate_protocol_fee(deposit);
-        remainder -= protocol_fee;
-        // transfer protocol fee
-        Promise::new(self.protocol_fee_recipient_account.clone()).transfer(protocol_fee);
-        let mut referrer_fee = None;
-        if let Some(referrer_id) = referrer_id.clone() {
-            let referrer_amount = self.calculate_referrer_fee(deposit);
-            // transfer referrer fee
-            Promise::new(referrer_id).transfer(referrer_amount);
-            remainder -= referrer_amount;
-            referrer_fee = Some(U128::from(referrer_amount));
+        let is_matching_pool = matching_pool.unwrap_or(false);
+        if !is_matching_pool {
+            self.assert_round_active();
+            // error if this is an end-user donation and no project_id is provided
+            if project_id.is_none() {
+                env::panic_str(
+                    "project_id argument must be provided for public (non-matching pool) donations",
+                );
+            }
         }
-        // add donation record
-        let patron_donation_count = self.patron_donation_ids.len();
-        let patron_donation = PatronDonation {
-            id: patron_donation_count + 1 as DonationId,
-            donor_id: env::predecessor_account_id(),
-            total_amount: U128::from(deposit),
-            message,
-            donated_at: env::block_timestamp(),
-            referrer_id,
-            referrer_fee,
-            protocol_fee: U128::from(protocol_fee),
-            amount_after_fees: U128::from(remainder),
-        };
-        self.patron_donations_by_id
-            .insert(&patron_donation.id, &patron_donation);
-        self.patron_donation_ids.insert(&patron_donation.id);
-        self.matching_pool_balance = U128::from(
-            self.matching_pool_balance
-                .0
-                .checked_add(remainder)
-                .expect(&format!(
-                    "Overflow occurred when calculating self.matching_pool_balance ({} + {})",
-                    self.matching_pool_balance.0, remainder,
-                )),
-        );
+        // TODO: may want to prohibit additions to matching pool once public round has closed?
+        let deposit = env::attached_deposit();
+        self.assert_caller_can_donate(deposit, project_id, message, referrer_id, is_matching_pool)
     }
 
     pub(crate) fn assert_caller_can_donate(
         &mut self,
+        deposit: Balance,
         project_id: Option<ProjectId>,
         message: Option<String>,
+        referrer_id: Option<AccountId>,
+        matching_pool: bool,
     ) -> Promise {
-        if let Some(donation_requirement) = &self.donation_requirement {
-            let promise = sbt_registry::ext(donation_requirement.registry_id.clone())
-                .with_static_gas(Gas(XXC_GAS))
-                .sbt_tokens_by_owner(
-                    env::predecessor_account_id(),
-                    Some(donation_requirement.issuer_id.clone()),
-                    Some(donation_requirement.class_id),
-                );
-
-            promise.then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(Gas(XXC_GAS))
-                    .assert_can_donate_callback(
-                        env::predecessor_account_id(),
-                        env::attached_deposit(),
-                        project_id,
-                        message,
-                    ),
-            )
-        } else {
-            // no donation requirement. always allow
+        if matching_pool {
+            assert!(
+                deposit >= self.min_matching_pool_donation_amount.0,
+                "Matching pool donations must be at least {} yoctoNEAR",
+                self.min_matching_pool_donation_amount.0
+            );
+            // matching pool donations not subject to sybil checks, so go to always_allow callback
             Self::ext(env::current_account_id())
-                .with_static_gas(Gas(XXC_GAS))
-                .always_allow_callback(
-                    env::predecessor_account_id(),
-                    env::attached_deposit(),
-                    project_id,
-                    message,
+                .with_static_gas(XCC_GAS)
+                .sybil_always_allow_callback(
+                    deposit,
+                    project_id.clone(),
+                    message.clone(),
+                    referrer_id.clone(),
+                    matching_pool,
+                )
+        } else {
+            if let Some(sybil_wrapper_provider) = self.sybil_wrapper_provider.get() {
+                let (contract_id, method_name) = sybil_wrapper_provider.decompose();
+                let args = json!({ "account_id": env::predecessor_account_id() })
+                    .to_string()
+                    .into_bytes();
+                Promise::new(AccountId::new_unchecked(contract_id.clone()))
+                    .function_call(method_name, args, 0, Gas(TGAS * 50))
+                    .then(
+                        Self::ext(env::current_account_id())
+                            .with_static_gas(XCC_GAS)
+                            .sybil_callback(
+                                deposit,
+                                project_id.clone(),
+                                message.clone(),
+                                referrer_id.clone(),
+                                matching_pool,
+                            ),
+                    )
+            } else {
+                // no sybil wrapper provider, so go to always_allow callback
+                Self::ext(env::current_account_id())
+                    .with_static_gas(XCC_GAS)
+                    .sybil_always_allow_callback(
+                        deposit,
+                        project_id.clone(),
+                        message.clone(),
+                        referrer_id.clone(),
+                        matching_pool,
+                    )
+            }
+        }
+    }
+
+    #[private] // Public - but only callable by env::current_account_id()
+    pub fn sybil_always_allow_callback(
+        &mut self,
+        deposit: Balance,
+        project_id: Option<ProjectId>,
+        message: Option<String>,
+        referrer_id: Option<AccountId>,
+        matching_pool: bool,
+    ) -> Promise {
+        self.handle_protocol_fee(deposit, project_id, message, referrer_id, matching_pool)
+    }
+
+    #[private] // Public - but only callable by env::current_account_id()
+    pub fn sybil_callback(
+        &mut self,
+        deposit: Balance,
+        project_id: Option<ProjectId>,
+        message: Option<String>,
+        referrer_id: Option<AccountId>,
+        matching_pool: bool,
+        #[callback_result] call_result: Result<bool, PromiseError>,
+    ) -> Promise {
+        let caller_id = env::predecessor_account_id();
+        if call_result.is_err() {
+            log!(format!(
+                "Error verifying sybil check; returning donation {} to donor {}",
+                deposit, caller_id
+            ));
+            Promise::new(caller_id).transfer(deposit);
+            env::panic_str(
+                "There was an error querying sybil check. Donation has been returned to donor.",
+            );
+        }
+        let is_human: bool = call_result.unwrap();
+        if !is_human {
+            log!(format!(
+                "Sybil provider wrapper check returned false; returning donation {} to donor {}",
+                deposit, caller_id
+            ));
+            Promise::new(caller_id).transfer(deposit);
+            env::panic_str(
+                "Sybil provider wrapper check returned false. Donation has been returned to donor.",
+            );
+        } else {
+            self.handle_protocol_fee(deposit, project_id, message, referrer_id, matching_pool)
+        }
+    }
+
+    pub(crate) fn handle_protocol_fee(
+        &mut self,
+        deposit: Balance,
+        project_id: Option<ProjectId>,
+        message: Option<String>,
+        referrer_id: Option<AccountId>,
+        matching_pool: bool,
+    ) -> Promise {
+        if let Some(protocol_config_provider) = self.protocol_config_provider.get() {
+            let (contract_id, method_name) = protocol_config_provider.decompose();
+            let args = json!({}).to_string().into_bytes();
+            Promise::new(AccountId::new_unchecked(contract_id.clone()))
+                .function_call(method_name.clone(), args, 0, XCC_GAS)
+                .then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(XCC_GAS)
+                        .handle_protocol_fee_callback(
+                            deposit,
+                            project_id,
+                            message,
+                            referrer_id,
+                            matching_pool,
+                        ),
+                )
+        } else {
+            // bypass protocol fee
+            Self::ext(env::current_account_id())
+                .with_static_gas(XCC_GAS)
+                .bypass_protocol_fee(
+                    deposit,
+                    project_id.clone(),
+                    message.clone(),
+                    referrer_id.clone(),
+                    matching_pool,
                 )
         }
     }
 
-    pub(crate) fn donate_to_application(
+    // calculate protocol fee callback
+    #[private]
+    pub fn handle_protocol_fee_callback(
         &mut self,
-        caller_id: AccountId,
-        amount: u128,
-        project_id: ProjectId,
-        message: Option<String>,
-    ) {
-        let donation_count_for_project = self
-            .donation_ids_by_project_id
-            .get(&project_id)
-            .map_or(0, |ids| ids.len());
-
-        let mut remainder = amount;
-        let protocol_fee = self.calculate_protocol_fee(amount);
-        remainder -= protocol_fee;
-
-        let donation = Donation {
-            id: (donation_count_for_project + 1) as DonationId,
-            donor_id: caller_id,
-            total_amount: U128::from(amount),
-            message,
-            donated_at: env::block_timestamp(),
-            project_id,
-            protocol_fee: U128::from(protocol_fee),
-            amount_after_fees: U128::from(remainder),
-        };
-
-        self.insert_donation_record(&donation);
-        self.donations_balance = U128::from(
-            self.donations_balance
-                .0
-                .checked_add(remainder)
-                .expect(&format!(
-                    "Overflow occurred when calculating self.donations_balance ({} + {})",
-                    self.donations_balance.0, remainder,
-                )),
-        );
-
-        log!(format!(
-            "Transferring protocol fee {} to {}",
-            protocol_fee, self.protocol_fee_recipient_account
-        ));
-        Promise::new(self.protocol_fee_recipient_account.clone()).transfer(protocol_fee);
-    }
-
-    pub(crate) fn handle_donation(
-        &mut self,
-        caller_id: AccountId,
-        amount: u128,
+        deposit: Balance,
         project_id: Option<ProjectId>,
         message: Option<String>,
-    ) {
-        match project_id {
-            Some(app_id) => {
-                self.donate_to_application(caller_id, amount, app_id, message.clone());
-            }
-            None => {
-                // First, collect the applications into a Vec
-                let all_applications: Vec<_> = self.applications_by_project_id.values().collect();
-
-                // Filter the applications that are Approved
-                let approved_applications: Vec<_> = all_applications
-                    .into_iter()
-                    .filter(|application| application.status == ApplicationStatus::Approved)
-                    .collect();
-
-                let num_approved_applications = approved_applications.len() as u128;
-                if num_approved_applications == 0 {
-                    env::panic_str("No approved applications");
-                }
-                let amount_per_application = amount / num_approved_applications;
-                let remainder = amount % num_approved_applications;
-
-                // Now, iterate over the Vec of approved applications
-                for (i, application) in approved_applications.iter().enumerate() {
-                    let mut final_amount = amount_per_application;
-                    // Distribute the remainder until it's depleted
-                    if (i as u128) < remainder {
-                        final_amount += 1;
-                    }
-                    self.donate_to_application(
-                        caller_id.clone(),
-                        final_amount,
-                        application.project_id.clone(),
-                        message.clone(),
-                    );
-                }
-            }
+        referrer_id: Option<AccountId>,
+        matching_pool: bool,
+        #[callback_result] call_result: Result<ProtocolConfigProviderResult, PromiseError>,
+    ) -> DonationExternal {
+        if call_result.is_err() {
+            log!(format!(
+                "Error getting protocol fee; continuing with donation",
+            ));
+            self.process_donation(
+                deposit,
+                0,
+                None,
+                project_id,
+                message,
+                referrer_id,
+                matching_pool,
+            )
+        } else {
+            let protocol_config_provider_result = call_result.unwrap();
+            let protocol_fee_basis_points = protocol_config_provider_result.basis_points;
+            let protocol_fee_recipient_account = protocol_config_provider_result.account_id;
+            // calculate protocol fee (don't transfer yet)
+            let protocol_fee = self.calculate_fee(deposit, protocol_fee_basis_points);
+            self.process_donation(
+                deposit,
+                protocol_fee,
+                Some(protocol_fee_recipient_account),
+                project_id,
+                message,
+                referrer_id,
+                matching_pool,
+            )
         }
     }
 
-    // pub(crate) fn handle_donation(
-    //     &mut self,
-    //     caller_id: AccountId,
-    //     amount: u128,
-    //     application_id: Option<ApplicationId>,
-    //     message: Option<String>,
-    // ) {
-    //     let donation_count_for_project = if let Some(donation_ids_by_project_set) =
-    //         self.donation_ids_by_application_id.get(&application_id)
-    //     {
-    //         donation_ids_by_project_set.len()
-    //     } else {
-    //         0
-    //     };
-    //     // let deposit = env::attached_deposit();
-    //     let mut remainder = amount;
-    //     let protocol_fee = self.calculate_protocol_fee(amount);
-    //     remainder -= protocol_fee;
-    //     let donation = Donation {
-    //         id: donation_count_for_project + 1 as DonationId,
-    //         donor_id: caller_id.clone(),
-    //         total_amount: U128::from(amount),
-    //         message,
-    //         donated_at: env::block_timestamp(),
-    //         application_id,
-    //         protocol_fee: U128::from(protocol_fee),
-    //         amount_after_fees: U128::from(remainder),
-    //     };
-    //     self.insert_donation_record(&donation);
-    //     self.donations_balance = U128::from(
-    //         self.donations_balance
-    //             .0
-    //             .checked_add(remainder)
-    //             .expect(&format!(
-    //                 "Overflow occurred when calculating self.donations_balance ({} + {})",
-    //                 self.donations_balance.0, remainder,
-    //             )),
-    //     );
-    //     log!(format!(
-    //         "Transferring protocol fee {} to {}",
-    //         protocol_fee, self.protocol_fee_recipient_account
-    //     ));
-    //     Promise::new(self.protocol_fee_recipient_account.clone()).transfer(protocol_fee);
-    // }
+    #[private]
+    pub fn bypass_protocol_fee(
+        &mut self,
+        deposit: Balance,
+        project_id: Option<ProjectId>,
+        message: Option<String>,
+        referrer_id: Option<AccountId>,
+        matching_pool: bool,
+    ) -> DonationExternal {
+        self.process_donation(
+            deposit,
+            0,
+            None,
+            project_id,
+            message,
+            referrer_id,
+            matching_pool,
+        )
+    }
 
-    pub(crate) fn insert_donation_record(&mut self, donation: &Donation) {
-        self.donations_by_id.insert(&donation.id, &donation);
-        // add to donations-by-application mapping
-        let mut donation_ids_by_project_set = if let Some(donation_ids_by_application_set) =
-            self.donation_ids_by_project_id.get(&donation.project_id)
-        {
-            donation_ids_by_application_set
-        } else {
-            UnorderedSet::new(StorageKey::DonationIdsByProjectIdInner {
-                project_id: donation.project_id.clone(),
-            })
+    pub(crate) fn process_donation(
+        &mut self,
+        deposit: Balance,
+        protocol_fee: u128,
+        protocol_fee_recipient_account: Option<AccountId>,
+        project_id: Option<ProjectId>,
+        message: Option<String>,
+        referrer_id: Option<AccountId>,
+        matching_pool: bool,
+    ) -> DonationExternal {
+        let initial_storage_usage = env::storage_usage();
+
+        // subtract protocol fee
+        let mut remainder = deposit.checked_sub(protocol_fee).expect(&format!(
+            "Overflow occurred when calculating remainder ({} - {})",
+            deposit, protocol_fee,
+        ));
+
+        // subtract chef fee
+        // TODO: consider adding to Donation struct
+        let mut chef_fee: Option<U128> = None;
+        let mut chef_id: Option<AccountId> = None;
+        if let Some(chef) = self.chef.get() {
+            // chef fee only applies to public round donations
+            if !matching_pool {
+                let chef_fee_amount = self.calculate_fee(remainder, self.chef_fee_basis_points);
+                chef_fee = Some(U128::from(chef_fee_amount));
+                chef_id = Some(chef);
+                remainder = remainder.checked_sub(chef_fee_amount).expect(&format!(
+                    "Overflow occurred when calculating remainder ({} - {})",
+                    remainder, chef_fee_amount,
+                ));
+            }
+        }
+
+        // subtract referrer fee
+        let mut referrer_fee: Option<U128> = None;
+        if let Some(_referrer_id) = referrer_id.clone() {
+            let referrer_fee_amount = self.calculate_referrer_fee(remainder, matching_pool);
+            referrer_fee = Some(U128::from(referrer_fee_amount));
+            remainder = remainder.checked_sub(referrer_fee_amount).expect(&format!(
+                "Overflow occurred when calculating remainder ({} - {})",
+                remainder, referrer_fee_amount,
+            ));
+        }
+
+        // insert mappings
+        let donation_id = (self.donations_by_id.len() + 1) as DonationId;
+        let donation = Donation {
+            donor_id: env::signer_account_id(),
+            total_amount: U128::from(deposit),
+            message,
+            donated_at: env::block_timestamp(),
+            project_id: project_id.clone(),
+            protocol_fee: U128::from(protocol_fee),
+            referrer_id: referrer_id.clone(),
+            referrer_fee,
+            chef_id: chef_id.clone(),
+            chef_fee,
         };
-        donation_ids_by_project_set.insert(&donation.id);
-        self.donation_ids_by_project_id
-            .insert(&donation.project_id, &donation_ids_by_project_set);
+        self.insert_donation_record(&donation_id, &donation, matching_pool);
+
+        // update totals
+        if matching_pool {
+            self.total_matching_pool_donations = U128::from(
+                self.total_matching_pool_donations
+                    .0
+                    .checked_add(remainder)
+                    .expect(&format!(
+                        "Overflow occurred when calculating self.total_matching_pool_donations ({} + {})",
+                        self.total_matching_pool_donations.0, remainder,
+                    )),
+            );
+        } else {
+            self.total_public_donations = U128::from(
+                self.total_public_donations
+                    .0
+                    .checked_add(remainder)
+                    .expect(&format!(
+                        "Overflow occurred when calculating self.total_public_donations ({} + {})",
+                        self.total_public_donations.0, remainder,
+                    )),
+            );
+        }
+
+        // assert that donation after fees > storage cost
+        let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
+        require!(
+            remainder > required_deposit,
+            format!(
+                "Must attach {} yoctoNEAR to cover storage",
+                required_deposit
+            )
+        );
+
+        // subtract storage cost
+        remainder = remainder.checked_sub(required_deposit).expect(&format!(
+            "Overflow occurred when calculating remainder ({} - {})",
+            remainder, required_deposit,
+        ));
+
+        // transfer protocol fee
+        if let Some(protocol_fee_recipient_account) = protocol_fee_recipient_account {
+            Promise::new(protocol_fee_recipient_account.clone()).transfer(protocol_fee);
+        }
+
+        // transfer chef fee
+        if let Some(chef_fee) = chef_fee {
+            // it has already been established that chef is Some
+            Promise::new(chef_id.expect("no chef ID")).transfer(chef_fee.0);
+        }
+
+        // transfer referrer fee
+        if let Some(referrer_fee) = referrer_fee {
+            // it has already been established that referrer_id is Some
+            Promise::new(referrer_id.expect("no referrer ID")).transfer(referrer_fee.0);
+        }
+
+        // transfer remainder to project
+        if let Some(project_id) = project_id {
+            Promise::new(project_id.clone()).transfer(remainder);
+        }
+
+        // return formatted donation
+        self.format_donation(&donation, donation_id)
+    }
+
+    pub(crate) fn insert_donation_record(
+        &mut self,
+        donation_id: &DonationId,
+        donation: &Donation,
+        matching_pool: bool,
+    ) {
+        // insert base donation record
+        self.donations_by_id
+            .insert(donation_id, &VersionedDonation::Current(donation.clone()));
+
+        // if donation has a project_id, add to relevant mappings
+        if let Some(project_id) = donation.project_id.clone() {
+            let mut donation_ids_by_project_set = if let Some(donation_ids_by_application_set) =
+                self.donation_ids_by_project_id.get(&project_id)
+            {
+                donation_ids_by_application_set
+            } else {
+                UnorderedSet::new(StorageKey::DonationIdsByProjectIdInner {
+                    project_id: project_id.clone(),
+                })
+            };
+            donation_ids_by_project_set.insert(donation_id);
+            self.donation_ids_by_project_id
+                .insert(&project_id, &donation_ids_by_project_set);
+        }
+
         // add to donations-by-donor mapping
-        // self.add_donation_for_donor(&donation);
         let mut donation_ids_by_donor_set = if let Some(donation_ids_by_donor_set) =
             self.donation_ids_by_donor_id.get(&donation.donor_id)
         {
@@ -422,56 +611,32 @@ impl Contract {
                 donor_id: donation.donor_id.clone(),
             })
         };
-        donation_ids_by_donor_set.insert(&donation.id);
+        donation_ids_by_donor_set.insert(donation_id);
         self.donation_ids_by_donor_id
             .insert(&donation.donor_id, &donation_ids_by_donor_set);
-    }
 
-    // CALLBACKS
-
-    #[private] // Public - but only callable by env::current_account_id()
-    pub fn always_allow_callback(
-        &mut self,
-        caller_id: AccountId,
-        amount: u128,
-        project_id: Option<ProjectId>,
-        message: Option<String>,
-    ) {
-        self.handle_donation(caller_id, amount, project_id, message)
-    }
-
-    #[private] // Public - but only callable by env::current_account_id()
-    pub fn assert_can_donate_callback(
-        &mut self,
-        caller_id: AccountId,
-        amount: u128,
-        project_id: Option<ProjectId>,
-        message: Option<String>,
-        #[callback_result] call_result: Result<SbtTokensByOwnerResult, PromiseError>,
-    ) {
-        // Check if the promise succeeded by calling the method outlined in external.rs
-        if call_result.is_err() {
-            log!(format!(
-                "Error verifying donation requirement; returning donation {} to donor {}",
-                amount, caller_id
-            ));
-            Promise::new(caller_id).transfer(amount);
-            env::panic_str(
-                "There was an error querying SBTs. Donation has been returned to donor.",
-            );
-        }
-        let tokens: Vec<(AccountId, Vec<OwnedToken>)> = call_result.unwrap();
-        if tokens.len() > 0 {
-            // user holds the required SBT(s)
-            self.handle_donation(caller_id, amount, project_id, message)
+        // add to public round or matching pool donation ids
+        if matching_pool {
+            self.matching_pool_donation_ids.insert(donation_id);
         } else {
-            log!(format!(
-                "Donor doesn't have the required SBTs in order to donate; returning donation {} to donor {}",
-                amount, caller_id
-            ));
-            Promise::new(caller_id).transfer(amount);
-            env::panic_str("Donor doesn't have the required SBTs in order to donate. Donation has been returned to donor.");
-            // TODO: add details of required SBTs to error string
+            self.public_round_donation_ids.insert(donation_id);
+        }
+    }
+
+    pub fn format_donation(&self, donation: &Donation, id: DonationId) -> DonationExternal {
+        DonationExternal {
+            id,
+            donor_id: donation.donor_id.clone(),
+            total_amount: donation.total_amount,
+            message: donation.message.clone(),
+            donated_at: donation.donated_at,
+            project_id: donation.project_id.clone(),
+            referrer_id: donation.referrer_id.clone(),
+            referrer_fee: donation.referrer_fee.clone(),
+            protocol_fee: donation.protocol_fee,
+            matching_pool: self.matching_pool_donation_ids.contains(&id),
+            chef_id: donation.chef_id.clone(),
+            chef_fee: donation.chef_fee.clone(),
         }
     }
 }

@@ -17,10 +17,15 @@ type TimestampMs = u64;
 
 ```rs
 pub struct Contract {
+    /// Contract superuser
     owner: AccountId,
+    /// Contract admins (can be added/removed by owner)
     admins: UnorderedSet<AccountId>,
-    project_ids: UnorderedSet<ProjectId>,
+    /// Records of all Projects deployed by this Registry, indexed at their account ID, versioned for easy upgradeability
+    project_ids: UnorderedSet<ProjectId>, // NB: this is unnecessary, but retained for now as it is implemented in v0
     projects_by_id: LookupMap<ProjectId, VersionedProjectInternal>,
+    /// Contract "source" metadata, as specified in NEP 0330 (https://github.com/near/NEPs/blob/master/neps/nep-0330.md), with addition of `commit_hash`
+    contract_source_metadata: LazyOption<VersionedContractSourceMetadata>,
 }
 ```
 
@@ -61,6 +66,15 @@ pub struct ProjectExternal {
 ### Write Methods
 
 ```rs
+// INIT
+
+pub fn new(
+    owner: AccountId,
+    admins: Vec<AccountId>,
+    source_metadata: ContractSourceMetadata,
+) -> Self
+
+
 // PROJECTS
 
 #[payable]
@@ -77,6 +91,7 @@ pub fn admin_set_project_status(
     review_notes: Option<String>,
 ) -> ()
 
+
 // ADMINS
 
 #[payable]
@@ -85,10 +100,16 @@ pub fn owner_add_admins(&mut self, admins: Vec<AccountId>)
 #[payable]
 pub fn owner_remove_admins(&mut self, admins: Vec<AccountId>)
 
+
 // OWNER
 
 #[payable]
 pub fn owner_change_owner(&mut self, owner: AccountId)
+
+
+// SOURCE METADATA
+
+pub fn self_set_source_metadata(&mut self, source_metadata: ContractSourceMetadata) // only callable by the contract account (reasoning is that this should be able to be updated by the same account that can deploy code to the account)
 ```
 
 ### Read Methods
@@ -100,11 +121,18 @@ pub fn get_projects(&self) -> Vec<ProjectExternal>
 
 pub fn get_project_by_id(&self, project_id: ProjectId) -> ProjectExternal
 
+
 // ADMINS
 
 pub fn get_admins(&self) -> Vec<AccountId>
 
+
 // OWNER
 
 pub fn get_owner(&self) -> AccountId
+
+
+// SOURCE METADATA
+
+pub fn get_contract_source_metadata(&self) -> Option<ContractSourceMetadata>
 ```

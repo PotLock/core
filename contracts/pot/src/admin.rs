@@ -2,264 +2,201 @@ use crate::*;
 
 #[near_bindgen]
 impl Contract {
-    // APPLICATION START
-    pub fn admin_set_application_start_ms(&mut self, application_start_ms: u64) -> Promise {
-        pot_deployer::ext(self.pot_deployer_contract_id.clone())
-            .with_static_gas(Gas(XXC_GAS))
-            .get_admin()
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(Gas(XXC_GAS))
-                    .admin_set_application_start_ms_callback(
-                        env::predecessor_account_id().clone(),
-                        application_start_ms.clone(),
-                    ),
-            )
+    // CHANGE OWNER
+    pub fn owner_change_owner(&mut self, new_owner: AccountId) {
+        self.assert_owner();
+        self.owner = new_owner;
     }
 
-    #[private] // Public - but only callable by env::current_account_id()
-    pub fn admin_set_application_start_ms_callback(
-        &mut self,
-        caller_id: AccountId,
-        application_start_ms: u64,
-        #[callback_result] call_result: Result<AccountId, PromiseError>,
-    ) {
+    // ADD/REMOVE ADMINS
+    pub fn owner_add_admins(&mut self, new_admins: Vec<AccountId>) {
+        self.assert_owner();
+        for new_admin in new_admins.iter() {
+            self.admins.insert(new_admin);
+        }
+    }
+
+    pub fn owner_remove_admins(&mut self, admins_to_remove: Vec<AccountId>) {
+        self.assert_owner();
+        for admin_to_remove in admins_to_remove.iter() {
+            self.admins.remove(admin_to_remove);
+        }
+    }
+
+    pub fn owner_set_admins(&mut self, account_ids: Vec<AccountId>) {
+        self.assert_owner();
+        for account_id in account_ids {
+            self.admins.remove(&account_id);
+        }
+    }
+
+    pub fn owner_clear_admins(&mut self) {
+        self.assert_owner();
+        self.admins.clear();
+    }
+
+    // CHEF
+    pub fn admin_set_chef(&mut self, chef: AccountId) {
+        self.assert_admin_or_greater();
+        self.chef.set(&chef);
+    }
+
+    pub fn admin_remove_chef(&mut self) {
+        self.assert_admin_or_greater();
+        self.chef.remove();
+    }
+
+    pub fn admin_set_chef_fee_basis_points(&mut self, chef_fee_basis_points: u32) {
+        self.assert_admin_or_greater();
+        self.chef_fee_basis_points = chef_fee_basis_points;
+    }
+
+    // POT CONFIG
+    pub fn admin_set_pot_name(&mut self, pot_name: String) {
+        self.assert_admin_or_greater();
+        self.pot_name = pot_name;
+    }
+
+    pub fn admin_set_pot_description(&mut self, pot_description: String) {
+        self.assert_admin_or_greater();
+        self.pot_description = pot_description;
+    }
+
+    pub fn admin_set_max_projects(&mut self, max_projects: u32) {
+        self.assert_admin_or_greater();
+        self.max_projects = max_projects;
+    }
+
+    pub fn admin_set_base_currency(&mut self, base_currency: AccountId) {
+        self.assert_admin_or_greater();
+        // only "near" allowed for now
         assert_eq!(
-            caller_id,
-            call_result.expect("Failed to get admin on Pot Deployer contract."),
-            "Caller is not admin on Pot Deployer contract."
+            base_currency,
+            AccountId::new_unchecked("near".to_string()),
+            "Only NEAR is supported"
         );
+        self.base_currency = base_currency;
+    }
+
+    pub fn admin_set_application_start_ms(&mut self, application_start_ms: u64) {
+        self.assert_admin_or_greater();
         self.application_start_ms = application_start_ms;
     }
 
-    // APPLICATION END
-
-    pub fn admin_set_application_end_ms(&mut self, application_end_ms: u64) -> Promise {
-        pot_deployer::ext(self.pot_deployer_contract_id.clone())
-            .with_static_gas(Gas(XXC_GAS))
-            .get_admin()
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(Gas(XXC_GAS))
-                    .admin_set_application_end_ms_callback(
-                        env::predecessor_account_id().clone(),
-                        application_end_ms.clone(),
-                    ),
-            )
-    }
-
-    #[private] // Public - but only callable by env::current_account_id()
-    pub fn admin_set_application_end_ms_callback(
-        &mut self,
-        caller_id: AccountId,
-        application_end_ms: u64,
-        #[callback_result] call_result: Result<AccountId, PromiseError>,
-    ) {
-        assert_eq!(
-            caller_id,
-            call_result.expect("Failed to get admin on Pot Deployer contract."),
-            "Caller is not admin on Pot Deployer contract."
+    pub fn admin_set_application_end_ms(&mut self, application_end_ms: u64) {
+        self.assert_admin_or_greater();
+        assert!(
+            application_end_ms <= self.public_round_end_ms,
+            "Application end must be before public round end"
         );
         self.application_end_ms = application_end_ms;
     }
 
-    // CHEF
-
-    pub fn admin_set_chef(&mut self, chef_id: AccountId) -> Promise {
-        pot_deployer::ext(self.pot_deployer_contract_id.clone())
-            .with_static_gas(Gas(XXC_GAS))
-            .get_admin()
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(Gas(XXC_GAS))
-                    .admin_set_chef_callback(
-                        env::predecessor_account_id().clone(),
-                        chef_id.clone(),
-                    ),
-            )
+    pub fn admin_set_public_round_start_ms(&mut self, public_round_start_ms: u64) {
+        self.assert_admin_or_greater();
+        self.public_round_start_ms = public_round_start_ms;
     }
 
-    #[private] // Public - but only callable by env::current_account_id()
-    pub fn admin_set_chef_callback(
+    pub fn admin_set_public_round_end_ms(&mut self, public_round_end_ms: u64) {
+        self.assert_admin_or_greater();
+        self.public_round_end_ms = public_round_end_ms;
+    }
+
+    pub fn admin_set_public_round_open(&mut self, public_round_end_ms: TimestampMs) {
+        self.assert_admin_or_greater();
+        self.public_round_start_ms = env::block_timestamp_ms();
+        self.public_round_end_ms = public_round_end_ms;
+    }
+
+    pub fn admin_set_public_round_closed(&mut self) {
+        self.assert_admin_or_greater();
+        self.public_round_end_ms = env::block_timestamp_ms();
+    }
+
+    pub fn admin_set_registry_provider(&mut self, contract_id: AccountId, method_name: String) {
+        self.assert_admin_or_greater();
+        let provider_id = ProviderId::new(contract_id.to_string(), method_name);
+        self.registry_provider.set(&provider_id);
+    }
+
+    pub fn admin_remove_registry_provider(&mut self) {
+        self.assert_admin_or_greater();
+        self.registry_provider.remove();
+    }
+
+    pub fn admin_set_min_matching_pool_donation_amount(
         &mut self,
-        caller_id: AccountId,
-        chef_id: AccountId,
-        #[callback_result] call_result: Result<AccountId, PromiseError>,
+        min_matching_pool_donation_amount: U128,
     ) {
-        assert_eq!(
-            caller_id,
-            call_result.expect("Failed to get admin on Pot Deployer contract."),
-            "Caller is not admin on Pot Deployer contract."
-        );
-        self.chef_id = chef_id;
+        self.assert_admin_or_greater();
+        self.min_matching_pool_donation_amount = min_matching_pool_donation_amount;
     }
 
-    pub fn admin_set_chef_fee_basis_points(&mut self, chef_fee_basis_points: u32) -> Promise {
-        pot_deployer::ext(self.pot_deployer_contract_id.clone())
-            .with_static_gas(Gas(XXC_GAS))
-            .get_admin()
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(Gas(XXC_GAS))
-                    .admin_set_chef_fee_basis_points_callback(
-                        env::predecessor_account_id().clone(),
-                        chef_fee_basis_points.clone(),
-                    ),
-            )
-    }
-
-    #[private] // Public - but only callable by env::current_account_id()
-    pub fn admin_set_chef_fee_basis_points_callback(
+    pub fn admin_set_sybil_wrapper_provider(
         &mut self,
-        caller_id: AccountId,
-        chef_fee_basis_points: u32,
-        #[callback_result] call_result: Result<AccountId, PromiseError>,
+        contract_id: AccountId,
+        method_name: String,
     ) {
-        assert_eq!(
-            caller_id,
-            call_result.expect("Failed to get admin on Pot Deployer contract."),
-            "Caller is not admin on Pot Deployer contract."
-        );
-        self.chef_fee_basis_points = chef_fee_basis_points;
+        self.assert_admin_or_greater();
+        let provider_id = ProviderId::new(contract_id.to_string(), method_name);
+        self.sybil_wrapper_provider.set(&provider_id);
     }
 
-    // ROUND
-    pub fn admin_set_round_open(&mut self, round_end_ms: TimestampMs) -> Promise {
-        pot_deployer::ext(self.pot_deployer_contract_id.clone())
-            .with_static_gas(Gas(XXC_GAS))
-            .get_admin()
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(Gas(XXC_GAS))
-                    .admin_set_round_open_callback(
-                        env::predecessor_account_id().clone(),
-                        round_end_ms,
-                    ),
-            )
+    pub fn admin_remove_sybil_wrapper_provider(&mut self) {
+        self.assert_admin_or_greater();
+        self.sybil_wrapper_provider.remove();
     }
 
-    #[private] // Public - but only callable by env::current_account_id()
-    pub fn admin_set_round_open_callback(
+    pub fn admin_set_custom_sybil_checks(&mut self, custom_sybil_checks: Vec<CustomSybilCheck>) {
+        self.assert_admin_or_greater();
+        let formatted_custom_sybil_checks: HashMap<ProviderId, SybilProviderWeight> =
+            custom_sybil_checks
+                .into_iter()
+                .map(|custom_sybil_check| {
+                    let provider_id = ProviderId::new(
+                        custom_sybil_check.contract_id.to_string(),
+                        custom_sybil_check.method_name,
+                    );
+                    (provider_id, custom_sybil_check.weight)
+                })
+                .collect();
+        self.custom_sybil_checks.set(&formatted_custom_sybil_checks);
+    }
+
+    pub fn admin_remove_custom_sybil_checks(&mut self) {
+        self.assert_admin_or_greater();
+        self.custom_sybil_checks.remove();
+    }
+
+    pub fn admin_set_custom_min_threshold_score(&mut self, custom_min_threshold_score: u32) {
+        self.assert_admin_or_greater();
+        self.custom_min_threshold_score
+            .set(&custom_min_threshold_score);
+    }
+
+    pub fn admin_remove_custom_min_threshold_score(&mut self) {
+        self.assert_admin_or_greater();
+        self.custom_min_threshold_score.remove();
+    }
+
+    pub fn admin_set_patron_referral_fee_basis_points(
         &mut self,
-        caller_id: AccountId,
-        round_end_ms: TimestampMs,
-        #[callback_result] call_result: Result<AccountId, PromiseError>,
+        patron_referral_fee_basis_points: u32,
     ) {
-        assert_eq!(
-            caller_id,
-            call_result.expect("Failed to get admin on Pot Deployer contract."),
-            "Caller is not admin on Pot Deployer contract."
-        );
-        self.round_start_ms = env::block_timestamp_ms();
-        self.round_end_ms = round_end_ms;
+        self.assert_admin_or_greater();
+        self.patron_referral_fee_basis_points = patron_referral_fee_basis_points;
     }
 
-    pub fn admin_close_round(&mut self) -> Promise {
-        pot_deployer::ext(self.pot_deployer_contract_id.clone())
-            .with_static_gas(Gas(XXC_GAS))
-            .get_admin()
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(Gas(XXC_GAS))
-                    .admin_close_round_callback(env::predecessor_account_id().clone()),
-            )
-    }
-
-    #[private] // Public - but only callable by env::current_account_id()
-    pub fn admin_close_round_callback(
+    pub fn admin_set_public_round_referral_fee_basis_points(
         &mut self,
-        caller_id: AccountId,
-        #[callback_result] call_result: Result<AccountId, PromiseError>,
+        public_round_referral_fee_basis_points: u32,
     ) {
-        assert_eq!(
-            caller_id,
-            call_result.expect("Failed to get admin on Pot Deployer contract."),
-            "Caller is not admin on Pot Deployer contract."
-        );
-        self.round_end_ms = env::block_timestamp_ms();
+        self.assert_admin_or_greater();
+        self.public_round_referral_fee_basis_points = public_round_referral_fee_basis_points;
     }
 
-    // PAYOUTS
-    pub fn admin_process_payouts(&mut self) -> Promise {
-        pot_deployer::ext(self.pot_deployer_contract_id.clone())
-            .with_static_gas(Gas(XXC_GAS))
-            .get_admin()
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(Gas(XXC_GAS))
-                    .admin_process_payouts_callback(env::predecessor_account_id().clone()),
-            )
-    }
-
-    #[private] // Public - but only callable by env::current_account_id()
-    pub fn admin_process_payouts_callback(
-        &mut self,
-        caller_id: AccountId,
-        #[callback_result] call_result: Result<AccountId, PromiseError>,
-    ) {
-        assert_eq!(
-            caller_id,
-            call_result.expect("Failed to get admin on Pot Deployer contract."),
-            "Caller is not admin on Pot Deployer contract."
-        );
-        // verify that the round has closed
-        self.assert_round_closed();
-        // verify that payouts have not already been processed
-        assert!(
-            self.paid_out == false,
-            "Payouts have already been processed"
-        );
-        // verify that the cooldown period has passed
-        self.assert_cooldown_period_complete();
-        // pay out each project
-        // for each approved project...
-        for (project_id, application) in self.applications_by_project_id.iter() {
-            self.assert_approved_application(&project_id);
-            // ...if there are payouts for the project...
-            if let Some(payout_ids_for_project) = self.payout_ids_by_project_id.get(&project_id) {
-                // TODO: handle milestones (for now just paying out all payouts)
-                for payout_id in payout_ids_for_project.iter() {
-                    let mut payout = self.payouts_by_id.get(&payout_id).expect("no payout");
-                    if payout.paid_at.is_none() {
-                        // ...transfer funds...
-                        Promise::new(application.project_id.clone())
-                            .transfer(payout.amount_total.0); // TODO: what happens if this fails?
-                                                              // ...and update payout to indicate that funds have been transferred
-                                                              // TODO: handle via Promise callback?
-                        payout.paid_at = Some(env::block_timestamp_ms());
-                        self.payouts_by_id.insert(&payout_id, &payout);
-                    }
-                }
-            }
-        }
-        // set paid_out to true
-        self.paid_out = true;
-    }
-
-    pub fn admin_set_cooldown_period_complete(&mut self) -> Promise {
-        pot_deployer::ext(self.pot_deployer_contract_id.clone())
-            .with_static_gas(Gas(XXC_GAS))
-            .get_admin()
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(Gas(XXC_GAS))
-                    .admin_set_cooldown_period_complete_callback(
-                        env::predecessor_account_id().clone(),
-                    ),
-            )
-    }
-
-    #[private] // Public - but only callable by env::current_account_id()
-    pub fn admin_set_cooldown_period_complete_callback(
-        &mut self,
-        caller_id: AccountId,
-        #[callback_result] call_result: Result<AccountId, PromiseError>,
-    ) {
-        assert_eq!(
-            caller_id,
-            call_result.expect("Failed to get admin on Pot Deployer contract."),
-            "Caller is not admin on Pot Deployer contract."
-        );
-        self.cooldown_end_ms = Some(env::block_timestamp_ms());
+    pub fn admin_set_cooldown_period_complete(&mut self) {
+        self.assert_admin_or_greater();
+        self.cooldown_end_ms.set(&env::block_timestamp_ms());
     }
 }

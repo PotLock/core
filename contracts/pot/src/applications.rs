@@ -1,6 +1,9 @@
 use crate::*;
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug)]
+pub type ProjectId = AccountId;
+pub type ApplicationId = ProjectId; // Applications are indexed by ProjectId
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub enum ApplicationStatus {
     Pending,
@@ -9,61 +12,93 @@ pub enum ApplicationStatus {
     InReview,
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Application {
-    // functions as unique identifier for application, since projects can only apply once per round
+    /// functions as unique identifier for application, since projects can only apply once per round
+    // Don't technically need this, since we use the project_id as the key in the applications_by_id mapping, but it's possible that we'll want to change that in the future, so keeping this for now
     pub project_id: ProjectId,
-    // /// ID of the individual or group that submitted the application. TODO: MUST be on the Potlock Registry (registry.potluck.[NETWORK])
-    // pub creator_id: AccountId,
-    // /// Name of the individual or group that submitted the application
-    // pub creator_name: Option<String>, // TODO: consider whether this should be required (currently optional)
-    /// Account ID that should receive payout funds  
-    // pub payout_to: AccountId, // TODO: consider whether this should exist here or on the registry contract, or on nearhorizons contract
     /// Status of the project application (Pending, Accepted, Rejected, InReview)
     pub status: ApplicationStatus,
     /// Timestamp for when the application was submitted
     pub submitted_at: TimestampMs,
-    // /// Timestamp for when the application was reviewed (if applicable)
-    // pub reviewed_at: Option<TimestampMs>,
-    /// Timestamp for when the project was updated
-    // TODO: should only be updateable before it is approved
+    /// Timestamp for when the application was last updated (e.g. status changed)
     pub updated_at: Option<TimestampMs>,
     /// Notes to be added by Chef when reviewing the application
     pub review_notes: Option<String>,
+}
+
+#[derive(BorshSerialize, BorshDeserialize)]
+pub enum VersionedApplication {
+    Current(Application),
+}
+
+// converts VersionedApplication to Application
+impl From<VersionedApplication> for Application {
+    fn from(application: VersionedApplication) -> Self {
+        match application {
+            VersionedApplication::Current(current) => current,
+        }
+    }
+}
+
+// converts &VersionedApplication to Application
+impl From<&VersionedApplication> for Application {
+    fn from(application: &VersionedApplication) -> Self {
+        match application {
+            VersionedApplication::Current(current) => current.to_owned(),
+        }
+    }
 }
 
 #[near_bindgen]
 impl Contract {
     #[payable]
     pub fn apply(&mut self) -> Promise {
-        let project_id = env::predecessor_account_id();
-        let promise = potlock_registry::ext(self.registry_contract_id.clone())
-            .with_static_gas(Gas(XXC_GAS))
-            .get_project_by_id(project_id.clone());
-
-        promise.then(
+        let project_id = env::predecessor_account_id(); // TODO: consider renaming to "applicant_id" to make it less opinionated (e.g. maybe developers are applying, and they are not exactly a "project")
+        if let Some(registry_provider) = self.registry_provider.get() {
+            // decompose registry provider
+            let (contract_id, method_name) = registry_provider.decompose();
+            // call registry provider
+            let args = json!({ "account_id": project_id }).to_string().into_bytes();
+            Promise::new(AccountId::new_unchecked(contract_id.clone()))
+                .function_call(method_name.clone(), args, 0, XCC_GAS)
+                .then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(XCC_GAS)
+                        .assert_can_apply_callback(project_id.clone()),
+                )
+        } else {
             Self::ext(env::current_account_id())
-                .with_static_gas(Gas(XXC_GAS))
-                .assert_can_apply_callback(project_id.clone()),
-        )
+                .with_static_gas(XCC_GAS)
+                .apply_always_allow_callback(project_id.clone())
+        }
     }
 
-    #[private] // Public - but only callable by env::current_account_id()
+    #[private] // Only callable by env::current_account_id()
+    pub fn apply_always_allow_callback(&mut self, project_id: ProjectId) -> Application {
+        self.handle_apply(project_id)
+    }
+
+    #[private] // Only callable by env::current_account_id()
     pub fn assert_can_apply_callback(
         &mut self,
         project_id: ProjectId,
-        #[callback_result] call_result: Result<PotlockRegistryProject, PromiseError>,
+        #[callback_result] call_result: Result<bool, PromiseError>,
     ) -> Application {
         // Check if the promise succeeded by calling the method outlined in external.rs
-        if call_result.is_err() {
+        if call_result.is_err() || !call_result.unwrap() {
             env::panic_str(&format!(
-                "Project is not registered on {}",
-                self.registry_contract_id.clone()
+                "Project is not registered on {:#?}",
+                self.registry_provider.get().unwrap()
             ));
         }
+        self.handle_apply(project_id)
+    }
+
+    pub(crate) fn handle_apply(&mut self, project_id: ProjectId) -> Application {
         // check that application doesn't already exist for this project
-        if self.applications_by_project_id.get(&project_id).is_some() {
+        if self.applications_by_id.get(&project_id).is_some() {
             // application already exists
             env::panic_str("Application already exists for this project");
         }
@@ -79,55 +114,107 @@ impl Contract {
             updated_at: None,
             review_notes: None,
         };
+        // charge for storage
+        let initial_storage_usage = env::storage_usage();
         // update mappings
-        self.applications_by_project_id
-            .insert(&application.project_id, &application);
+        self.applications_by_id.insert(
+            &application.project_id,
+            &VersionedApplication::Current(application.clone()),
+        );
+        // refund excess deposit
+        refund_deposit(initial_storage_usage);
         // return application
         application
     }
 
     pub fn unapply(&mut self) {
         let project_id = env::predecessor_account_id();
-        let application = self
-            .applications_by_project_id
-            .get(&project_id)
-            .expect("Application does not exist for calling project");
+        let application = Application::from(
+            self.applications_by_id
+                .get(&project_id)
+                .expect("Application does not exist for calling project"),
+        );
         // verify that application is pending
+        // TODO: consider whether this check is necessary
         assert_eq!(
             application.status,
             ApplicationStatus::Pending,
             "Application status is {:?}. Only pending applications can be removed",
             application.status
         );
+        // get current storage usage
+        let initial_storage_usage = env::storage_usage();
         // remove from mappings
-        self.applications_by_project_id.remove(&project_id);
-        // TODO: emit event?
+        self.applications_by_id.remove(&project_id);
+        // refund for storage freed
+        refund_deposit(initial_storage_usage);
     }
 
     pub fn get_applications(
         &self,
-        from_index: Option<U128>,
+        from_index: Option<u64>,
+        limit: Option<u64>,
+        status: Option<ApplicationStatus>,
+    ) -> Vec<Application> {
+        let start_index: u64 = from_index.unwrap_or_default();
+        assert!(
+            (self.applications_by_id.len() as u64) >= start_index,
+            "Out of bounds, please use a smaller from_index."
+        );
+        let limit = limit.unwrap_or(usize::MAX as u64);
+        assert_ne!(limit, 0, "Cannot provide limit of 0.");
+        if let Some(status) = status {
+            self.applications_by_id
+                .iter()
+                .skip(start_index as usize)
+                .take(limit.try_into().unwrap())
+                .filter(|(_account_id, application)| {
+                    Application::from(application).status == status
+                })
+                .map(|(_account_id, application)| Application::from(application))
+                .collect()
+        } else {
+            self.applications_by_id
+                .iter()
+                .skip(start_index as usize)
+                .take(limit.try_into().unwrap())
+                .map(|(_account_id, application)| Application::from(application))
+                .collect()
+        }
+    }
+
+    pub fn get_approved_applications(
+        &self,
+        from_index: Option<u64>,
         limit: Option<u64>,
     ) -> Vec<Application> {
-        let start_index: u128 = from_index.map(From::from).unwrap_or_default();
+        let start_index: u64 = from_index.unwrap_or_default();
         assert!(
-            (self.applications_by_project_id.len() as u128) >= start_index,
+            (self.approved_application_ids.len() as u64) >= start_index,
             "Out of bounds, please use a smaller from_index."
         );
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
         assert_ne!(limit, 0, "Cannot provide limit of 0.");
-        self.applications_by_project_id
+        self.approved_application_ids
             .iter()
             .skip(start_index as usize)
             .take(limit.try_into().unwrap())
-            .map(|(_account_id, application)| application)
+            .map(|project_id| {
+                Application::from(
+                    self.applications_by_id
+                        .get(&project_id)
+                        .expect("Application does not exist"),
+                )
+            })
             .collect()
     }
 
     pub fn get_application_by_project_id(&self, project_id: ProjectId) -> Application {
-        self.applications_by_project_id
-            .get(&project_id)
-            .expect("Application does not exist")
+        Application::from(
+            self.applications_by_id
+                .get(&project_id)
+                .expect("Application does not exist"),
+        )
     }
 
     pub fn chef_set_application_status(
@@ -136,21 +223,36 @@ impl Contract {
         status: ApplicationStatus,
         notes: String,
     ) -> Application {
-        self.assert_chef();
+        self.assert_chef_or_greater();
         // verify that the application exists
-        let mut application = self
-            .applications_by_project_id
-            .get(&project_id)
-            .expect("Application does not exist");
+        let mut application = Application::from(
+            self.applications_by_id
+                .get(&project_id)
+                .expect("Application does not exist"),
+        );
+        let previous_status = application.status.clone();
         // verify that the application is pending
         application.status = status;
         application.updated_at = Some(env::block_timestamp_ms());
         application.review_notes = Some(notes);
         // update mapping
-        self.applications_by_project_id
-            .insert(&project_id, &application);
+        self.applications_by_id.insert(
+            &project_id,
+            &VersionedApplication::Current(application.clone()),
+        );
+        // insert into approved applications mapping if approved
+        if application.status == ApplicationStatus::Approved {
+            self.approved_application_ids.insert(&project_id);
+        } else {
+            // setting application status as something other than Approved; if it was previously approved, remove from approved mapping
+            if previous_status == ApplicationStatus::Approved {
+                self.approved_application_ids.remove(&project_id);
+            }
+        }
         application
     }
+
+    // TODO: consider removing convenience methods below
 
     pub fn chef_mark_application_approved(
         &mut self,

@@ -21,11 +21,7 @@ export const DEFAULT_MAX_PROTOCOL_FEE_BASIS_POINTS = 1000; // 10%
 export const DEFAULT_DEFAULT_CHEF_FEE_BASIS_POINTS = 100; // 1%
 export const DEFAULT_MAX_CHEF_FEE_BASIS_POINTS = 500; // 5%
 export const DEFAULT_REFERRAL_FEE_BASIS_POINTS = 100; // 1% // TODO: clean this up
-export const DEFAULT_PATRON_REFERRAL_FEE_BASIS_POINTS = 100; // 1%
-export const DEFAULT_MAX_PATRON_REFERRAL_FEE = utils.format.parseNearAmount(
-  "1000"
-) as string;
-export const DEFAULT_chef_fee_basis_points = 100; // 1%
+export const DEFAULT_CHEF_FEE_BASIS_POINTS = 100; // 1%
 export const DEFAULT_MAX_PROJECTS = 10;
 export const DEFAULT_BASE_CURRENCY = "near";
 export const DEFAULT_REGISTRY_ID = "registry-unstable.i-am-human.testnet";
