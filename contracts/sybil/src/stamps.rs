@@ -50,7 +50,7 @@ impl Contract {
     /// Add a stamp for a user
     // TODO: consider adding force_refresh param that defaults to false, which if present won't trigger an error if the user already has this stamp
     #[payable]
-    pub fn set_stamp(&mut self, provider_id: ProviderId) -> Promise {
+    pub fn add_stamp(&mut self, provider_id: ProviderId) -> Promise {
         let user_id = env::signer_account_id();
         let attached_deposit = env::attached_deposit();
         // get provider, verify it exists
@@ -172,6 +172,70 @@ impl Contract {
         user_ids_for_provider_set.insert(&user_id);
         self.user_ids_for_provider
             .insert(&provider_id, &user_ids_for_provider_set);
+    }
+
+    pub(crate) fn delete_stamp_record(
+        &mut self,
+        stamp_id: StampId,
+        stamp: Stamp,
+        provider_id: ProviderId,
+        user_id: AccountId,
+    ) {
+        // delete base stamp record
+        self.stamps_by_id.remove(&stamp_id);
+
+        // remove from provider_ids_for_user mapping
+        let mut provider_ids_for_user_set = self
+            .provider_ids_for_user
+            .get(&user_id)
+            .expect("No provider IDs for user");
+        provider_ids_for_user_set.remove(&provider_id);
+        self.provider_ids_for_user
+            .insert(&user_id, &provider_ids_for_user_set);
+
+        // remove from user_ids_for_provider mapping
+        let mut user_ids_for_provider_set = self
+            .user_ids_for_provider
+            .get(&provider_id)
+            .expect("No user Ids for provider");
+        user_ids_for_provider_set.remove(&user_id);
+        self.user_ids_for_provider
+            .insert(&provider_id, &user_ids_for_provider_set);
+    }
+
+    pub fn delete_stamp(&mut self, provider_id: ProviderId) {
+        let user_id = env::signer_account_id();
+        let stamp_id = StampId::new(user_id.clone(), provider_id.clone());
+        let stamp = Stamp::from(
+            self.stamps_by_id
+                .get(&stamp_id)
+                .expect("Stamp does not exist"),
+        );
+        let mut provider = Provider::from(
+            self.providers_by_id
+                .get(&provider_id)
+                .expect("Provider does not exist"),
+        );
+
+        // update state
+        let attached_deposit = env::attached_deposit();
+        let initial_storage_usage = env::storage_usage();
+        self.delete_stamp_record(
+            stamp_id.clone(),
+            stamp.clone(),
+            provider_id.clone(),
+            user_id.clone(),
+        );
+
+        provider.stamp_count -= 1;
+        self.providers_by_id
+            .insert(&provider_id, &VersionedProvider::Current(provider.clone()));
+
+        // refund user for freed storage
+        let storage_freed = initial_storage_usage - env::storage_usage();
+        log!(format!("Storage freed: {} bytes", storage_freed));
+        let cost_freed = env::storage_byte_cost() * Balance::from(storage_freed);
+        Promise::new(user_id.clone()).transfer(cost_freed + attached_deposit);
     }
 
     pub fn get_stamps_for_account_id(

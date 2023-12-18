@@ -187,6 +187,8 @@ pub fn register_provider(
 #[payable]
 pub fn set_stamp(&mut self, provider_id: ProviderId) -> Option<StampExternal> // None response indicates that user is not verified on target provider
 
+pub fn delete_stamp(&mut self, provider_id: ProviderId) -> ()
+
 
 // SOURCE METADATA
 
