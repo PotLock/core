@@ -17,8 +17,8 @@ A Factory contract that deploys Pots.
 A configurable, flexible yet secure contract that manages a funding round.
 
 ### [Sybil](sybil)
-
-A contract that provides a single wrapper method `is_human` that wraps configurable individual sybil resistance providers, calculating weights and returning a boolean. Also allows a user to collect "stamps" verifying their status with 3rd-party providers.
+   
+A registry for sybil resistance providers, allowing users to collect stamps indicating their verification with registered providers. Additionally, abstracts away individual sybil resistance providers/solutions to provide a single contract to call `is_human`.
 
 ### [Registry](registry)
 
