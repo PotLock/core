@@ -1,29 +1,36 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{LazyOption, UnorderedMap, UnorderedSet};
+use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap, UnorderedSet};
 use near_sdk::json_types::{U128, U64};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, log, near_bindgen, require, serde_json::json, AccountId, Balance, BorshStorageKey, Gas,
-    PanicOnDefault, Promise, PromiseResult,
+    PanicOnDefault, Promise, PromiseError, PromiseResult,
 };
 
+pub mod admin;
+pub mod constants;
 pub mod events;
 pub mod human;
 pub mod internal;
 pub mod owner;
 pub mod providers;
 pub mod source;
+pub mod stamps;
 pub mod utils;
+pub use crate::admin::*;
+pub use crate::constants::*;
 pub use crate::events::*;
 pub use crate::human::*;
 pub use crate::internal::*;
 pub use crate::owner::*;
 pub use crate::providers::*;
 pub use crate::source::*;
+pub use crate::stamps::*;
 pub use crate::utils::*;
 
 /// log prefix constant
 pub const EVENT_JSON_PREFIX: &str = "EVENT_JSON:";
+pub type TimestampMs = u64;
 
 /// Registry Contract
 #[near_bindgen]
@@ -35,6 +42,15 @@ pub struct Contract {
     providers_by_id: UnorderedMap<ProviderId, VersionedProvider>,
     default_provider_ids: UnorderedSet<ProviderId>,
     default_human_threshold: u32,
+    // MAPPINGS
+    // Stores all Stamp records, versioned for easy upgradeability
+    stamps_by_id: UnorderedMap<StampId, VersionedStamp>,
+    // Enables fetching of all stamps for a user
+    provider_ids_for_user: LookupMap<AccountId, UnorderedSet<ProviderId>>,
+    // Enables fetching of all users with given stamp (provider ID)
+    user_ids_for_provider: LookupMap<ProviderId, UnorderedSet<AccountId>>,
+    // Enables fetching of providers that a user has submitted (e.g. if user has submitted one malicious provider, they are likely to submit more and you'll want to be able to fetch these or filter them out of results)
+    provider_ids_for_submitter: LookupMap<AccountId, UnorderedSet<ProviderId>>,
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -57,6 +73,13 @@ pub enum StorageKey {
     Admins,
     ProvidersById,
     DefaultProviderIds,
+    StampsById,
+    ProviderIdsForUser,
+    ProviderIdsForUserInner { user_id: AccountId },
+    UserIdsForProvider,
+    UserIdsForProviderInner { provider_id: ProviderId },
+    SubmitterIdsForProvider,
+    SubmitterIdsForProviderInner { provider_id: ProviderId },
 }
 
 #[near_bindgen]
@@ -86,6 +109,10 @@ impl Contract {
             providers_by_id: UnorderedMap::new(StorageKey::ProvidersById),
             default_provider_ids: UnorderedSet::new(StorageKey::DefaultProviderIds),
             default_human_threshold: 0,
+            stamps_by_id: UnorderedMap::new(StorageKey::StampsById),
+            provider_ids_for_user: LookupMap::new(StorageKey::ProviderIdsForUser),
+            user_ids_for_provider: LookupMap::new(StorageKey::UserIdsForProvider),
+            provider_ids_for_submitter: LookupMap::new(StorageKey::SubmitterIdsForProvider),
         }
     }
 
@@ -116,6 +143,10 @@ impl Default for Contract {
             providers_by_id: UnorderedMap::new(StorageKey::ProvidersById),
             default_provider_ids: UnorderedSet::new(StorageKey::DefaultProviderIds),
             default_human_threshold: 0,
+            stamps_by_id: UnorderedMap::new(StorageKey::StampsById),
+            provider_ids_for_user: LookupMap::new(StorageKey::ProviderIdsForUser),
+            user_ids_for_provider: LookupMap::new(StorageKey::UserIdsForProvider),
+            provider_ids_for_submitter: LookupMap::new(StorageKey::SubmitterIdsForProvider),
         }
     }
 }
