@@ -65,7 +65,9 @@ impl Contract {
     #[payable]
     pub fn deploy_pot(&mut self, mut pot_args: PotArgs) -> Promise {
         // TODO: add protocol_config_provider to pot_args
-        self.assert_admin_or_whitelisted_deployer();
+        if self.require_whitelist {
+            self.assert_admin_or_whitelisted_deployer();
+        }
         let pot_account_id_str = format!(
             "{}.{}",
             slugify(&pot_args.pot_name),
