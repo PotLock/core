@@ -3,15 +3,21 @@ Welcome to the repository for the core smart contracts of the [PotLock Core] pro
 
 ## Table of Contents
 
-- [Overview](#overview)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-- [Smart Contracts](#smart-contracts)
-- [Usage](#usage)
-- [Contributing](#contributing)
-- [License](#license)
-- [Contact](#contact)
+- [PotLock Core Contracts](#potlock-core-contracts)
+  - [Table of Contents](#table-of-contents)
+  - [Getting Started](#getting-started)
+    - [Prerequisites](#prerequisites)
+- [Project Name - Core Smart Contracts](#project-name---core-smart-contracts)
+  - [Table of Contents](#table-of-contents-1)
+  - [Overview](#overview)
+  - [Getting Started](#getting-started-1)
+    - [Prerequisites](#prerequisites-1)
+    - [Installation](#installation)
+  - [Smart Contracts](#smart-contracts)
+  - [Usage](#usage)
+  - [Contributing](#contributing)
+  - [License](#license)
+  - [Contact](#contact)
 
 
 ## Getting Started
@@ -28,19 +34,28 @@ Welcome to the repository for the core smart contracts of the [Project Name] pro
 
 ## Table of Contents
 
-- [Overview](#overview)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-- [Smart Contracts](#smart-contracts)
-- [Usage](#usage)
-- [Contributing](#contributing)
-- [License](#license)
-- [Contact](#contact)
+- [PotLock Core Contracts](#potlock-core-contracts)
+  - [Table of Contents](#table-of-contents)
+  - [Getting Started](#getting-started)
+    - [Prerequisites](#prerequisites)
+- [Project Name - Core Smart Contracts](#project-name---core-smart-contracts)
+  - [Table of Contents](#table-of-contents-1)
+  - [Overview](#overview)
+  - [Getting Started](#getting-started-1)
+    - [Prerequisites](#prerequisites-1)
+    - [Installation](#installation)
+  - [Smart Contracts](#smart-contracts)
+  - [Usage](#usage)
+  - [Contributing](#contributing)
+  - [License](#license)
+  - [Contact](#contact)
 
 ## Overview
 
-[PotLock Core] is a set of 6 contracts. For an overview of the contracts check out the docs at https://docs.potlock.io/contracts/contracts-overview
+[PotLock Core] is a set of 6 contracts. For an overview of the contracts check out the docs at https://docs.potlock.io/contracts/contracts-overview.
+
+For detailed documentation on each contract, [start here](contracts)
+
 ## Getting Started
 
 ### Prerequisites
@@ -50,40 +65,15 @@ Welcome to the repository for the core smart contracts of the [Project Name] pro
 
 ### Installation
 
-1. Clone this repository:
-
-   ```sh
-   git clone https://github.com/PotLock/core.git
-   cd ontracts
-   ```
-
-2. Build the contracts:
-
-   ```sh
-   yarn build
-   ```
-
-3. Deploy the contracts:
-
-   ```sh
-   near deploy --wasmFile build/[contract-name].wasm --accountId YOUR_ACCOUNT_ID
-   ```
 
 ## Smart Contracts
 
-This section provides an overview of the main smart contracts in this repository:
-
-### [Contract Name]
-
-[Contract description, purpose, and functionalities.]
-
-- **Methods**: List of available methods and their descriptions.
-- **Usage**: How to interact with this contract programmatically.
-
-[Repeat this section for each core smart contract.]
+For more info on Smart Contracts, please visit [/contracts directory](contracts).
 
 ## Usage
-- To be written
+
+To be written
+  
 ## Contributing
 
 We welcome contributions from the community! To contribute to our core smart contracts, please follow the guidelines outlined in [CONTRIBUTING.md](CONTRIBUTING.md).

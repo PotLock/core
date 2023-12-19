@@ -5,8 +5,5 @@
   "repository": "git@github.com:PotLock/core.git",
   "author": "Lachlan Glen <54282009+lachlanglen@users.noreply.github.com>",
   "license": "MIT",
-  "scripts": {
-    "build:pot": "./contracts/pot/scripts/build.sh",
-    "dev:deploy": "yarn build && rm -rf neardev && (near dev-deploy || exit 0)"
-  }
+  "scripts": {}
 }
