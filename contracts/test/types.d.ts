@@ -52,7 +52,7 @@ interface PotArgs {
   custom_sybil_checks?: CustomSybilCheck[];
   custom_min_threshold_score?: number;
   referral_fee_matching_pool_basis_points: number;
-  public_round_referral_fee_basis_points: number;
+  referral_fee_public_round_basis_points: number;
   chef_fee_basis_points: number;
 }
 

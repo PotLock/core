@@ -208,7 +208,7 @@ impl Contract {
         let multiplier = if matching_pool {
             self.referral_fee_matching_pool_basis_points
         } else {
-            self.public_round_referral_fee_basis_points
+            self.referral_fee_public_round_basis_points
         };
         let referrer_amount = self.calculate_fee(amount, multiplier);
         referrer_amount

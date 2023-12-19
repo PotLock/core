@@ -187,12 +187,12 @@ impl Contract {
         self.referral_fee_matching_pool_basis_points = referral_fee_matching_pool_basis_points;
     }
 
-    pub fn admin_set_public_round_referral_fee_basis_points(
+    pub fn admin_set_referral_fee_public_round_basis_points(
         &mut self,
-        public_round_referral_fee_basis_points: u32,
+        referral_fee_public_round_basis_points: u32,
     ) {
         self.assert_admin_or_greater();
-        self.public_round_referral_fee_basis_points = public_round_referral_fee_basis_points;
+        self.referral_fee_public_round_basis_points = referral_fee_public_round_basis_points;
     }
 
     pub fn admin_set_cooldown_period_complete(&mut self) {

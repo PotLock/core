@@ -123,7 +123,7 @@ describe("PotDelpoyer Contract Tests", () => {
       sybil_wrapper_provider: "dev-1701729483653-58884486628411:is_human",
       referral_fee_matching_pool_basis_points:
         DEFAULT_REFERRAL_FEE_BASIS_POINTS,
-      public_round_referral_fee_basis_points: DEFAULT_REFERRAL_FEE_BASIS_POINTS,
+      referral_fee_public_round_basis_points: DEFAULT_REFERRAL_FEE_BASIS_POINTS,
       chef_fee_basis_points: DEFAULT_CHEF_FEE_BASIS_POINTS,
     };
     try {
