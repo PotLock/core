@@ -64,6 +64,7 @@ impl Contract {
     /// Deploy a new Pot. A `None` response indicates an unsuccessful deployment.
     #[payable]
     pub fn deploy_pot(&mut self, mut pot_args: PotArgs) -> Promise {
+        // TODO: add protocol_config_provider to pot_args
         self.assert_admin_or_whitelisted_deployer();
         let pot_account_id_str = format!(
             "{}.{}",
@@ -90,7 +91,7 @@ impl Contract {
             "get_protocol_config".to_string(),
         ));
 
-        let min_deployment_deposit = self.get_min_deployment_deposit(&pot_args);
+        let min_deployment_deposit = self.calculate_min_deployment_deposit(&pot_args);
 
         // insert dummy record in advance to check required deposit
         let pot = Pot {
@@ -196,7 +197,7 @@ impl Contract {
             .collect()
     }
 
-    pub fn get_min_deployment_deposit(&self, args: &PotArgs) -> u128 {
+    pub fn calculate_min_deployment_deposit(&self, args: &PotArgs) -> u128 {
         ((POT_WASM_CODE.len() + EXTRA_BYTES + args.try_to_vec().unwrap().len() * 2) as Balance
             * STORAGE_PRICE_PER_BYTE)
             .into()

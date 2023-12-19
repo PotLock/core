@@ -238,7 +238,7 @@ pub fn get_config(&self) -> ContractConfigExternal
 
 pub fn get_pots(&self) -> Vec<PotExternal>
 
-pub fn get_min_deployment_deposit(&self, args: &PotArgs) -> u128
+pub fn calculate_min_deployment_deposit(&self, args: &PotArgs) -> u128
 
 /// Method intended for use by Pot contract querying for protocol fee configuration
 pub fn get_protocol_config(&self) -> ProtocolConfig
