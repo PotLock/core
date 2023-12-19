@@ -164,9 +164,9 @@ pub struct Contract {
     custom_min_threshold_score: LazyOption<u32>,
 
     // FEES
-    /// Basis points (1/100 of a percent) that should be paid to an account that refers a Patron (paid at the point when the matching pool donation comes in)
+    /// Basis points (1/100 of a percent) that should be paid to an account that refers a matching pool donor (paid at the point when a matching pool donation comes in)
     referral_fee_matching_pool_basis_points: u32,
-    /// Basis points (1/100 of a percent) that should be paid to an account that refers a donor (paid at the point when the donation comes in)
+    /// Basis points (1/100 of a percent) that should be paid to an account that refers a public donor (paid at the point when a public donation comes in)
     referral_fee_public_round_basis_points: u32,
     /// Chef's fee for managing the round. Gets taken out of each donation as they come in and are paid out
     chef_fee_basis_points: u32,
