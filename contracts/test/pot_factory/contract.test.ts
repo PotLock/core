@@ -121,7 +121,8 @@ describe("PotDelpoyer Contract Tests", () => {
       application_end_ms: now + DEFAULT_APPLICATION_LENGTH, // 1 week
       max_projects: DEFAULT_MAX_PROJECTS,
       sybil_wrapper_provider: "dev-1701729483653-58884486628411:is_human",
-      patron_referral_fee_basis_points: DEFAULT_REFERRAL_FEE_BASIS_POINTS,
+      referral_fee_matching_pool_basis_points:
+        DEFAULT_REFERRAL_FEE_BASIS_POINTS,
       public_round_referral_fee_basis_points: DEFAULT_REFERRAL_FEE_BASIS_POINTS,
       chef_fee_basis_points: DEFAULT_CHEF_FEE_BASIS_POINTS,
     };

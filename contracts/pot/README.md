@@ -12,7 +12,7 @@ The typical flow / lifetime of a Pot is as follows:
   - Deployer (e.g. DAO that calls `deploy_pot` on PotFactory) is, by default, the "owner" (superuser) of the Pot contract
 - After deployment, Pot **configuration** can be updated by permissioned accounts (owner or admins)
 - A **chef** account can be set by Pot owner/admin. This account has permissions to change status of applications (e.g. move from `Pending` to `Approved`), as well as calculate and set payouts. Any action that is permissioned for the chef is also permissioned for owner/admins. The chef cannot update Pot configuration details; its primary purpose is to manage applications for the funding round.
-- At any time after deployment until the public round has closed, a **patron** can contribute to the **matching pool**. A minimum amount for matching pool donations can be set by the Pot owner/admin via `min_matching_pool_donation_amount`. A `referrer_id` may be included with a matching pool donation, indicating an account to which a percentage of the donation should be sent as a **referral fee**. This percentage is set by the owner/admin via `patron_referral_fee_basis_points`. No additional fees (e.g. protocol or chef fees) are paid out of matching pool donations.
+- At any time after deployment until the public round has closed, a **patron** can contribute to the **matching pool**. A minimum amount for matching pool donations can be set by the Pot owner/admin via `min_matching_pool_donation_amount`. A `referrer_id` may be included with a matching pool donation, indicating an account to which a percentage of the donation should be sent as a **referral fee**. This percentage is set by the owner/admin via `referral_fee_matching_pool_basis_points`. No additional fees (e.g. protocol or chef fees) are paid out of matching pool donations.
 - During the **application period** (between `application_start_ms` and `application_end_ms`), projects may apply to the funding round. Depending on the registration requirement set by the owner/admin via `registry_provider`, projects may be required to be registered on an external registry contract before they can apply.
 - During the **public round** (between `public_round_start_ms` and `public_round_end_ms`), end users may donate to approved projects. A `project_id` must be specified with the donation. Similarly to matching pool donations, a `referrer_id` may be provided; the referral fee percentage for public donations is set by the owner/admin via `public_round_referral_fee_basis_points`. Sybil resistance checks may be implemented for public donations by the Pot owner/admin. If a chef is specified on the contract, they will receive a percentage of the donation as specified by `chef_fee_basis_points`. If a `protocol_config_provider` is specified, a cross-contract (CC) call to this provider will be made to retrieve the percentage and recipient account for the protocol fee, and this amount will also be taken out of the donation. The donation must be large enough to cover its own storage _after_ all fees have been subtracted.
 - Once the public round is over, **payouts** may be calculated. This occurs off-chain as it is a computationally-expensive operation due to pairwise square root calculations. This calculation logic, however, will live on-chain in a BOS component. It can currently be found in [`test/utils/quadratics.ts`](../test/utils/quadratics.ts). Its required inputs are the total matching pool amount, and all individual donations, which can be fetched via paginated calls to `get_donations`. Once payouts have been calculated off-chain, they should be set on the Pot contract by the chef (or owner/admin). During this process, an error will occur if the total payout amount is not consistent with the matching pool balance.
@@ -71,7 +71,7 @@ pub struct Contract {
 
     // FEES
     /// Basis points (1/100 of a percent) that should be paid to an account that refers a Patron (paid at the point when the matching pool donation comes in)
-    patron_referral_fee_basis_points: u32,
+    referral_fee_matching_pool_basis_points: u32,
     /// Basis points (1/100 of a percent) that should be paid to an account that refers a donor (paid at the point when the donation comes in)
     public_round_referral_fee_basis_points: u32,
     /// Chef's fee for managing the round. Gets taken out of each donation as they come in and are paid out
@@ -138,7 +138,7 @@ pub struct PotConfig {
     pub sybil_wrapper_provider: Option<ProviderId>,
     pub custom_sybil_checks: Option<HashMap<ProviderId, SybilProviderWeight>>,
     pub custom_min_threshold_score: Option<u32>,
-    pub patron_referral_fee_basis_points: u32,
+    pub referral_fee_matching_pool_basis_points: u32,
     pub public_round_referral_fee_basis_points: u32,
     pub chef_fee_basis_points: u32,
     pub matching_pool_balance: U128,
@@ -350,7 +350,7 @@ pub fn new(
     custom_min_threshold_score: Option<u32>,
 
     // fees
-    patron_referral_fee_basis_points: u32, // this could be optional with a default, but better to set explicitly for now
+    referral_fee_matching_pool_basis_points: u32, // this could be optional with a default, but better to set explicitly for now
     public_round_referral_fee_basis_points: u32, // this could be optional with a default, but better to set explicitly for now
     chef_fee_basis_points: u32,
 
@@ -484,9 +484,9 @@ pub fn admin_set_custom_min_threshold_score(&mut self, custom_min_threshold_scor
 
 pub fn admin_remove_custom_min_threshold_score(&mut self) -> ()
 
-pub fn admin_set_patron_referral_fee_basis_points(
+pub fn admin_set_referral_fee_matching_pool_basis_points(
     &mut self,
-    patron_referral_fee_basis_points: u32,
+    referral_fee_matching_pool_basis_points: u32,
 ) -> ()
 
 pub fn admin_set_public_round_referral_fee_basis_points(

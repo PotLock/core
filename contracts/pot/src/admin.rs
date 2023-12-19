@@ -179,12 +179,12 @@ impl Contract {
         self.custom_min_threshold_score.remove();
     }
 
-    pub fn admin_set_patron_referral_fee_basis_points(
+    pub fn admin_set_referral_fee_matching_pool_basis_points(
         &mut self,
-        patron_referral_fee_basis_points: u32,
+        referral_fee_matching_pool_basis_points: u32,
     ) {
         self.assert_admin_or_greater();
-        self.patron_referral_fee_basis_points = patron_referral_fee_basis_points;
+        self.referral_fee_matching_pool_basis_points = referral_fee_matching_pool_basis_points;
     }
 
     pub fn admin_set_public_round_referral_fee_basis_points(

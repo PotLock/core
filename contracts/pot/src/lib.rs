@@ -165,8 +165,10 @@ pub struct Contract {
 
     // FEES
     /// Basis points (1/100 of a percent) that should be paid to an account that refers a Patron (paid at the point when the matching pool donation comes in)
-    patron_referral_fee_basis_points: u32,
+    // TODO: consider renaming to referral_fee_matching_pool_basis_points
+    referral_fee_matching_pool_basis_points: u32,
     /// Basis points (1/100 of a percent) that should be paid to an account that refers a donor (paid at the point when the donation comes in)
+    // TODO: consider renaming to referral_fee_public_round_basis_points
     public_round_referral_fee_basis_points: u32,
     /// Chef's fee for managing the round. Gets taken out of each donation as they come in and are paid out
     chef_fee_basis_points: u32,
@@ -265,7 +267,7 @@ impl Contract {
         custom_min_threshold_score: Option<u32>,
 
         // fees
-        patron_referral_fee_basis_points: u32, // this could be optional with a default, but better to set explicitly for now
+        referral_fee_matching_pool_basis_points: u32, // this could be optional with a default, but better to set explicitly for now
         public_round_referral_fee_basis_points: u32, // this could be optional with a default, but better to set explicitly for now
         chef_fee_basis_points: u32,
 
@@ -318,7 +320,7 @@ impl Contract {
             ),
 
             // fees
-            patron_referral_fee_basis_points,
+            referral_fee_matching_pool_basis_points,
             public_round_referral_fee_basis_points,
             chef_fee_basis_points,
 
@@ -382,7 +384,7 @@ impl Default for Contract {
             sybil_wrapper_provider: LazyOption::new(StorageKey::SybilContractId, None),
             custom_sybil_checks: LazyOption::new(StorageKey::CustomSybilChecks, None),
             custom_min_threshold_score: LazyOption::new(StorageKey::CustomMinThresholdScore, None),
-            patron_referral_fee_basis_points: 0,
+            referral_fee_matching_pool_basis_points: 0,
             public_round_referral_fee_basis_points: 0,
             chef_fee_basis_points: 0,
             total_matching_pool_donations: U128(0),

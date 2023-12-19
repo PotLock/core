@@ -206,7 +206,7 @@ impl Contract {
 
     pub(crate) fn calculate_referrer_fee(&self, amount: u128, matching_pool: bool) -> u128 {
         let multiplier = if matching_pool {
-            self.patron_referral_fee_basis_points
+            self.referral_fee_matching_pool_basis_points
         } else {
             self.public_round_referral_fee_basis_points
         };
