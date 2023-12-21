@@ -18,6 +18,8 @@ pub struct Application {
     /// functions as unique identifier for application, since projects can only apply once per round
     // Don't technically need this, since we use the project_id as the key in the applications_by_id mapping, but it's possible that we'll want to change that in the future, so keeping this for now
     pub project_id: ProjectId,
+    /// Optional message to be included in application
+    pub message: Option<String>,
     /// Status of the project application (Pending, Accepted, Rejected, InReview)
     pub status: ApplicationStatus,
     /// Timestamp for when the application was submitted
@@ -54,7 +56,7 @@ impl From<&VersionedApplication> for Application {
 #[near_bindgen]
 impl Contract {
     #[payable]
-    pub fn apply(&mut self) -> Promise {
+    pub fn apply(&mut self, message: Option<String>) -> Promise {
         let project_id = env::predecessor_account_id(); // TODO: consider renaming to "applicant_id" to make it less opinionated (e.g. maybe developers are applying, and they are not exactly a "project")
         if let Some(registry_provider) = self.registry_provider.get() {
             // decompose registry provider
@@ -66,24 +68,29 @@ impl Contract {
                 .then(
                     Self::ext(env::current_account_id())
                         .with_static_gas(XCC_GAS)
-                        .assert_can_apply_callback(project_id.clone()),
+                        .assert_can_apply_callback(project_id.clone(), message),
                 )
         } else {
             Self::ext(env::current_account_id())
                 .with_static_gas(XCC_GAS)
-                .apply_always_allow_callback(project_id.clone())
+                .apply_always_allow_callback(project_id.clone(), message)
         }
     }
 
     #[private] // Only callable by env::current_account_id()
-    pub fn apply_always_allow_callback(&mut self, project_id: ProjectId) -> Application {
-        self.handle_apply(project_id)
+    pub fn apply_always_allow_callback(
+        &mut self,
+        project_id: ProjectId,
+        message: Option<String>,
+    ) -> Application {
+        self.handle_apply(project_id, message)
     }
 
     #[private] // Only callable by env::current_account_id()
     pub fn assert_can_apply_callback(
         &mut self,
         project_id: ProjectId,
+        message: Option<String>,
         #[callback_result] call_result: Result<bool, PromiseError>,
     ) -> Application {
         // Check if the promise succeeded by calling the method outlined in external.rs
@@ -93,10 +100,14 @@ impl Contract {
                 self.registry_provider.get().unwrap()
             ));
         }
-        self.handle_apply(project_id)
+        self.handle_apply(project_id, message)
     }
 
-    pub(crate) fn handle_apply(&mut self, project_id: ProjectId) -> Application {
+    pub(crate) fn handle_apply(
+        &mut self,
+        project_id: ProjectId,
+        message: Option<String>,
+    ) -> Application {
         // check that application doesn't already exist for this project
         if self.applications_by_id.get(&project_id).is_some() {
             // application already exists
@@ -109,6 +120,7 @@ impl Contract {
         // add application
         let application = Application {
             project_id,
+            message,
             status: ApplicationStatus::Pending,
             submitted_at: env::block_timestamp_ms(),
             updated_at: None,
