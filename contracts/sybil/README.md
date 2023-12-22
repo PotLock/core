@@ -223,7 +223,11 @@ pub fn admin_update_provider(
 ) -> Provider
 
 #[payable]
-pub fn admin_activate_provider(&mut self, provider_id: ProviderId) -> Provider
+pub fn admin_activate_provider(
+    &mut self,
+    provider_id: ProviderId,
+    default_weight: u32,
+) -> Provider
 
 #[payable]
 pub fn admin_deactivate_provider(&mut self, provider_id: ProviderId) -> Provider
