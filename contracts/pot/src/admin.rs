@@ -1,5 +1,29 @@
 use crate::*;
 
+/// Used ephemerally in view methods
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct UpdatePotArgs {
+    pub owner: Option<AccountId>,
+    pub admins: Option<Vec<AccountId>>,
+    pub chef: Option<AccountId>,
+    pub pot_name: Option<String>,
+    pub pot_description: Option<String>,
+    pub max_projects: Option<u32>,
+    pub application_start_ms: Option<TimestampMs>,
+    pub application_end_ms: Option<TimestampMs>,
+    pub public_round_start_ms: Option<TimestampMs>,
+    pub public_round_end_ms: Option<TimestampMs>,
+    pub registry_provider: Option<ProviderId>,
+    pub min_matching_pool_donation_amount: Option<U128>,
+    pub sybil_wrapper_provider: Option<ProviderId>,
+    pub custom_sybil_checks: Option<Vec<CustomSybilCheck>>,
+    pub custom_min_threshold_score: Option<u32>,
+    pub referral_fee_matching_pool_basis_points: Option<u32>,
+    pub referral_fee_public_round_basis_points: Option<u32>,
+    pub chef_fee_basis_points: Option<u32>,
+}
+
 #[near_bindgen]
 impl Contract {
     // CHANGE OWNER
@@ -52,6 +76,106 @@ impl Contract {
     }
 
     // POT CONFIG
+    pub fn admin_dangerously_set_pot_config(&mut self, update_args: UpdatePotArgs) -> PotConfig {
+        self.assert_admin_or_greater();
+        if let Some(owner) = update_args.owner {
+            if env::signer_account_id() == self.owner {
+                // only update owner if caller is owner
+                self.owner = owner;
+            }
+        }
+        if let Some(admins) = update_args.admins {
+            // clear existing admins and reset to IDs provided
+            self.admins.clear();
+            for admin in admins.iter() {
+                self.admins.insert(admin);
+            }
+        }
+        // set chef to provided ID or remove if not present
+        if let Some(chef) = update_args.chef {
+            self.chef.set(&chef);
+        } else {
+            self.chef.remove();
+        };
+        if let Some(pot_name) = update_args.pot_name {
+            self.pot_name = pot_name;
+        }
+        if let Some(pot_description) = update_args.pot_description {
+            self.pot_description = pot_description;
+        }
+        if let Some(max_projects) = update_args.max_projects {
+            self.max_projects = max_projects;
+        }
+        if let Some(application_start_ms) = update_args.application_start_ms {
+            self.application_start_ms = application_start_ms;
+        }
+        if let Some(application_end_ms) = update_args.application_end_ms {
+            assert!(
+                application_end_ms <= self.public_round_end_ms,
+                "Application end must be before public round end"
+            );
+            self.application_end_ms = application_end_ms;
+        }
+        if let Some(public_round_start_ms) = update_args.public_round_start_ms {
+            self.public_round_start_ms = public_round_start_ms;
+        }
+        if let Some(public_round_end_ms) = update_args.public_round_end_ms {
+            self.public_round_end_ms = public_round_end_ms;
+        }
+        if let Some(registry_provider) = update_args.registry_provider {
+            self.registry_provider.set(&registry_provider);
+        } else {
+            self.registry_provider.remove();
+        };
+        if let Some(min_matching_pool_donation_amount) =
+            update_args.min_matching_pool_donation_amount
+        {
+            self.min_matching_pool_donation_amount = min_matching_pool_donation_amount;
+        }
+        if let Some(sybil_wrapper_provider) = update_args.sybil_wrapper_provider {
+            self.sybil_wrapper_provider.set(&sybil_wrapper_provider);
+        } else {
+            self.sybil_wrapper_provider.remove();
+        };
+        if let Some(custom_sybil_checks) = update_args.custom_sybil_checks {
+            let formatted_custom_sybil_checks: HashMap<ProviderId, SybilProviderWeight> =
+                custom_sybil_checks
+                    .into_iter()
+                    .map(|custom_sybil_check| {
+                        let provider_id = ProviderId::new(
+                            custom_sybil_check.contract_id.to_string(),
+                            custom_sybil_check.method_name,
+                        );
+                        (provider_id, custom_sybil_check.weight)
+                    })
+                    .collect();
+            self.custom_sybil_checks.set(&formatted_custom_sybil_checks);
+        } else {
+            self.custom_sybil_checks.remove();
+        };
+        if let Some(custom_min_threshold_score) = update_args.custom_min_threshold_score {
+            self.custom_min_threshold_score
+                .set(&custom_min_threshold_score);
+        } else {
+            self.custom_min_threshold_score.remove();
+        };
+        if let Some(referral_fee_matching_pool_basis_points) =
+            update_args.referral_fee_matching_pool_basis_points
+        {
+            self.referral_fee_matching_pool_basis_points = referral_fee_matching_pool_basis_points;
+        }
+        if let Some(referral_fee_public_round_basis_points) =
+            update_args.referral_fee_public_round_basis_points
+        {
+            self.referral_fee_public_round_basis_points = referral_fee_public_round_basis_points;
+        }
+        if let Some(chef_fee_basis_points) = update_args.chef_fee_basis_points {
+            self.chef_fee_basis_points = chef_fee_basis_points;
+        }
+
+        self.get_config()
+    }
+
     pub fn admin_set_pot_name(&mut self, pot_name: String) {
         self.assert_admin_or_greater();
         self.pot_name = pot_name;

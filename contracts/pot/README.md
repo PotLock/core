@@ -148,6 +148,28 @@ pub struct PotConfig {
     pub protocol_config_provider: Option<ProviderId>,
 }
 
+/// Ephemeral-only
+pub struct UpdatePotArgs {
+    pub owner: Option<AccountId>,
+    pub admins: Option<Vec<AccountId>>,
+    pub chef: Option<AccountId>,
+    pub pot_name: Option<String>,
+    pub pot_description: Option<String>,
+    pub max_projects: Option<u32>,
+    pub application_start_ms: Option<TimestampMs>,
+    pub application_end_ms: Option<TimestampMs>,
+    pub public_round_start_ms: Option<TimestampMs>,
+    pub public_round_end_ms: Option<TimestampMs>,
+    pub registry_provider: Option<ProviderId>,
+    pub min_matching_pool_donation_amount: Option<U128>,
+    pub sybil_wrapper_provider: Option<ProviderId>,
+    pub custom_sybil_checks: Option<Vec<CustomSybilCheck>>,
+    pub custom_min_threshold_score: Option<u32>,
+    pub referral_fee_matching_pool_basis_points: Option<u32>,
+    pub referral_fee_public_round_basis_points: Option<u32>,
+    pub chef_fee_basis_points: Option<u32>,
+}
+
 /// Result expected from protocol_config_provider when querying for protocol fee configuration
 pub struct ProtocolConfigProviderResult {
     pub basis_points: u32,
@@ -423,6 +445,8 @@ pub fn admin_process_payouts(&mut self) -> ()
 
 
 // CONFIG
+
+pub fn admin_dangerously_set_pot_config(&mut self, update_args: UpdatePotArgs) -> PotConfig
 
 pub fn owner_change_owner(&mut self, owner: AccountId) -> ()
 
