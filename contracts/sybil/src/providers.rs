@@ -184,7 +184,7 @@ impl Contract {
             icon_url,
             external_url,
             submitted_by: env::signer_account_id(),
-            submitted_at_ms: env::block_timestamp() / 1000000,
+            submitted_at_ms: env::block_timestamp_ms(),
             stamp_count: 0,
         };
 

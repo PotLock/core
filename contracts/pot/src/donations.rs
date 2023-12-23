@@ -500,7 +500,7 @@ impl Contract {
             donor_id: env::signer_account_id(),
             total_amount: U128::from(deposit),
             message,
-            donated_at: env::block_timestamp(),
+            donated_at: env::block_timestamp_ms(),
             project_id: project_id.clone(),
             protocol_fee: U128::from(protocol_fee),
             referrer_id: referrer_id.clone(),
