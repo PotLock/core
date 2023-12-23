@@ -68,6 +68,7 @@ impl Contract {
         for payout in payouts.iter() {
             // verify that the project exists and is approved
             self.assert_approved_application(&payout.project_id);
+            // TODO: check that the project is not owner, admin or chef
             // add amount to running total
             running_total += payout.amount.0;
             // set cooldown_end to now + 1 week (?)
@@ -137,6 +138,7 @@ impl Contract {
         for (project_id, v_app) in self.applications_by_id.iter() {
             // TODO: update this to only go through approved applications mapping
             self.assert_approved_application(&project_id);
+            // TODO: check that the project is not owner, admin or chef
             let application = Application::from(v_app);
             // ...if there are payouts for the project...
             if let Some(payout_ids_for_project) = self.payout_ids_by_project_id.get(&project_id) {

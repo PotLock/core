@@ -56,6 +56,7 @@ impl Contract {
     #[payable]
     pub fn apply(&mut self) -> Promise {
         let project_id = env::predecessor_account_id(); // TODO: consider renaming to "applicant_id" to make it less opinionated (e.g. maybe developers are applying, and they are not exactly a "project")
+                                                        // TODO: check that the project is not owner, admin or chef
         if let Some(registry_provider) = self.registry_provider.get() {
             // decompose registry provider
             let (contract_id, method_name) = registry_provider.decompose();
