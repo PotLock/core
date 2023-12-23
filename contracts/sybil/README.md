@@ -33,6 +33,14 @@ pub struct Contract {
     // Enables fetching of providers that a user has submitted (e.g. if user has submitted one malicious provider, they are likely to submit more and you'll want to be able to fetch these or filter them out of results)
     provider_ids_for_submitter: LookupMap<AccountId, UnorderedSet<ProviderId>>,
 }
+
+/// Ephemeral-only
+pub struct Config {
+    pub owner: AccountId,
+    pub admins: Vec<AccountId>,
+    pub default_provider_ids: Vec<ProviderId>,
+    pub default_human_threshold: u32,
+}
 ```
 
 ### Providers
@@ -215,7 +223,11 @@ pub fn admin_update_provider(
 ) -> Provider
 
 #[payable]
-pub fn admin_activate_provider(&mut self, provider_id: ProviderId) -> Provider
+pub fn admin_activate_provider(
+    &mut self,
+    provider_id: ProviderId,
+    default_weight: u32,
+) -> Provider
 
 #[payable]
 pub fn admin_deactivate_provider(&mut self, provider_id: ProviderId) -> Provider

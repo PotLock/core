@@ -23,13 +23,18 @@ impl Contract {
     // convenience methods
 
     #[payable]
-    pub fn admin_activate_provider(&mut self, provider_id: ProviderId) -> Provider {
+    pub fn admin_activate_provider(
+        &mut self,
+        provider_id: ProviderId,
+        default_weight: u32,
+    ) -> Provider {
         self.assert_owner_or_admin();
         // check that provider exists
         if let Some(versioned_provider) = self.providers_by_id.get(&provider_id) {
             // update provider
             let mut provider = Provider::from(versioned_provider);
             provider.is_active = true;
+            provider.default_weight = default_weight;
             self.providers_by_id
                 .insert(&provider_id, &VersionedProvider::Current(provider.clone()));
             provider

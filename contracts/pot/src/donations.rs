@@ -500,7 +500,7 @@ impl Contract {
             donor_id: env::signer_account_id(),
             total_amount: U128::from(deposit),
             message,
-            donated_at: env::block_timestamp(),
+            donated_at: env::block_timestamp_ms(),
             project_id: project_id.clone(),
             protocol_fee: U128::from(protocol_fee),
             referrer_id: referrer_id.clone(),
@@ -519,6 +519,15 @@ impl Contract {
                     .expect(&format!(
                         "Overflow occurred when calculating self.total_matching_pool_donations ({} + {})",
                         self.total_matching_pool_donations.0, remainder,
+                    )),
+            );
+            self.matching_pool_balance = U128::from(
+                self.matching_pool_balance
+                    .0
+                    .checked_add(remainder)
+                    .expect(&format!(
+                        "Overflow occurred when calculating self.matching_pool_balance ({} + {})",
+                        self.matching_pool_balance.0, remainder,
                     )),
             );
         } else {

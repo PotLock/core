@@ -68,6 +68,16 @@ impl From<VersionedContract> for Contract {
     }
 }
 
+/// Ephemeral-only
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub struct Config {
+    pub owner: AccountId,
+    pub admins: Vec<AccountId>,
+    pub default_provider_ids: Vec<ProviderId>,
+    pub default_human_threshold: u32,
+}
+
 #[derive(BorshSerialize, BorshStorageKey)]
 pub enum StorageKey {
     SourceMetadata,
@@ -117,12 +127,13 @@ impl Contract {
         }
     }
 
-    pub fn get_owner(&self) -> AccountId {
-        self.owner.clone()
-    }
-
-    pub fn get_admins(&self) -> Vec<AccountId> {
-        self.admins.to_vec()
+    pub fn get_config(&self) -> Config {
+        Config {
+            owner: self.owner.clone(),
+            admins: self.admins.to_vec(),
+            default_provider_ids: self.default_provider_ids.to_vec(),
+            default_human_threshold: self.default_human_threshold,
+        }
     }
 }
 
