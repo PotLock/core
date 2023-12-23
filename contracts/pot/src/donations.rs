@@ -521,6 +521,15 @@ impl Contract {
                         self.total_matching_pool_donations.0, remainder,
                     )),
             );
+            self.matching_pool_balance = U128::from(
+                self.matching_pool_balance
+                    .0
+                    .checked_add(remainder)
+                    .expect(&format!(
+                        "Overflow occurred when calculating self.matching_pool_balance ({} + {})",
+                        self.matching_pool_balance.0, remainder,
+                    )),
+            );
         } else {
             self.total_public_donations = U128::from(
                 self.total_public_donations
