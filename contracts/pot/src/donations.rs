@@ -237,6 +237,13 @@ impl Contract {
                 );
             }
         }
+        // don't allow a project to donate to itself
+        if let Some(project_id) = project_id.clone() {
+            if project_id == env::predecessor_account_id() || project_id == env::signer_account_id()
+            {
+                env::panic_str("Projects cannot donate to themselves");
+            }
+        }
         // TODO: may want to prohibit additions to matching pool once public round has closed?
         let deposit = env::attached_deposit();
         self.assert_caller_can_donate(deposit, project_id, message, referrer_id, is_matching_pool)
