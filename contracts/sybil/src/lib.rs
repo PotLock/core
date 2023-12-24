@@ -41,6 +41,7 @@ pub struct Contract {
     admins: UnorderedSet<AccountId>,
     providers_by_id: UnorderedMap<ProviderId, VersionedProvider>,
     default_provider_ids: UnorderedSet<ProviderId>,
+    // TODO: add active provider IDs
     default_human_threshold: u32,
     // MAPPINGS
     // Stores all Stamp records, versioned for easy upgradeability

@@ -1,3 +1,5 @@
+use borsh::de;
+
 use crate::*;
 
 pub type ProjectId = AccountId;
@@ -18,6 +20,8 @@ pub struct Application {
     /// functions as unique identifier for application, since projects can only apply once per round
     // Don't technically need this, since we use the project_id as the key in the applications_by_id mapping, but it's possible that we'll want to change that in the future, so keeping this for now
     pub project_id: ProjectId,
+    /// Optional message to be included in application
+    pub message: Option<String>,
     /// Status of the project application (Pending, Accepted, Rejected, InReview)
     pub status: ApplicationStatus,
     /// Timestamp for when the application was submitted
@@ -54,9 +58,9 @@ impl From<&VersionedApplication> for Application {
 #[near_bindgen]
 impl Contract {
     #[payable]
-    pub fn apply(&mut self) -> Promise {
+    pub fn apply(&mut self, message: Option<String>) -> Promise {
         let project_id = env::predecessor_account_id(); // TODO: consider renaming to "applicant_id" to make it less opinionated (e.g. maybe developers are applying, and they are not exactly a "project")
-                                                        // TODO: check that the project is not owner, admin or chef
+        let deposit = env::attached_deposit();
         if let Some(registry_provider) = self.registry_provider.get() {
             // decompose registry provider
             let (contract_id, method_name) = registry_provider.decompose();
@@ -67,24 +71,31 @@ impl Contract {
                 .then(
                     Self::ext(env::current_account_id())
                         .with_static_gas(XCC_GAS)
-                        .assert_can_apply_callback(project_id.clone()),
+                        .assert_can_apply_callback(project_id.clone(), message, deposit),
                 )
         } else {
             Self::ext(env::current_account_id())
                 .with_static_gas(XCC_GAS)
-                .apply_always_allow_callback(project_id.clone())
+                .apply_always_allow_callback(project_id.clone(), message, deposit)
         }
     }
 
     #[private] // Only callable by env::current_account_id()
-    pub fn apply_always_allow_callback(&mut self, project_id: ProjectId) -> Application {
-        self.handle_apply(project_id)
+    pub fn apply_always_allow_callback(
+        &mut self,
+        project_id: ProjectId,
+        message: Option<String>,
+        deposit: Balance,
+    ) -> Application {
+        self.handle_apply(project_id, message, deposit)
     }
 
     #[private] // Only callable by env::current_account_id()
     pub fn assert_can_apply_callback(
         &mut self,
         project_id: ProjectId,
+        message: Option<String>,
+        deposit: Balance,
         #[callback_result] call_result: Result<bool, PromiseError>,
     ) -> Application {
         // Check if the promise succeeded by calling the method outlined in external.rs
@@ -94,10 +105,15 @@ impl Contract {
                 self.registry_provider.get().unwrap()
             ));
         }
-        self.handle_apply(project_id)
+        self.handle_apply(project_id, message, deposit)
     }
 
-    pub(crate) fn handle_apply(&mut self, project_id: ProjectId) -> Application {
+    pub(crate) fn handle_apply(
+        &mut self,
+        project_id: ProjectId,
+        message: Option<String>,
+        deposit: Balance,
+    ) -> Application {
         // check that application doesn't already exist for this project
         if self.applications_by_id.get(&project_id).is_some() {
             // application already exists
@@ -110,6 +126,7 @@ impl Contract {
         // add application
         let application = Application {
             project_id,
+            message,
             status: ApplicationStatus::Pending,
             submitted_at: env::block_timestamp_ms(),
             updated_at: None,
@@ -123,7 +140,16 @@ impl Contract {
             &VersionedApplication::Current(application.clone()),
         );
         // refund excess deposit
-        refund_deposit(initial_storage_usage);
+        let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
+        if deposit > required_deposit {
+            Promise::new(env::predecessor_account_id()).transfer(deposit - required_deposit);
+        } else if deposit < required_deposit {
+            env::panic_str(&format!(
+                "Must attach {} yoctoNEAR to cover storage",
+                required_deposit
+            ));
+        }
+
         // return application
         application
     }
