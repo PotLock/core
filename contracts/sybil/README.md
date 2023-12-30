@@ -187,8 +187,20 @@ pub fn register_provider(
     tags: Option<Vec<String>>,
     icon_url: Option<String>,
     external_url: Option<String>,
-) -> Provider // NB: anyone can call this method to register a provider
+) -> ProviderExternal // NB: anyone can call this method to register a provider. If caller is admin, provider is automatically activated.
 
+/// NB: this method can only be called by the provider's original submitter, or sybil contract owner/admin.
+#[payable]
+pub fn update_provider(
+    &mut self,
+    provider_id: ProviderId,
+    name: Option<String>,
+    description: Option<String>,
+    gas: Option<u64>,
+    tags: Option<Vec<String>>,
+    icon_url: Option<String>,
+    external_url: Option<String>,
+) -> ProviderExternal
 
 // STAMPS
 
@@ -214,13 +226,6 @@ pub fn owner_add_admins(&mut self, account_ids: Vec<AccountId>)
 
 #[payable]
 pub fn owner_remove_admins(&mut self, account_ids: Vec<AccountId>)
-
-#[payable]
-pub fn admin_update_provider(
-    &mut self,
-    provider_id: ProviderId,
-    provider: Provider,
-) -> Provider
 
 #[payable]
 pub fn admin_activate_provider(

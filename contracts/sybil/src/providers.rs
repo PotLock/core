@@ -8,7 +8,7 @@ const PROVIDER_ID_DELIMITER: &str = ":"; // separates contract_id and method_nam
 
 // Generate ProviderId ("{CONTRACT_ADDRESS}:{METHOD_NAME}") from contract_id and method_name
 impl ProviderId {
-    fn new(contract_id: String, method_name: String) -> Self {
+    pub fn new(contract_id: String, method_name: String) -> Self {
         ProviderId(format!(
             "{}{}{}",
             contract_id, PROVIDER_ID_DELIMITER, method_name
@@ -159,7 +159,7 @@ impl Contract {
         tags: Option<Vec<String>>,
         icon_url: Option<String>,
         external_url: Option<String>,
-    ) -> Provider {
+    ) -> ProviderExternal {
         // Get initial storage usage so user can pay for what they use
         let initial_storage_usage = env::storage_usage();
 
@@ -172,7 +172,7 @@ impl Contract {
         }
 
         // create provider
-        let provider = Provider {
+        let mut provider = Provider {
             name,
             description,
             is_active: false,
@@ -188,6 +188,11 @@ impl Contract {
             stamp_count: 0,
         };
 
+        // set provider to active if caller is owner/admin
+        if self.is_owner_or_admin() {
+            provider.is_active = true;
+        }
+
         // create & store provider
         self.providers_by_id.insert(
             &provider_id,
@@ -200,7 +205,72 @@ impl Contract {
         refund_deposit(initial_storage_usage);
 
         // return provider
-        provider
+        ProviderExternal::from_provider_id(&provider_id.0, provider)
+    }
+
+    #[payable]
+    pub fn update_provider(
+        &mut self,
+        provider_id: ProviderId,
+        name: Option<String>,
+        description: Option<String>,
+        gas: Option<u64>,
+        tags: Option<Vec<String>>,
+        icon_url: Option<String>,
+        external_url: Option<String>,
+    ) -> ProviderExternal {
+        // Ensure caller is Provider submitter or Owner/Admin
+        assert!(
+            env::signer_account_id()
+                == Provider::from(
+                    self.providers_by_id
+                        .get(&provider_id)
+                        .expect(&format!("Provider {:#?} does not exist", provider_id)),
+                )
+                .submitted_by
+                || self.is_owner_or_admin(),
+        );
+
+        // Get initial storage usage so user can pay for what they use
+        let initial_storage_usage = env::storage_usage();
+
+        // check that provider exists
+        let mut provider: Provider = self
+            .providers_by_id
+            .get(&provider_id)
+            .expect(&format!("Provider {:#?} does not exist", provider_id))
+            .into();
+
+        // update provider
+        if let Some(name) = name {
+            provider.name = name;
+        }
+        if let Some(description) = description {
+            provider.description = Some(description);
+        }
+        if let Some(gas) = gas {
+            provider.gas = Some(gas);
+        }
+        if let Some(tags) = tags {
+            provider.tags = Some(tags);
+        }
+        if let Some(icon_url) = icon_url {
+            provider.icon_url = Some(icon_url);
+        }
+        if let Some(external_url) = external_url {
+            provider.external_url = Some(external_url);
+        }
+
+        // update & store provider
+        self.providers_by_id.insert(
+            &provider_id,
+            &VersionedProvider::from(VersionedProvider::Current(provider.clone())),
+        );
+
+        // Refund any unused deposit
+        refund_deposit(initial_storage_usage);
+
+        ProviderExternal::from_provider_id(&provider_id.0, provider)
     }
 
     // * VIEW METHODS *
