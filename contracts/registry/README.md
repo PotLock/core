@@ -115,6 +115,11 @@ pub fn self_set_source_metadata(&mut self, source_metadata: ContractSourceMetada
 ### Read Methods
 
 ```rs
+// IS REGISTERED BOOLEAN
+
+pub fn is_registered(&self, account_id: ProjectId) -> bool
+
+
 // PROJECTS
 
 pub fn get_projects(&self) -> Vec<ProjectExternal>
