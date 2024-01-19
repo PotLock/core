@@ -41,6 +41,122 @@ impl From<VersionedDonation> for Donation {
 
 #[near_bindgen]
 impl Contract {
+    pub fn ft_on_transfer(&mut self, sender_id: AccountId, amount: U128, msg: String) -> String {
+        let ft_id = env::predecessor_account_id();
+        // deconstruct msg, should contain recipient_id and optional referrer_id
+        let mut recipient_id = None;
+        let mut referrer_id = None;
+        let mut message = None;
+        let mut parts = msg.split("|");
+        if let Some(recipient_id_str) = parts.next() {
+            recipient_id = Some(AccountId::new_unchecked(recipient_id_str.to_string()));
+        }
+        if let Some(referrer_id_str) = parts.next() {
+            referrer_id = Some(AccountId::new_unchecked(referrer_id_str.to_string()));
+        }
+        if let Some(message_str) = parts.next() {
+            message = Some(message_str.to_string());
+        }
+        log!(format!(
+            "Recipient ID {:?}, Referrer ID {:?}, Amount {}, Message {:?}",
+            recipient_id, referrer_id, amount.0, message
+        ));
+
+        if let Some(recipient_id) = recipient_id {
+            // store donation to see how much storage was used
+            // check that user has paid enough to cover storage
+            // panicking will cancel the transfer on the FT contract
+            let initial_storage_usage = env::storage_usage();
+            // calculate fees
+            // calculate protocol fee
+            let mut remainder = amount.0;
+            let protocol_fee = self.calculate_protocol_fee(amount.0);
+            remainder -= protocol_fee;
+
+            // calculate referrer fee, if applicable
+            let mut referrer_fee = None;
+            if referrer_id.is_some() {
+                let referrer_amount = self.calculate_referrer_fee(amount.0);
+                remainder -= referrer_amount;
+                referrer_fee = Some(U128::from(referrer_amount));
+            }
+
+            // get donation count, which will be incremented to create the unique donation ID
+            let donation_count = self.donations_by_id.len();
+
+            // format donation record
+            let donation = Donation {
+                id: (donation_count + 1) as DonationId,
+                donor_id: env::predecessor_account_id(),
+                total_amount: amount,
+                ft_id: ft_id.clone(),
+                message,
+                donated_at_ms: env::block_timestamp_ms(),
+                recipient_id: recipient_id.clone(),
+                protocol_fee: U128::from(protocol_fee),
+                referrer_id: referrer_id.clone(),
+                referrer_fee,
+            };
+
+            // insert mapping records
+            self.insert_donation_record(&donation);
+
+            // check that user has enough storage deposit
+            let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
+            let storage_balance = self.storage_balance_of(&sender_id);
+            assert!(
+                storage_balance.0 >= required_deposit,
+                "Must add storage deposit of at least {} yoctoNEAR to cover Donation storage",
+                required_deposit
+            );
+
+            // deduct storage deposit from user's balance
+            let new_storage_balance = storage_balance.0 - required_deposit;
+            self.storage_deposits
+                .insert(&sender_id, &new_storage_balance);
+
+            // transfer fees
+            // transfer protocol fee
+            // TODO: validate that this further transfer can be made potentially in the same block where ft_resolve_transfer is called on FT contract. This account may not have enough balance to cover the transfer at that point.
+            log!(format!(
+                "Transferring protocol fee {} ({}) to {}",
+                protocol_fee, ft_id, self.protocol_fee_recipient_account
+            ));
+            let protocol_fee_transfer_args = json!({ "receiver_id": self.protocol_fee_recipient_account.clone(), "amount": protocol_fee })
+                .to_string()
+                .into_bytes();
+            Promise::new(AccountId::new_unchecked(ft_id.to_string())).function_call(
+                "ft_transfer".to_string(),
+                protocol_fee_transfer_args,
+                NO_DEPOSIT,
+                Gas(XCC_GAS_DEFAULT),
+            );
+
+            // transfer referrer fee
+            if let (Some(referrer_fee), Some(referrer_id)) = (referrer_fee, referrer_id) {
+                log!(format!(
+                    "Transferring referrer fee {} ({}) to {}",
+                    referrer_fee.0, ft_id, referrer_id
+                ));
+                let referrer_fee_transfer_args =
+                    json!({ "receiver_id": referrer_id, "amount": referrer_fee.0 })
+                        .to_string()
+                        .into_bytes();
+                Promise::new(AccountId::new_unchecked(ft_id.to_string())).function_call(
+                    "ft_transfer".to_string(),
+                    referrer_fee_transfer_args,
+                    NO_DEPOSIT,
+                    Gas(XCC_GAS_DEFAULT),
+                );
+            }
+
+            // return # unused tokens as per NEP-144 standard
+            "0".to_string()
+        } else {
+            panic!("Must provide recipient ID in msg");
+        }
+    }
+
     #[payable]
     pub fn donate(
         &mut self,

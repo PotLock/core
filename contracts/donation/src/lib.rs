@@ -3,7 +3,7 @@ use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap, UnorderedSet};
 use near_sdk::json_types::{U128, U64};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
-    env, log, near_bindgen, require, serde_json::json, AccountId, Balance, BorshStorageKey,
+    env, log, near_bindgen, require, serde_json::json, AccountId, Balance, BorshStorageKey, Gas,
     PanicOnDefault, Promise,
 };
 
@@ -13,6 +13,7 @@ pub mod events;
 pub mod internal;
 pub mod owner;
 pub mod source;
+pub mod storage;
 pub mod utils;
 pub use crate::constants::*;
 pub use crate::donations::*;
@@ -20,6 +21,7 @@ pub use crate::events::*;
 pub use crate::internal::*;
 pub use crate::owner::*;
 pub use crate::source::*;
+pub use crate::storage::*;
 pub use crate::utils::*;
 
 type DonationId = u64;
@@ -39,6 +41,7 @@ pub struct Contract {
     donation_ids_by_recipient_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
     donation_ids_by_donor_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
     donation_ids_by_ft_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
+    storage_deposits: UnorderedMap<AccountId, Balance>,
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -75,6 +78,7 @@ pub enum StorageKey {
     DonationIdsByFtId,
     DonationIdsByFtIdInner { ft_id: AccountId },
     SourceMetadata,
+    StorageDeposits,
 }
 
 #[near_bindgen]
@@ -101,6 +105,7 @@ impl Contract {
                 StorageKey::SourceMetadata,
                 Some(&VersionedContractSourceMetadata::Current(source_metadata)),
             ),
+            storage_deposits: UnorderedMap::new(StorageKey::StorageDeposits),
         }
     }
 
@@ -135,6 +140,7 @@ impl Default for Contract {
                     },
                 )),
             ),
+            storage_deposits: UnorderedMap::new(StorageKey::StorageDeposits),
         }
     }
 }
