@@ -49,13 +49,19 @@ impl Contract {
         let mut message = None;
         let mut parts = msg.split("|");
         if let Some(recipient_id_str) = parts.next() {
-            recipient_id = Some(AccountId::new_unchecked(recipient_id_str.to_string()));
+            if recipient_id_str != "" {
+                recipient_id = Some(AccountId::new_unchecked(recipient_id_str.to_string()));
+            }
         }
         if let Some(referrer_id_str) = parts.next() {
-            referrer_id = Some(AccountId::new_unchecked(referrer_id_str.to_string()));
+            if referrer_id_str != "" {
+                referrer_id = Some(AccountId::new_unchecked(referrer_id_str.to_string()));
+            }
         }
         if let Some(message_str) = parts.next() {
-            message = Some(message_str.to_string());
+            if message_str != "" {
+                message = Some(message_str.to_string());
+            }
         }
         log!(format!(
             "Recipient ID {:?}, Referrer ID {:?}, Amount {}, Message {:?}",
@@ -106,7 +112,8 @@ impl Contract {
             let storage_balance = self.storage_balance_of(&sender_id);
             assert!(
                 storage_balance.0 >= required_deposit,
-                "Must add storage deposit of at least {} yoctoNEAR to cover Donation storage",
+                "{} must add storage deposit of at least {} yoctoNEAR to cover Donation storage",
+                sender_id,
                 required_deposit
             );
 
@@ -122,30 +129,32 @@ impl Contract {
                 "Transferring protocol fee {} ({}) to {}",
                 protocol_fee, ft_id, self.protocol_fee_recipient_account
             ));
-            let protocol_fee_transfer_args = json!({ "receiver_id": self.protocol_fee_recipient_account.clone(), "amount": protocol_fee })
+            let protocol_fee_transfer_args: Vec<u8> = json!({ "receiver_id": self.protocol_fee_recipient_account.clone(), "amount": U128(protocol_fee) })
                 .to_string()
                 .into_bytes();
             Promise::new(AccountId::new_unchecked(ft_id.to_string())).function_call(
                 "ft_transfer".to_string(),
                 protocol_fee_transfer_args,
-                NO_DEPOSIT,
+                ONE_YOCTO,
                 Gas(XCC_GAS_DEFAULT),
             );
 
             // transfer referrer fee
-            if let (Some(referrer_fee), Some(referrer_id)) = (referrer_fee, referrer_id) {
+            if let Some(referrer_id) = referrer_id {
                 log!(format!(
-                    "Transferring referrer fee {} ({}) to {}",
-                    referrer_fee.0, ft_id, referrer_id
+                    "Transferring referrer fee {:?} ({}) to {}",
+                    referrer_fee.clone().unwrap(),
+                    ft_id,
+                    referrer_id
                 ));
                 let referrer_fee_transfer_args =
-                    json!({ "receiver_id": referrer_id, "amount": referrer_fee.0 })
+                    json!({ "receiver_id": referrer_id, "amount": referrer_fee })
                         .to_string()
                         .into_bytes();
                 Promise::new(AccountId::new_unchecked(ft_id.to_string())).function_call(
                     "ft_transfer".to_string(),
                     referrer_fee_transfer_args,
-                    NO_DEPOSIT,
+                    ONE_YOCTO,
                     Gas(XCC_GAS_DEFAULT),
                 );
             }
