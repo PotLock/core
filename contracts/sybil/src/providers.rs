@@ -218,6 +218,7 @@ impl Contract {
         tags: Option<Vec<String>>,
         icon_url: Option<String>,
         external_url: Option<String>,
+        default_weight: Option<u32>, // owner/admin-only
     ) -> ProviderExternal {
         // Ensure caller is Provider submitter or Owner/Admin
         assert!(
@@ -259,6 +260,13 @@ impl Contract {
         }
         if let Some(external_url) = external_url {
             provider.external_url = Some(external_url);
+        }
+
+        // owner/admin-only
+        if self.is_owner_or_admin() {
+            if let Some(default_weight) = default_weight {
+                provider.default_weight = default_weight;
+            }
         }
 
         // update & store provider

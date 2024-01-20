@@ -200,12 +200,13 @@ pub fn update_provider(
     tags: Option<Vec<String>>,
     icon_url: Option<String>,
     external_url: Option<String>,
+    default_weight: Option<u32>, // owner/admin-only
 ) -> ProviderExternal
 
 // STAMPS
 
 #[payable]
-pub fn set_stamp(&mut self, provider_id: ProviderId) -> Option<StampExternal> // None response indicates that user is not verified on target provider
+pub fn add_stamp(&mut self, provider_id: ProviderId) -> Option<StampExternal> // None response indicates that user is not verified on target provider
 
 pub fn delete_stamp(&mut self, provider_id: ProviderId) -> ()
 
