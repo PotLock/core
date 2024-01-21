@@ -53,13 +53,19 @@ impl Contract {
         );
         // clear any existing payouts (in case this is a reset, e.g. fixing an error)
         for application_id in self.approved_application_ids.iter() {
+            // if there are payouts for the project...
             if let Some(payout_ids_for_application) =
                 self.payout_ids_by_project_id.get(&application_id)
             {
+                // ...remove them
                 for payout_id in payout_ids_for_application.iter() {
                     self.payouts_by_id.remove(&payout_id);
                 }
-                self.payout_ids_by_project_id.remove(&application_id);
+                // ...and remove the set of payout IDs for the project
+                let removed = self.payout_ids_by_project_id.remove(&application_id);
+                if let Some(mut removed) = removed {
+                    removed.clear();
+                }
             }
         }
         // get down to business
