@@ -158,7 +158,7 @@ impl Contract {
                 {
                     // TODO: handle milestones (for now just paying out all payouts)
                     for payout_id in payout_ids_for_project.iter() {
-                        let payout =
+                        let mut payout =
                             Payout::from(self.payouts_by_id.get(&payout_id).expect("no payout"));
                         if payout.paid_at.is_none() {
                             // ...transfer funds...
@@ -167,8 +167,12 @@ impl Contract {
                                 .then(
                                     Self::ext(env::current_account_id())
                                         .with_static_gas(XCC_GAS)
-                                        .transfer_payout_callback(payout),
+                                        .transfer_payout_callback(payout.clone()),
                                 );
+                            // update payout to indicate that funds transfer has been initiated
+                            payout.paid_at = Some(env::block_timestamp_ms());
+                            self.payouts_by_id
+                                .insert(&payout_id, &VersionedPayout::Current(payout));
                         }
                     }
                 }
@@ -189,16 +193,15 @@ impl Contract {
                 "Error paying out amount {:#?} to project {}",
                 payout.amount, payout.project_id
             ));
+            // update payout to indicate error transferring funds
+            payout.paid_at = None;
+            self.payouts_by_id
+                .insert(&payout.id.clone(), &VersionedPayout::Current(payout));
         } else {
             log!(format!(
                 "Successfully paid out amount {:#?} to project {}",
                 payout.amount, payout.project_id
             ));
-            // update payout to indicate that funds have been transferred
-            payout.paid_at = Some(env::block_timestamp_ms());
-            let payout_id = payout.id.clone();
-            self.payouts_by_id
-                .insert(&payout_id, &VersionedPayout::Current(payout));
         }
     }
 
