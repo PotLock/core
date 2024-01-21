@@ -60,6 +60,11 @@ impl Contract {
     #[payable]
     pub fn apply(&mut self, message: Option<String>) -> Promise {
         let project_id = env::predecessor_account_id(); // TODO: consider renaming to "applicant_id" to make it less opinionated (e.g. maybe developers are applying, and they are not exactly a "project")
+                                                        // chef, admin & owner cannot apply
+        assert!(
+            !self.is_chef(Some(&project_id)) && !self.is_owner_or_admin(Some(&project_id)),
+            "Chef, admin & owner cannot apply"
+        );
         let deposit = env::attached_deposit();
         if let Some(registry_provider) = self.registry_provider.get() {
             // decompose registry provider
