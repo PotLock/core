@@ -200,13 +200,13 @@ impl Contract {
 
     pub(crate) fn calculate_fee(&self, amount: u128, basis_points: u32, is_protocol: bool) -> u128 {
         let total_basis_points = 10_000u128;
-        let amount = basis_points as u128 * amount;
+        let fee_amount = basis_points as u128 * amount;
         if !is_protocol {
             // round down
-            amount / total_basis_points
+            fee_amount / total_basis_points
         } else {
             // round up
-            amount.div_ceil(total_basis_points)
+            fee_amount.div_ceil(total_basis_points)
         }
     }
 
