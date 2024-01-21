@@ -135,26 +135,35 @@ impl Contract {
         self.assert_cooldown_period_complete();
         // pay out each project
         // for each approved project...
-        for (project_id, v_app) in self.applications_by_id.iter() {
-            // TODO: update this to only go through approved applications mapping
-            self.assert_approved_application(&project_id);
-            // TODO: check that the project is not owner, admin or chef
-            let application = Application::from(v_app);
-            // ...if there are payouts for the project...
-            if let Some(payout_ids_for_project) = self.payout_ids_by_project_id.get(&project_id) {
-                // TODO: handle milestones (for now just paying out all payouts)
-                for payout_id in payout_ids_for_project.iter() {
-                    let payout =
-                        Payout::from(self.payouts_by_id.get(&payout_id).expect("no payout"));
-                    if payout.paid_at.is_none() {
-                        // ...transfer funds...
-                        Promise::new(application.project_id.clone())
-                            .transfer(payout.amount.0)
-                            .then(
-                                Self::ext(env::current_account_id())
-                                    .with_static_gas(XCC_GAS)
-                                    .transfer_payout_callback(payout),
-                            );
+        // loop through self.approved_application_ids set
+        for project_id in self.approved_application_ids.iter() {
+            // get application
+            let application = Application::from(
+                self.applications_by_id
+                    .get(&project_id)
+                    .expect("no application"),
+            );
+            // check that the project is not owner, admin or chef
+            if self.is_owner_or_admin(Some(&project_id)) || self.is_chef(Some(&project_id)) {
+                log!("Skipping payout for project {} as it is owner, admin or chef and not eligible for payouts.", project_id);
+            } else {
+                // ...if there are payouts for the project...
+                if let Some(payout_ids_for_project) = self.payout_ids_by_project_id.get(&project_id)
+                {
+                    // TODO: handle milestones (for now just paying out all payouts)
+                    for payout_id in payout_ids_for_project.iter() {
+                        let payout =
+                            Payout::from(self.payouts_by_id.get(&payout_id).expect("no payout"));
+                        if payout.paid_at.is_none() {
+                            // ...transfer funds...
+                            Promise::new(application.project_id.clone())
+                                .transfer(payout.amount.0)
+                                .then(
+                                    Self::ext(env::current_account_id())
+                                        .with_static_gas(XCC_GAS)
+                                        .transfer_payout_callback(payout),
+                                );
+                        }
                     }
                 }
             }
