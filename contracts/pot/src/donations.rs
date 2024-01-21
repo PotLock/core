@@ -198,10 +198,16 @@ impl Contract {
             .collect()
     }
 
-    pub(crate) fn calculate_fee(&self, amount: u128, basis_points: u32) -> u128 {
+    pub(crate) fn calculate_fee(&self, amount: u128, basis_points: u32, is_protocol: bool) -> u128 {
         let total_basis_points = 10_000u128;
-        let amount_per_basis_point = amount / total_basis_points;
-        basis_points as u128 * amount_per_basis_point
+        let amount = basis_points as u128 * amount;
+        if !is_protocol {
+            // round down
+            amount / total_basis_points
+        } else {
+            // round up
+            amount.div_ceil(total_basis_points)
+        }
     }
 
     pub(crate) fn calculate_referrer_fee(&self, amount: u128, matching_pool: bool) -> u128 {
@@ -210,7 +216,7 @@ impl Contract {
         } else {
             self.referral_fee_public_round_basis_points
         };
-        let referrer_amount = self.calculate_fee(amount, multiplier);
+        let referrer_amount = self.calculate_fee(amount, multiplier, false);
         referrer_amount
     }
 
@@ -424,7 +430,7 @@ impl Contract {
             let protocol_fee_basis_points = protocol_config_provider_result.basis_points;
             let protocol_fee_recipient_account = protocol_config_provider_result.account_id;
             // calculate protocol fee (don't transfer yet)
-            let protocol_fee = self.calculate_fee(deposit, protocol_fee_basis_points);
+            let protocol_fee = self.calculate_fee(deposit, protocol_fee_basis_points, true);
             self.process_donation(
                 deposit,
                 protocol_fee,
@@ -482,7 +488,8 @@ impl Contract {
         if let Some(chef) = self.chef.get() {
             // chef fee only applies to public round donations
             if !matching_pool {
-                let chef_fee_amount = self.calculate_fee(remainder, self.chef_fee_basis_points);
+                let chef_fee_amount =
+                    self.calculate_fee(remainder, self.chef_fee_basis_points, false);
                 chef_fee = Some(U128::from(chef_fee_amount));
                 chef_id = Some(chef);
                 remainder = remainder.checked_sub(chef_fee_amount).expect(&format!(
