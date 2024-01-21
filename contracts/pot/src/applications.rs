@@ -121,8 +121,6 @@ impl Contract {
         }
         // check that application period is open
         self.assert_application_period_open();
-        // check that max_projects hasn't been reached
-        self.assert_max_projects_not_reached();
         // add application
         let application = Application {
             project_id,
@@ -257,8 +255,10 @@ impl Contract {
                 .get(&project_id)
                 .expect("Application does not exist"),
         );
+        // check that max_projects hasn't been reached
+        self.assert_max_projects_not_reached();
+        // update application
         let previous_status = application.status.clone();
-        // verify that the application is pending
         application.status = status;
         application.updated_at = Some(env::block_timestamp_ms());
         application.review_notes = Some(notes);
