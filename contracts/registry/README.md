@@ -65,6 +65,8 @@ pub struct ProjectExternal {
 
 ### Write Methods
 
+**NB: ALL privileged write methods (those beginning with `admin_*` or `owner_*`) require an attached deposit of at least one yoctoNEAR, for security purposes.**
+
 ```rs
 // INIT
 
