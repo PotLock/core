@@ -42,6 +42,7 @@ pub struct PayoutInput {
 #[near_bindgen]
 impl Contract {
     // set_payouts (callable by chef or admin)
+    #[payable]
     pub fn chef_set_payouts(&mut self, payouts: Vec<PayoutInput>) {
         self.assert_chef_or_greater();
         // verify that the round has closed
@@ -128,6 +129,7 @@ impl Contract {
             .collect()
     }
 
+    #[payable]
     pub fn admin_process_payouts(&mut self) {
         self.assert_admin_or_greater();
         // verify that the round has closed

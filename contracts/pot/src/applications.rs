@@ -242,6 +242,7 @@ impl Contract {
         )
     }
 
+    #[payable]
     pub fn chef_set_application_status(
         &mut self,
         project_id: ProjectId,
@@ -281,6 +282,7 @@ impl Contract {
 
     // TODO: consider removing convenience methods below
 
+    #[payable]
     pub fn chef_mark_application_approved(
         &mut self,
         project_id: ProjectId,
@@ -289,6 +291,7 @@ impl Contract {
         self.chef_set_application_status(project_id, ApplicationStatus::Approved, notes)
     }
 
+    #[payable]
     pub fn chef_mark_application_rejected(
         &mut self,
         project_id: ProjectId,
@@ -297,6 +300,7 @@ impl Contract {
         self.chef_set_application_status(project_id, ApplicationStatus::Rejected, notes)
     }
 
+    #[payable]
     pub fn chef_mark_application_in_review(
         &mut self,
         project_id: ProjectId,
@@ -305,6 +309,7 @@ impl Contract {
         self.chef_set_application_status(project_id, ApplicationStatus::InReview, notes)
     }
 
+    #[payable]
     pub fn chef_mark_application_pending(
         &mut self,
         project_id: ProjectId,

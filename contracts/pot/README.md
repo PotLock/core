@@ -346,6 +346,8 @@ pub struct ContractSourceMetadata {
 
 ### Write Methods
 
+**NB: ALL privileged write methods (those beginning with `chef_*`, `admin_*` or `owner_*`) require an attached deposit of at least one yoctoNEAR, for security purposes.**
+
 ```rs
 // INIT
 
@@ -391,6 +393,7 @@ pub fn apply(&mut self) -> Application
 /// Only allowed for projects/applications that are in Pending status
 pub fn unapply(&mut self) -> ()
 
+#[payable]
 pub fn chef_set_application_status(
     &mut self,
     project_id: ProjectId,
@@ -400,24 +403,28 @@ pub fn chef_set_application_status(
 
 // convenience methods that wrap chef_set_application_status (may remove, TBD)
 
+#[payable]
 pub fn chef_mark_application_approved(
     &mut self,
     project_id: ProjectId,
     notes: String,
 ) -> Application
 
+#[payable]
 pub fn chef_mark_application_rejected(
     &mut self,
     project_id: ProjectId,
     notes: String,
 ) -> Application
 
+#[payable]
 pub fn chef_mark_application_in_review(
     &mut self,
     project_id: ProjectId,
     notes: String,
 ) -> Application
 
+#[payable]
 pub fn chef_mark_application_pending(
     &mut self,
     project_id: ProjectId,
@@ -439,85 +446,118 @@ pub fn donate(
 
 // PAYOUTS
 
+#[payable]
 pub fn chef_set_payouts(&mut self, payouts: Vec<PayoutInput>) -> ()
 
+#[payable]
 pub fn admin_process_payouts(&mut self) -> ()
 
 
 // CONFIG
 
+#[payable]
 pub fn admin_dangerously_set_pot_config(&mut self, update_args: UpdatePotArgs) -> PotConfig
 
+#[payable]
 pub fn owner_change_owner(&mut self, owner: AccountId) -> ()
 
+#[payable]
 pub fn owner_add_admins(&mut self, admins: Vec<AccountId>) -> ()
 
+#[payable]
 pub fn owner_remove_admins(&mut self, admins: Vec<AccountId>) -> ()
 
+#[payable]
 pub fn owner_set_admins(&mut self, account_ids: Vec<AccountId>) -> ()
 
+#[payable]
 pub fn owner_clear_admins(&mut self) -> ()
 
+#[payable]
 pub fn admin_set_chef(&mut self, chef: AccountId) -> ()
 
+#[payable]
 pub fn admin_remove_chef(&mut self) -> ()
 
+#[payable]
 pub fn admin_set_chef_fee_basis_points(&mut self, chef_fee_basis_points: u32) -> ()
 
+#[payable]
 pub fn admin_set_pot_name(&mut self, pot_name: String) -> ()
 
+#[payable]
 pub fn admin_set_pot_description(&mut self, pot_description: String) -> ()
 
+#[payable]
 pub fn admin_set_max_projects(&mut self, max_projects: u32) -> ()
 
+#[payable]
 pub fn admin_set_base_currency(&mut self, base_currency: AccountId) -> ()
 
+#[payable]
 pub fn admin_set_application_start_ms(&mut self, application_start_ms: u64) -> ()
 
+#[payable]
 pub fn admin_set_application_end_ms(&mut self, application_end_ms: u64) -> ()
 
+#[payable]
 pub fn admin_set_public_round_start_ms(&mut self, public_round_start_ms: u64) -> ()
 
+#[payable]
 pub fn admin_set_public_round_end_ms(&mut self, public_round_end_ms: u64) -> ()
 
 /// Sets `public_round_start_ms` to env::block_timestamp_ms()
+#[payable]
 pub fn admin_set_public_round_open(&mut self, public_round_end_ms: TimestampMs) -> ()
 
 /// Sets `public_round_end_ms` to env::block_timestamp_ms()
+#[payable]
 pub fn admin_set_public_round_closed(&mut self) -> ()
 
+#[payable]
 pub fn admin_set_registry_provider(&mut self, contract_id: AccountId, method_name: String) -> ()
 
+#[payable]
 pub fn admin_remove_registry_provider(&mut self) -> ()
 
+#[payable]
 pub fn admin_set_min_matching_pool_donation_amount(&mut self, min_matching_pool_donation_amount: U128) -> ()
 
+#[payable]
 pub fn admin_set_sybil_wrapper_provider(
     &mut self,
     contract_id: AccountId,
     method_name: String,
 ) -> ()
 
+#[payable]
 pub fn admin_remove_sybil_wrapper_provider(&mut self) -> ()
 
+#[payable]
 pub fn admin_set_custom_sybil_checks(&mut self, custom_sybil_checks: Vec<CustomSybilCheck>) -> ()
 
+#[payable]
 pub fn admin_remove_custom_sybil_checks(&mut self) -> ()
 
+#[payable]
 pub fn admin_set_custom_min_threshold_score(&mut self, custom_min_threshold_score: u32) -> ()
 
+#[payable]
 pub fn admin_remove_custom_min_threshold_score(&mut self) -> ()
 
+#[payable]
 pub fn admin_set_referral_fee_matching_pool_basis_points(
     &mut self,
     referral_fee_matching_pool_basis_points: u32,
 ) -> ()
 
+#[payable]
 pub fn admin_set_referral_fee_public_round_basis_points(
     &mut self,
     referral_fee_public_round_basis_points: u32,
 ) -> ()
 
+#[payable]
 pub fn admin_set_cooldown_period_complete(&mut self) -> ()
 
 

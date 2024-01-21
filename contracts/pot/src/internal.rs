@@ -1,6 +1,13 @@
 use crate::*;
 
 impl Contract {
+    pub(crate) fn assert_at_least_one_yocto(&self) {
+        assert!(
+            env::attached_deposit() >= 1,
+            "At least one yoctoNEAR must be attached"
+        );
+    }
+
     pub(crate) fn is_owner(&self, account_id: Option<&AccountId>) -> bool {
         account_id.unwrap_or(&env::predecessor_account_id()) == &self.owner
     }
@@ -19,6 +26,8 @@ impl Contract {
             self.is_owner(None),
             "Only contract owner can call this method"
         );
+        // require owner to attach at least one yoctoNEAR for security purposes
+        self.assert_at_least_one_yocto();
     }
 
     pub(crate) fn assert_admin_or_greater(&self) {
@@ -26,6 +35,8 @@ impl Contract {
             self.is_owner_or_admin(None),
             "Only contract admin or owner can call this method"
         );
+        // require caller to attach at least one yoctoNEAR for security purposes
+        self.assert_at_least_one_yocto();
     }
 
     pub(crate) fn is_chef(&self, account_id: Option<&AccountId>) -> bool {
@@ -42,6 +53,8 @@ impl Contract {
             self.is_chef(None) || self.is_admin(None) || self.is_owner(None),
             "Only chef, admin or owner can call this method"
         );
+        // require caller to attach at least one yoctoNEAR for security purposes
+        self.assert_at_least_one_yocto();
     }
 
     pub(crate) fn assert_round_closed(&self) {
