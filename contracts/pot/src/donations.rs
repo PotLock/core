@@ -257,6 +257,7 @@ impl Contract {
         referrer_id: Option<AccountId>,
         matching_pool: bool,
     ) -> Promise {
+        let caller_id = env::predecessor_account_id();
         if matching_pool {
             assert!(
                 deposit >= self.min_matching_pool_donation_amount.0,
@@ -276,7 +277,7 @@ impl Contract {
         } else {
             if let Some(sybil_wrapper_provider) = self.sybil_wrapper_provider.get() {
                 let (contract_id, method_name) = sybil_wrapper_provider.decompose();
-                let args = json!({ "account_id": env::predecessor_account_id() })
+                let args = json!({ "account_id": caller_id.clone() })
                     .to_string()
                     .into_bytes();
                 Promise::new(AccountId::new_unchecked(contract_id.clone()))
@@ -285,6 +286,7 @@ impl Contract {
                         Self::ext(env::current_account_id())
                             .with_static_gas(XCC_GAS)
                             .sybil_callback(
+                                caller_id,
                                 deposit,
                                 project_id.clone(),
                                 message.clone(),
@@ -322,6 +324,7 @@ impl Contract {
     #[private] // Public - but only callable by env::current_account_id()
     pub fn sybil_callback(
         &mut self,
+        caller_id: AccountId,
         deposit: Balance,
         project_id: Option<ProjectId>,
         message: Option<String>,
@@ -329,7 +332,6 @@ impl Contract {
         matching_pool: bool,
         #[callback_result] call_result: Result<bool, PromiseError>,
     ) -> Promise {
-        let caller_id = env::predecessor_account_id();
         if call_result.is_err() {
             log!(format!(
                 "Error verifying sybil check; returning donation {} to donor {}",
