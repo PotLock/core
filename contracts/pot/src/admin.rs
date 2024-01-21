@@ -77,6 +77,7 @@ impl Contract {
 
     // POT CONFIG
     pub fn admin_dangerously_set_pot_config(&mut self, update_args: UpdatePotArgs) -> PotConfig {
+        // TODO: CONSIDER REMOVING THIS METHOD DUE TO POTENTIAL FOR MISUSE
         self.assert_admin_or_greater();
         if let Some(owner) = update_args.owner {
             if env::signer_account_id() == self.owner {
