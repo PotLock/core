@@ -198,10 +198,16 @@ impl Contract {
             .collect()
     }
 
-    pub(crate) fn calculate_fee(&self, amount: u128, basis_points: u32) -> u128 {
+    pub(crate) fn calculate_fee(&self, amount: u128, basis_points: u32, is_protocol: bool) -> u128 {
         let total_basis_points = 10_000u128;
-        let amount_per_basis_point = amount / total_basis_points;
-        basis_points as u128 * amount_per_basis_point
+        let fee_amount = basis_points as u128 * amount;
+        if !is_protocol {
+            // round down
+            fee_amount / total_basis_points
+        } else {
+            // round up
+            fee_amount.div_ceil(total_basis_points)
+        }
     }
 
     pub(crate) fn calculate_referrer_fee(&self, amount: u128, matching_pool: bool) -> u128 {
@@ -210,7 +216,7 @@ impl Contract {
         } else {
             self.referral_fee_public_round_basis_points
         };
-        let referrer_amount = self.calculate_fee(amount, multiplier);
+        let referrer_amount = self.calculate_fee(amount, multiplier, false);
         referrer_amount
     }
 
@@ -257,6 +263,7 @@ impl Contract {
         referrer_id: Option<AccountId>,
         matching_pool: bool,
     ) -> Promise {
+        let caller_id = env::predecessor_account_id();
         if matching_pool {
             assert!(
                 deposit >= self.min_matching_pool_donation_amount.0,
@@ -276,7 +283,7 @@ impl Contract {
         } else {
             if let Some(sybil_wrapper_provider) = self.sybil_wrapper_provider.get() {
                 let (contract_id, method_name) = sybil_wrapper_provider.decompose();
-                let args = json!({ "account_id": env::predecessor_account_id() })
+                let args = json!({ "account_id": caller_id.clone() })
                     .to_string()
                     .into_bytes();
                 Promise::new(AccountId::new_unchecked(contract_id.clone()))
@@ -285,6 +292,7 @@ impl Contract {
                         Self::ext(env::current_account_id())
                             .with_static_gas(XCC_GAS)
                             .sybil_callback(
+                                caller_id,
                                 deposit,
                                 project_id.clone(),
                                 message.clone(),
@@ -322,6 +330,7 @@ impl Contract {
     #[private] // Public - but only callable by env::current_account_id()
     pub fn sybil_callback(
         &mut self,
+        caller_id: AccountId,
         deposit: Balance,
         project_id: Option<ProjectId>,
         message: Option<String>,
@@ -329,7 +338,6 @@ impl Contract {
         matching_pool: bool,
         #[callback_result] call_result: Result<bool, PromiseError>,
     ) -> Promise {
-        let caller_id = env::predecessor_account_id();
         if call_result.is_err() {
             log!(format!(
                 "Error verifying sybil check; returning donation {} to donor {}",
@@ -422,7 +430,7 @@ impl Contract {
             let protocol_fee_basis_points = protocol_config_provider_result.basis_points;
             let protocol_fee_recipient_account = protocol_config_provider_result.account_id;
             // calculate protocol fee (don't transfer yet)
-            let protocol_fee = self.calculate_fee(deposit, protocol_fee_basis_points);
+            let protocol_fee = self.calculate_fee(deposit, protocol_fee_basis_points, true);
             self.process_donation(
                 deposit,
                 protocol_fee,
@@ -480,7 +488,8 @@ impl Contract {
         if let Some(chef) = self.chef.get() {
             // chef fee only applies to public round donations
             if !matching_pool {
-                let chef_fee_amount = self.calculate_fee(remainder, self.chef_fee_basis_points);
+                let chef_fee_amount =
+                    self.calculate_fee(remainder, self.chef_fee_basis_points, false);
                 chef_fee = Some(U128::from(chef_fee_amount));
                 chef_id = Some(chef);
                 remainder = remainder.checked_sub(chef_fee_amount).expect(&format!(

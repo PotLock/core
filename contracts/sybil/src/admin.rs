@@ -33,6 +33,9 @@ impl Contract {
             provider.is_active = false;
             self.providers_by_id
                 .insert(&provider_id, &VersionedProvider::Current(provider.clone()));
+            // remove provider from devault providers
+            self.default_provider_ids.remove(&provider_id);
+            // return provider
             provider
         } else {
             env::panic_str("Provider does not exist");
@@ -109,12 +112,38 @@ impl Contract {
     }
 
     #[payable]
-    pub fn admin_add_default_providers(&mut self, provider_id: ProviderId) {
+    pub fn admin_add_default_providers(&mut self, provider_ids: Vec<ProviderId>) {
         // only contract owner or admin can call this method
         self.assert_owner_or_admin();
         let initial_storage_usage = env::storage_usage();
-        // add new default provider
-        self.default_provider_ids.insert(&provider_id);
+        // add new default providers
+        for provider_id in provider_ids {
+            self.default_provider_ids.insert(&provider_id);
+        }
+        // refund any unused deposit
+        refund_deposit(initial_storage_usage);
+    }
+
+    #[payable]
+    pub fn admin_remove_default_providers(&mut self, provider_ids: Vec<ProviderId>) {
+        // only contract owner or admin can call this method
+        self.assert_owner_or_admin();
+        let initial_storage_usage = env::storage_usage();
+        // remove default providers
+        for provider_id in provider_ids {
+            self.default_provider_ids.remove(&provider_id);
+        }
+        // refund any unused deposit
+        refund_deposit(initial_storage_usage);
+    }
+
+    #[payable]
+    pub fn admin_clear_default_providers(&mut self) {
+        // only contract owner or admin can call this method
+        self.assert_owner_or_admin();
+        let initial_storage_usage = env::storage_usage();
+        // clear default providers
+        self.default_provider_ids.clear();
         // refund any unused deposit
         refund_deposit(initial_storage_usage);
     }

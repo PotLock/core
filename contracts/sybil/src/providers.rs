@@ -300,9 +300,22 @@ impl Contract {
         }
     }
 
-    pub fn get_providers(&self) -> Vec<ProviderExternal> {
+    pub fn get_providers(
+        &self,
+        from_index: Option<u64>,
+        limit: Option<u64>,
+    ) -> Vec<ProviderExternal> {
+        let start_index: u64 = from_index.unwrap_or_default();
+        assert!(
+            (self.providers_by_id.len() as u64) >= start_index,
+            "Out of bounds, please use a smaller from_index."
+        );
+        let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
+        assert_ne!(limit, 0, "Cannot provide limit of 0.");
         self.providers_by_id
             .iter()
+            .skip(start_index as usize)
+            .take(limit.try_into().unwrap())
             .map(|(provider_id, provider)| {
                 ProviderExternal::from_provider_id(&provider_id.0, Provider::from(provider))
             })

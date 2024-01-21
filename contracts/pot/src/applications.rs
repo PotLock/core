@@ -60,6 +60,11 @@ impl Contract {
     #[payable]
     pub fn apply(&mut self, message: Option<String>) -> Promise {
         let project_id = env::predecessor_account_id(); // TODO: consider renaming to "applicant_id" to make it less opinionated (e.g. maybe developers are applying, and they are not exactly a "project")
+                                                        // chef, admin & owner cannot apply
+        assert!(
+            !self.is_chef(Some(&project_id)) && !self.is_owner_or_admin(Some(&project_id)),
+            "Chef, admin & owner cannot apply"
+        );
         let deposit = env::attached_deposit();
         if let Some(registry_provider) = self.registry_provider.get() {
             // decompose registry provider
@@ -121,8 +126,6 @@ impl Contract {
         }
         // check that application period is open
         self.assert_application_period_open();
-        // check that max_projects hasn't been reached
-        self.assert_max_projects_not_reached();
         // add application
         let application = Application {
             project_id,
@@ -244,6 +247,7 @@ impl Contract {
         )
     }
 
+    #[payable]
     pub fn chef_set_application_status(
         &mut self,
         project_id: ProjectId,
@@ -257,8 +261,10 @@ impl Contract {
                 .get(&project_id)
                 .expect("Application does not exist"),
         );
+        // check that max_projects hasn't been reached
+        self.assert_max_projects_not_reached();
+        // update application
         let previous_status = application.status.clone();
-        // verify that the application is pending
         application.status = status;
         application.updated_at = Some(env::block_timestamp_ms());
         application.review_notes = Some(notes);
@@ -281,6 +287,7 @@ impl Contract {
 
     // TODO: consider removing convenience methods below
 
+    #[payable]
     pub fn chef_mark_application_approved(
         &mut self,
         project_id: ProjectId,
@@ -289,6 +296,7 @@ impl Contract {
         self.chef_set_application_status(project_id, ApplicationStatus::Approved, notes)
     }
 
+    #[payable]
     pub fn chef_mark_application_rejected(
         &mut self,
         project_id: ProjectId,
@@ -297,6 +305,7 @@ impl Contract {
         self.chef_set_application_status(project_id, ApplicationStatus::Rejected, notes)
     }
 
+    #[payable]
     pub fn chef_mark_application_in_review(
         &mut self,
         project_id: ProjectId,
@@ -305,6 +314,7 @@ impl Contract {
         self.chef_set_application_status(project_id, ApplicationStatus::InReview, notes)
     }
 
+    #[payable]
     pub fn chef_mark_application_pending(
         &mut self,
         project_id: ProjectId,

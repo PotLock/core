@@ -164,6 +164,8 @@ pub struct ContractSourceMetadata {
 
 ### Write Methods
 
+**NB: ALL privileged write methods (those beginning with `admin_*` or `owner_*`) require an attached deposit of at least one yoctoNEAR, for security purposes.**
+
 ```rs
 // INIT
 
@@ -248,7 +250,13 @@ pub fn admin_unflag_provider(&mut self, provider_id: ProviderId) -> Provider
 pub fn admin_set_default_providers(&mut self, provider_ids: Vec<ProviderId>)
 
 #[payable]
-pub fn admin_add_default_providers(&mut self, provider_id: ProviderId)
+pub fn admin_add_default_providers(&mut self, provider_ids: Vec<ProviderId>)
+
+#[payable]
+pub fn admin_remove_default_providers(&mut self, provider_ids: Vec<ProviderId>)
+
+#[payable]
+pub fn admin_clear_default_providers(&mut self)
 
 #[payable]
 pub fn admin_set_default_human_threshold(&mut self, default_human_threshold: u32)
