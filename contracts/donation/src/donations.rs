@@ -93,7 +93,7 @@ impl Contract {
             // format donation record
             let donation = Donation {
                 id: (donation_count + 1) as DonationId,
-                donor_id: env::predecessor_account_id(),
+                donor_id: sender_id.clone(),
                 total_amount: amount,
                 ft_id: ft_id.clone(),
                 message,
