@@ -65,6 +65,8 @@ pub struct ProjectExternal {
 
 ### Write Methods
 
+**NB: ALL privileged write methods (those beginning with `admin_*` or `owner_*`) require an attached deposit of at least one yoctoNEAR, for security purposes.**
+
 ```rs
 // INIT
 
@@ -115,6 +117,11 @@ pub fn self_set_source_metadata(&mut self, source_metadata: ContractSourceMetada
 ### Read Methods
 
 ```rs
+// IS REGISTERED BOOLEAN
+
+pub fn is_registered(&self, account_id: ProjectId) -> bool
+
+
 // PROJECTS
 
 pub fn get_projects(&self) -> Vec<ProjectExternal>

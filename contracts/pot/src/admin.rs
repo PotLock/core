@@ -27,57 +27,84 @@ pub struct UpdatePotArgs {
 #[near_bindgen]
 impl Contract {
     // CHANGE OWNER
+    #[payable]
     pub fn owner_change_owner(&mut self, new_owner: AccountId) {
         self.assert_owner();
+        let initial_storage_usage = env::storage_usage();
         self.owner = new_owner;
+        refund_deposit(initial_storage_usage);
     }
 
     // ADD/REMOVE ADMINS
+    #[payable]
     pub fn owner_add_admins(&mut self, new_admins: Vec<AccountId>) {
         self.assert_owner();
+        let initial_storage_usage = env::storage_usage();
         for new_admin in new_admins.iter() {
             self.admins.insert(new_admin);
         }
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn owner_remove_admins(&mut self, admins_to_remove: Vec<AccountId>) {
         self.assert_owner();
+        let initial_storage_usage = env::storage_usage();
         for admin_to_remove in admins_to_remove.iter() {
             self.admins.remove(admin_to_remove);
         }
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn owner_set_admins(&mut self, account_ids: Vec<AccountId>) {
         self.assert_owner();
+        let initial_storage_usage = env::storage_usage();
         for account_id in account_ids {
             self.admins.remove(&account_id);
         }
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn owner_clear_admins(&mut self) {
         self.assert_owner();
+        let initial_storage_usage = env::storage_usage();
         self.admins.clear();
+        refund_deposit(initial_storage_usage);
     }
 
     // CHEF
+    #[payable]
     pub fn admin_set_chef(&mut self, chef: AccountId) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.chef.set(&chef);
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_remove_chef(&mut self) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.chef.remove();
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_set_chef_fee_basis_points(&mut self, chef_fee_basis_points: u32) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.chef_fee_basis_points = chef_fee_basis_points;
+        refund_deposit(initial_storage_usage);
     }
 
     // POT CONFIG
+    #[payable]
     pub fn admin_dangerously_set_pot_config(&mut self, update_args: UpdatePotArgs) -> PotConfig {
+        // TODO: CONSIDER REMOVING THIS METHOD DUE TO POTENTIAL FOR MISUSE
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         if let Some(owner) = update_args.owner {
             if env::signer_account_id() == self.owner {
                 // only update owner if caller is owner
@@ -173,26 +200,39 @@ impl Contract {
             self.chef_fee_basis_points = chef_fee_basis_points;
         }
 
+        refund_deposit(initial_storage_usage);
+
         self.get_config()
     }
 
+    #[payable]
     pub fn admin_set_pot_name(&mut self, pot_name: String) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.pot_name = pot_name;
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_set_pot_description(&mut self, pot_description: String) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.pot_description = pot_description;
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_set_max_projects(&mut self, max_projects: u32) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.max_projects = max_projects;
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_set_base_currency(&mut self, base_currency: AccountId) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         // only "near" allowed for now
         assert_eq!(
             base_currency,
@@ -200,79 +240,115 @@ impl Contract {
             "Only NEAR is supported"
         );
         self.base_currency = base_currency;
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_set_application_start_ms(&mut self, application_start_ms: u64) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.application_start_ms = application_start_ms;
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_set_application_end_ms(&mut self, application_end_ms: u64) {
         self.assert_admin_or_greater();
         assert!(
             application_end_ms <= self.public_round_end_ms,
             "Application end must be before public round end"
         );
+        let initial_storage_usage = env::storage_usage();
         self.application_end_ms = application_end_ms;
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_set_public_round_start_ms(&mut self, public_round_start_ms: u64) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.public_round_start_ms = public_round_start_ms;
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_set_public_round_end_ms(&mut self, public_round_end_ms: u64) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.public_round_end_ms = public_round_end_ms;
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_set_public_round_open(&mut self, public_round_end_ms: TimestampMs) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.public_round_start_ms = env::block_timestamp_ms();
         self.public_round_end_ms = public_round_end_ms;
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_set_public_round_closed(&mut self) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.public_round_end_ms = env::block_timestamp_ms();
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_set_registry_provider(&mut self, contract_id: AccountId, method_name: String) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         let provider_id = ProviderId::new(contract_id.to_string(), method_name);
         self.registry_provider.set(&provider_id);
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_remove_registry_provider(&mut self) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.registry_provider.remove();
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_set_min_matching_pool_donation_amount(
         &mut self,
         min_matching_pool_donation_amount: U128,
     ) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.min_matching_pool_donation_amount = min_matching_pool_donation_amount;
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_set_sybil_wrapper_provider(
         &mut self,
         contract_id: AccountId,
         method_name: String,
     ) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         let provider_id = ProviderId::new(contract_id.to_string(), method_name);
         self.sybil_wrapper_provider.set(&provider_id);
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_remove_sybil_wrapper_provider(&mut self) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.sybil_wrapper_provider.remove();
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_set_custom_sybil_checks(&mut self, custom_sybil_checks: Vec<CustomSybilCheck>) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         let formatted_custom_sybil_checks: HashMap<ProviderId, SybilProviderWeight> =
             custom_sybil_checks
                 .into_iter()
@@ -285,42 +361,61 @@ impl Contract {
                 })
                 .collect();
         self.custom_sybil_checks.set(&formatted_custom_sybil_checks);
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_remove_custom_sybil_checks(&mut self) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.custom_sybil_checks.remove();
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_set_custom_min_threshold_score(&mut self, custom_min_threshold_score: u32) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.custom_min_threshold_score
             .set(&custom_min_threshold_score);
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_remove_custom_min_threshold_score(&mut self) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.custom_min_threshold_score.remove();
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_set_referral_fee_matching_pool_basis_points(
         &mut self,
         referral_fee_matching_pool_basis_points: u32,
     ) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.referral_fee_matching_pool_basis_points = referral_fee_matching_pool_basis_points;
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_set_referral_fee_public_round_basis_points(
         &mut self,
         referral_fee_public_round_basis_points: u32,
     ) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.referral_fee_public_round_basis_points = referral_fee_public_round_basis_points;
+        refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
     pub fn admin_set_cooldown_period_complete(&mut self) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.cooldown_end_ms.set(&env::block_timestamp_ms());
+        refund_deposit(initial_storage_usage);
     }
 }

@@ -218,6 +218,7 @@ impl Contract {
         tags: Option<Vec<String>>,
         icon_url: Option<String>,
         external_url: Option<String>,
+        default_weight: Option<u32>, // owner/admin-only
     ) -> ProviderExternal {
         // Ensure caller is Provider submitter or Owner/Admin
         assert!(
@@ -261,6 +262,13 @@ impl Contract {
             provider.external_url = Some(external_url);
         }
 
+        // owner/admin-only
+        if self.is_owner_or_admin() {
+            if let Some(default_weight) = default_weight {
+                provider.default_weight = default_weight;
+            }
+        }
+
         // update & store provider
         self.providers_by_id.insert(
             &provider_id,
@@ -292,9 +300,22 @@ impl Contract {
         }
     }
 
-    pub fn get_providers(&self) -> Vec<ProviderExternal> {
+    pub fn get_providers(
+        &self,
+        from_index: Option<u64>,
+        limit: Option<u64>,
+    ) -> Vec<ProviderExternal> {
+        let start_index: u64 = from_index.unwrap_or_default();
+        assert!(
+            (self.providers_by_id.len() as u64) >= start_index,
+            "Out of bounds, please use a smaller from_index."
+        );
+        let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
+        assert_ne!(limit, 0, "Cannot provide limit of 0.");
         self.providers_by_id
             .iter()
+            .skip(start_index as usize)
+            .take(limit.try_into().unwrap())
             .map(|(provider_id, provider)| {
                 ProviderExternal::from_provider_id(&provider_id.0, Provider::from(provider))
             })
