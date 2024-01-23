@@ -46,7 +46,7 @@ impl Contract {
         &mut self,
         recipient_id: AccountId,
         message: Option<String>,
-        referrer_id: Option<AccountId>,
+        mut referrer_id: Option<AccountId>,
     ) -> Donation {
         // user has to pay for storage
         let initial_storage_usage = env::storage_usage();
@@ -61,9 +61,14 @@ impl Contract {
         // calculate referrer fee, if applicable
         let mut referrer_fee = None;
         if let Some(_referrer_id) = referrer_id.clone() {
-            let referrer_amount = self.calculate_referrer_fee(amount);
-            remainder -= referrer_amount;
-            referrer_fee = Some(U128::from(referrer_amount));
+            // if referrer ID is provided, check that it isn't caller or recipient. If it is, set to None
+            if _referrer_id == env::predecessor_account_id() || _referrer_id == recipient_id {
+                referrer_id = None;
+            } else {
+                let referrer_amount = self.calculate_referrer_fee(amount);
+                remainder -= referrer_amount;
+                referrer_fee = Some(U128::from(referrer_amount));
+            }
         }
 
         // get donation count, which will be incremented to create the unique donation ID
