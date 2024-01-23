@@ -54,12 +54,11 @@ impl Contract {
 
         // calculate protocol fee (unless bypassed)
         let amount = env::attached_deposit();
-        let mut protocol_fee = self.calculate_protocol_fee(amount);
-        if let Some(bypass_protocol_fee) = bypass_protocol_fee {
-            if bypass_protocol_fee {
-                protocol_fee = 0;
-            }
-        }
+        let protocol_fee = if bypass_protocol_fee.unwrap_or(false) {
+            0
+        } else {
+            self.calculate_protocol_fee(amount)
+        };
         let mut remainder: u128 = amount;
         remainder -= protocol_fee;
 

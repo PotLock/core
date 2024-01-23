@@ -229,6 +229,7 @@ impl Contract {
         message: Option<String>,
         referrer_id: Option<AccountId>,
         matching_pool: Option<bool>,
+        bypass_protocol_fee: Option<bool>,
     ) -> Promise {
         if let Some(project_id) = project_id.clone() {
             self.assert_approved_application(&project_id);
@@ -252,7 +253,14 @@ impl Contract {
         }
         // TODO: may want to prohibit additions to matching pool once public round has closed?
         let deposit = env::attached_deposit();
-        self.assert_caller_can_donate(deposit, project_id, message, referrer_id, is_matching_pool)
+        self.assert_caller_can_donate(
+            deposit,
+            project_id,
+            message,
+            referrer_id,
+            is_matching_pool,
+            bypass_protocol_fee,
+        )
     }
 
     pub(crate) fn assert_caller_can_donate(
@@ -262,6 +270,7 @@ impl Contract {
         message: Option<String>,
         referrer_id: Option<AccountId>,
         matching_pool: bool,
+        bypass_protocol_fee: Option<bool>,
     ) -> Promise {
         let caller_id = env::predecessor_account_id();
         if matching_pool {
@@ -279,6 +288,7 @@ impl Contract {
                     message.clone(),
                     referrer_id.clone(),
                     matching_pool,
+                    bypass_protocol_fee,
                 )
         } else {
             if let Some(sybil_wrapper_provider) = self.sybil_wrapper_provider.get() {
@@ -298,6 +308,7 @@ impl Contract {
                                 message.clone(),
                                 referrer_id.clone(),
                                 matching_pool,
+                                bypass_protocol_fee,
                             ),
                     )
             } else {
@@ -310,6 +321,7 @@ impl Contract {
                         message.clone(),
                         referrer_id.clone(),
                         matching_pool,
+                        bypass_protocol_fee,
                     )
             }
         }
@@ -323,8 +335,16 @@ impl Contract {
         message: Option<String>,
         referrer_id: Option<AccountId>,
         matching_pool: bool,
+        bypass_protocol_fee: Option<bool>,
     ) -> Promise {
-        self.handle_protocol_fee(deposit, project_id, message, referrer_id, matching_pool)
+        self.handle_protocol_fee(
+            deposit,
+            project_id,
+            message,
+            referrer_id,
+            matching_pool,
+            bypass_protocol_fee,
+        )
     }
 
     #[private] // Public - but only callable by env::current_account_id()
@@ -336,6 +356,7 @@ impl Contract {
         message: Option<String>,
         referrer_id: Option<AccountId>,
         matching_pool: bool,
+        bypass_protocol_fee: Option<bool>,
         #[callback_result] call_result: Result<bool, PromiseError>,
     ) -> Promise {
         if call_result.is_err() {
@@ -359,7 +380,14 @@ impl Contract {
                 "Sybil provider wrapper check returned false. Donation has been returned to donor.",
             );
         } else {
-            self.handle_protocol_fee(deposit, project_id, message, referrer_id, matching_pool)
+            self.handle_protocol_fee(
+                deposit,
+                project_id,
+                message,
+                referrer_id,
+                matching_pool,
+                bypass_protocol_fee,
+            )
         }
     }
 
@@ -370,8 +398,20 @@ impl Contract {
         message: Option<String>,
         referrer_id: Option<AccountId>,
         matching_pool: bool,
+        bypass_protocol_fee: Option<bool>,
     ) -> Promise {
-        if let Some(protocol_config_provider) = self.protocol_config_provider.get() {
+        if bypass_protocol_fee.unwrap_or(false) {
+            // bypass protocol fee
+            Self::ext(env::current_account_id())
+                .with_static_gas(XCC_GAS)
+                .bypass_protocol_fee(
+                    deposit,
+                    project_id.clone(),
+                    message.clone(),
+                    referrer_id.clone(),
+                    matching_pool,
+                )
+        } else if let Some(protocol_config_provider) = self.protocol_config_provider.get() {
             let (contract_id, method_name) = protocol_config_provider.decompose();
             let args = json!({}).to_string().into_bytes();
             Promise::new(AccountId::new_unchecked(contract_id.clone()))
