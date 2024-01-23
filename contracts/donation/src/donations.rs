@@ -47,15 +47,20 @@ impl Contract {
         recipient_id: AccountId,
         message: Option<String>,
         mut referrer_id: Option<AccountId>,
+        bypass_protocol_fee: Option<bool>,
     ) -> Donation {
         // user has to pay for storage
         let initial_storage_usage = env::storage_usage();
 
-        // calculate fees
-        // calculate protocol fee
+        // calculate protocol fee (unless bypassed)
         let amount = env::attached_deposit();
-        let mut remainder = amount;
-        let protocol_fee = self.calculate_protocol_fee(amount);
+        let mut protocol_fee = self.calculate_protocol_fee(amount);
+        if let Some(bypass_protocol_fee) = bypass_protocol_fee {
+            if bypass_protocol_fee {
+                protocol_fee = 0;
+            }
+        }
+        let mut remainder: u128 = amount;
         remainder -= protocol_fee;
 
         // calculate referrer fee, if applicable
@@ -91,7 +96,7 @@ impl Contract {
         // insert mapping records
         self.insert_donation_record(&donation);
 
-        // assert that donation after fees > storage cost
+        // assert that donation after fees covers storage cost
         let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
         require!(
             remainder > required_deposit,
@@ -102,21 +107,24 @@ impl Contract {
         );
         remainder -= required_deposit;
 
-        // transfer fees
         // transfer protocol fee
-        log!(format!(
-            "Transferring protocol fee {} to {}",
-            protocol_fee, self.protocol_fee_recipient_account
-        ));
-        Promise::new(self.protocol_fee_recipient_account.clone()).transfer(protocol_fee);
+        if protocol_fee > 0 {
+            log!(format!(
+                "Transferring protocol fee {} to {}",
+                protocol_fee, self.protocol_fee_recipient_account
+            ));
+            Promise::new(self.protocol_fee_recipient_account.clone()).transfer(protocol_fee);
+        }
 
         // transfer referrer fee
         if let (Some(referrer_fee), Some(referrer_id)) = (referrer_fee, referrer_id) {
-            log!(format!(
-                "Transferring referrer fee {} to {}",
-                referrer_fee.0, referrer_id
-            ));
-            Promise::new(referrer_id).transfer(referrer_fee.0);
+            if referrer_fee.0 > 0 {
+                log!(format!(
+                    "Transferring referrer fee {} to {}",
+                    referrer_fee.0, referrer_id
+                ));
+                Promise::new(referrer_id).transfer(referrer_fee.0);
+            }
         }
 
         // transfer donation
