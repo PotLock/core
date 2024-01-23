@@ -41,6 +41,7 @@ impl From<VersionedDonation> for Donation {
 
 #[near_bindgen]
 impl Contract {
+    /// FT equivalent of donate, for use with FTs that implement NEP-144
     pub fn ft_on_transfer(&mut self, sender_id: AccountId, amount: U128, msg: String) -> String {
         let ft_id = env::predecessor_account_id();
         // deconstruct msg, should contain recipient_id and optional referrer_id
