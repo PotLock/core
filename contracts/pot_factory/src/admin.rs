@@ -11,6 +11,7 @@ impl Contract {
     #[payable]
     pub fn owner_set_admins(&mut self, account_ids: Vec<AccountId>) {
         self.assert_owner();
+        self.admins.clear();
         for account_id in account_ids {
             self.admins.insert(&account_id);
         }
