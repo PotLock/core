@@ -441,6 +441,7 @@ pub fn donate(
     message: Option<String>,
     referrer_id: Option<AccountId>,
     matching_pool: Option<bool>,
+    bypass_protocol_fee: Option<bool>, // Allows donor to bypass protocol fee if they wish. Defaults to "false".
 ) -> DonationExternal
 
 
