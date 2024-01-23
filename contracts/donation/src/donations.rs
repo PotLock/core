@@ -90,55 +90,19 @@ impl Contract {
             // verify and update storage balance for FT donation
             self.verify_and_update_storage_balance(sender_id.clone(), initial_storage_usage);
 
-            // transfer protocol fee
-            log!(format!(
-                "Transferring protocol fee {} ({}) to {}",
-                protocol_fee, ft_id, self.protocol_fee_recipient_account
-            ));
-            self.handle_transfer(
-                self.protocol_fee_recipient_account.clone(),
-                U128(protocol_fee),
-                remainder,
-                donation.clone(),
-                false,
-                true,
-                false,
-            );
-
-            // transfer referrer fee
-            if let (Some(referrer_fee), Some(referrer_id)) = (referrer_fee, referrer_id) {
-                log!(format!(
-                    "Transferring referrer fee {:?} ({}) to {}",
-                    referrer_fee.clone(),
-                    ft_id,
-                    referrer_id
-                ));
-                self.handle_transfer(
-                    referrer_id.clone(),
-                    referrer_fee.clone(),
-                    remainder,
-                    donation.clone(),
-                    false,
-                    false,
-                    true,
-                );
-            }
-
             // transfer donation
-            // TODO: transfer donation FIRST and only transfer fees if donation transfer succeeds (otherwise return fees to donor)
             log!(format!(
                 "Transferring donation {} ({}) to {}",
                 remainder, ft_id, recipient_id
             ));
-            self.handle_transfer(
+            self.handle_transfer_donation(
                 recipient_id.clone(),
                 U128(remainder),
                 remainder,
                 donation.clone(),
-                true,
-                false,
-                false,
             );
+
+            // NB: fees will be transferred in transfer_funds_callback after successful transfer of donation
 
             // return # unused tokens as per NEP-144 standard
             "0".to_string()
@@ -184,53 +148,19 @@ impl Contract {
         );
         remainder -= required_deposit;
 
-        // transfer protocol fee
-        log!(format!(
-            "Transferring protocol fee {} to {}",
-            protocol_fee, self.protocol_fee_recipient_account
-        ));
-        self.handle_transfer(
-            self.protocol_fee_recipient_account.clone(),
-            U128(protocol_fee),
-            remainder,
-            donation.clone(),
-            false,
-            true,
-            false,
-        );
-
-        // transfer referrer fee
-        if let (Some(referrer_fee), Some(referrer_id)) = (referrer_fee, referrer_id) {
-            log!(format!(
-                "Transferring referrer fee {} to {}",
-                referrer_fee.0, referrer_id
-            ));
-            self.handle_transfer(
-                referrer_id.clone(),
-                referrer_fee.clone(),
-                remainder,
-                donation.clone(),
-                false,
-                false,
-                true,
-            );
-        }
-
         // transfer donation
-        // TODO: transfer donation FIRST and only transfer fees if donation transfer succeeds (otherwise return fees to donor)
         log!(format!(
             "Transferring donation {} to {}",
             remainder, recipient_id
         ));
-        self.handle_transfer(
+        self.handle_transfer_donation(
             recipient_id.clone(),
             U128(remainder),
             remainder,
             donation.clone(),
-            true,
-            false,
-            false,
         );
+
+        // NB: fees will be transferred in transfer_funds_callback after successful transfer of donation
 
         // return donation
         donation
@@ -286,7 +216,7 @@ impl Contract {
         self.next_donation_id += 1;
 
         // insert mapping records
-        self.insert_donation_record(&donation);
+        self.insert_donation_record_internal(&donation);
 
         donation
     }
@@ -306,10 +236,16 @@ impl Contract {
             required_deposit
         );
 
+        log!("Old storage balance: {}", storage_balance.0);
         // deduct storage deposit from user's balance
         let new_storage_balance = storage_balance.0 - required_deposit;
         self.storage_deposits
             .insert(&sender_id, &new_storage_balance);
+        log!("New storage balance: {}", new_storage_balance);
+        log!(format!(
+            "Deducted {} yoctoNEAR from {}'s storage balance to cover storage",
+            required_deposit, sender_id
+        ));
     }
 
     pub(crate) fn handle_transfer(
@@ -359,6 +295,60 @@ impl Contract {
         }
     }
 
+    pub(crate) fn handle_transfer_donation(
+        &self,
+        recipient_id: AccountId,
+        amount: U128,
+        remainder: Balance,
+        donation: Donation,
+    ) {
+        self.handle_transfer(
+            recipient_id,
+            amount,
+            remainder,
+            donation,
+            true,
+            false,
+            false,
+        );
+    }
+
+    pub(crate) fn handle_transfer_protocol_fee(
+        &self,
+        recipient_id: AccountId,
+        amount: U128,
+        remainder: Balance,
+        donation: Donation,
+    ) {
+        self.handle_transfer(
+            recipient_id,
+            amount,
+            remainder,
+            donation,
+            false,
+            true,
+            false,
+        );
+    }
+
+    pub(crate) fn handle_transfer_referrer_fee(
+        &self,
+        recipient_id: AccountId,
+        amount: U128,
+        remainder: Balance,
+        donation: Donation,
+    ) {
+        self.handle_transfer(
+            recipient_id,
+            amount,
+            remainder,
+            donation,
+            false,
+            false,
+            true,
+        );
+    }
+
     /// Verifies whether donation & fees have been paid out for a given donation
     #[private]
     pub fn transfer_funds_callback(
@@ -373,18 +363,18 @@ impl Contract {
         let is_ft_transfer = donation.ft_id != AccountId::new_unchecked("near".to_string());
         if call_result.is_err() {
             // ERROR CASE HANDLING
-            // 1. If donation transfer failed, delete Donation record and return funds to donor
-            // 2. If protocol fee transfer failed, update donation record to indicate protocol fee of "0"
-            // 3. If referrer fee transfer failed, update donation record to indicate referrer fee of "0"
+            // 1. If donation transfer failed, delete Donation record and return all funds to donor. NB: fees have not been transferred yet.
+            // 2. If protocol fee transfer failed, update donation record to indicate protocol fee of "0". NB: donation has already been transferred to recipient and this cannot be reversed.
+            // 3. If referrer fee transfer failed, update donation record to indicate referrer fee of "0". NB: donation has already been transferred to recipient and this cannot be reversed.
             if is_donation_transfer {
                 log!(format!(
-                    "Error transferring donation {} to {}. Returning funds to donor.",
-                    remainder, donation.recipient_id
+                    "Error transferring donation {:?} to {}. Returning funds to donor.",
+                    donation.total_amount, donation.recipient_id
                 ));
                 // return funds to donor
                 if is_ft_transfer {
                     let donation_transfer_args =
-                        json!({ "receiver_id": donation.donor_id, "amount": U128(remainder) })
+                        json!({ "receiver_id": donation.donor_id, "amount": donation.total_amount.clone() })
                             .to_string()
                             .into_bytes();
                     Promise::new(AccountId::new_unchecked(donation.ft_id.to_string()))
@@ -395,17 +385,23 @@ impl Contract {
                             Gas(XCC_GAS_DEFAULT),
                         );
                 } else {
-                    Promise::new(donation.donor_id.clone()).transfer(remainder);
+                    Promise::new(donation.donor_id.clone()).transfer(donation.total_amount.0);
                 }
                 // delete donation record, and refund freed storage cost to donor's storage balance
                 let initial_storage_usage = env::storage_usage();
-                self.donations_by_id.remove(&donation.id);
+                self.remove_donation_record_internal(&donation);
                 let storage_freed = initial_storage_usage - env::storage_usage();
                 let cost_freed = env::storage_byte_cost() * Balance::from(storage_freed);
                 let storage_balance = self.storage_balance_of(&donation.donor_id);
                 let new_storage_balance = storage_balance.0 + cost_freed;
+                log!("Old storage balance: {}", storage_balance.0);
+                log!("New storage balance: {}", new_storage_balance);
                 self.storage_deposits
                     .insert(&donation.donor_id, &new_storage_balance); // TODO: check if this is hackable, e.g. if user can withdraw all their storage before this callback runs and therefore get a higher refund
+                log!(format!(
+                    "Refunded {} yoctoNEAR to {}'s storage balance for freed storage",
+                    cost_freed, donation.donor_id
+                ));
             } else if is_protocol_fee_transfer {
                 log!(format!(
                     "Error transferring protocol fee {:?} to {}. Returning funds to donor.",
@@ -460,6 +456,41 @@ impl Contract {
             }
         } else {
             if is_donation_transfer {
+                log!(format!(
+                    "Successfully transferred donation {} to {}!",
+                    remainder, donation.recipient_id
+                ));
+
+                // transfer protocol fee
+                log!(format!(
+                    "Transferring protocol fee {:?} ({}) to {}",
+                    donation.protocol_fee, donation.ft_id, self.protocol_fee_recipient_account
+                ));
+                self.handle_transfer_protocol_fee(
+                    self.protocol_fee_recipient_account.clone(),
+                    donation.protocol_fee.clone(),
+                    remainder,
+                    donation.clone(),
+                );
+
+                // transfer referrer fee
+                if let (Some(referrer_fee), Some(referrer_id)) =
+                    (donation.referrer_fee.clone(), donation.referrer_id.clone())
+                {
+                    log!(format!(
+                        "Transferring referrer fee {:?} ({}) to {}",
+                        referrer_fee.clone(),
+                        donation.ft_id,
+                        referrer_id
+                    ));
+                    self.handle_transfer_referrer_fee(
+                        referrer_id.clone(),
+                        referrer_fee.clone(),
+                        remainder,
+                        donation.clone(),
+                    );
+                }
+
                 // log event indicating successful donation/transfer!
                 log_donation_event(&donation);
             }
@@ -480,7 +511,7 @@ impl Contract {
         fee_amount / total_basis_points
     }
 
-    pub(crate) fn insert_donation_record(&mut self, donation: &Donation) {
+    pub(crate) fn insert_donation_record_internal(&mut self, donation: &Donation) {
         self.donations_by_id
             .insert(&donation.id, &VersionedDonation::Current(donation.clone()));
         // add to donations-by-recipient mapping
@@ -522,6 +553,33 @@ impl Contract {
                 })
             };
         donation_ids_by_ft_set.insert(&donation.id);
+        self.donation_ids_by_ft_id
+            .insert(&donation.ft_id, &donation_ids_by_ft_set);
+    }
+
+    pub(crate) fn remove_donation_record_internal(&mut self, donation: &Donation) {
+        self.donations_by_id.remove(&donation.id);
+        // remove from donations-by-recipient mapping
+        let mut donation_ids_by_recipient_set = self
+            .donation_ids_by_recipient_id
+            .get(&donation.recipient_id)
+            .unwrap();
+        donation_ids_by_recipient_set.remove(&donation.id);
+        self.donation_ids_by_recipient_id
+            .insert(&donation.recipient_id, &donation_ids_by_recipient_set);
+
+        // remove from donations-by-donor mapping
+        let mut donation_ids_by_donor_set = self
+            .donation_ids_by_donor_id
+            .get(&donation.donor_id)
+            .unwrap();
+        donation_ids_by_donor_set.remove(&donation.id);
+        self.donation_ids_by_donor_id
+            .insert(&donation.donor_id, &donation_ids_by_donor_set);
+
+        // remove from donations-by-ft mapping
+        let mut donation_ids_by_ft_set = self.donation_ids_by_ft_id.get(&donation.ft_id).unwrap();
+        donation_ids_by_ft_set.remove(&donation.id);
         self.donation_ids_by_ft_id
             .insert(&donation.ft_id, &donation_ids_by_ft_set);
     }
