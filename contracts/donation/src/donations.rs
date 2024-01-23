@@ -69,149 +69,76 @@ impl Contract {
         ));
 
         if let Some(recipient_id) = recipient_id {
-            // store donation to see how much storage was used
-            // check that user has paid enough to cover storage
-            // panicking will cancel the transfer on the FT contract
+            // calculate amounts
+            let (protocol_fee, referrer_fee, remainder) =
+                self.calculate_fees_and_remainder(amount.0, referrer_id.clone());
+
+            // create and insert donation record
             let initial_storage_usage = env::storage_usage();
-            // calculate fees
-            // calculate protocol fee
-            let mut remainder = amount.0;
-            let protocol_fee = self.calculate_protocol_fee(amount.0);
-            remainder -= protocol_fee;
-
-            // calculate referrer fee, if applicable
-            let mut referrer_fee = None;
-            if referrer_id.is_some() {
-                let referrer_amount = self.calculate_referrer_fee(amount.0);
-                remainder -= referrer_amount;
-                referrer_fee = Some(U128::from(referrer_amount));
-            }
-
-            // format donation record
-            let donation = Donation {
-                id: self.next_donation_id,
-                donor_id: sender_id.clone(),
-                total_amount: amount,
-                ft_id: ft_id.clone(),
+            let donation = self.create_and_insert_donation_record(
+                sender_id.clone(),
+                amount,
+                ft_id.clone(),
                 message,
-                donated_at_ms: env::block_timestamp_ms(),
-                recipient_id: recipient_id.clone(),
-                protocol_fee: U128::from(protocol_fee),
-                referrer_id: referrer_id.clone(),
+                env::block_timestamp_ms(),
+                recipient_id.clone(),
+                U128::from(protocol_fee),
+                referrer_id.clone(),
                 referrer_fee,
-            };
-
-            // increment next_donation_id
-            self.next_donation_id += 1;
-
-            // insert mapping records
-            self.insert_donation_record(&donation);
-
-            // check that user has enough storage deposit
-            let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
-            let storage_balance = self.storage_balance_of(&sender_id);
-            assert!(
-                storage_balance.0 >= required_deposit,
-                "{} must add storage deposit of at least {} yoctoNEAR to cover Donation storage",
-                sender_id,
-                required_deposit
             );
 
-            // deduct storage deposit from user's balance
-            let new_storage_balance = storage_balance.0 - required_deposit;
-            self.storage_deposits
-                .insert(&sender_id, &new_storage_balance);
+            // verify and update storage balance for FT donation
+            self.verify_and_update_storage_balance(sender_id.clone(), initial_storage_usage);
 
-            // transfer fees
             // transfer protocol fee
             log!(format!(
                 "Transferring protocol fee {} ({}) to {}",
                 protocol_fee, ft_id, self.protocol_fee_recipient_account
             ));
-            let protocol_fee_transfer_args: Vec<u8> = json!({ "receiver_id": self.protocol_fee_recipient_account.clone(), "amount": U128(protocol_fee) })
-                .to_string()
-                .into_bytes();
-            Promise::new(AccountId::new_unchecked(ft_id.to_string()))
-                .function_call(
-                    "ft_transfer".to_string(),
-                    protocol_fee_transfer_args,
-                    ONE_YOCTO,
-                    Gas(XCC_GAS_DEFAULT),
-                )
-                .then(
-                    Self::ext(env::current_account_id())
-                        .with_static_gas(Gas(XCC_GAS_DEFAULT))
-                        .transfer_funds_callback(
-                            remainder,
-                            donation.clone(),
-                            Some(ft_id.clone()),
-                            false,
-                            true,
-                            false,
-                        ),
-                );
+            self.handle_transfer(
+                self.protocol_fee_recipient_account.clone(),
+                U128(protocol_fee),
+                remainder,
+                donation.clone(),
+                false,
+                true,
+                false,
+            );
 
             // transfer referrer fee
-            if let Some(referrer_id) = referrer_id {
+            if let (Some(referrer_fee), Some(referrer_id)) = (referrer_fee, referrer_id) {
                 log!(format!(
                     "Transferring referrer fee {:?} ({}) to {}",
-                    referrer_fee.clone().unwrap(),
+                    referrer_fee.clone(),
                     ft_id,
                     referrer_id
                 ));
-                let referrer_fee_transfer_args =
-                    json!({ "receiver_id": referrer_id, "amount": referrer_fee })
-                        .to_string()
-                        .into_bytes();
-                Promise::new(AccountId::new_unchecked(ft_id.to_string()))
-                    .function_call(
-                        "ft_transfer".to_string(),
-                        referrer_fee_transfer_args,
-                        ONE_YOCTO,
-                        Gas(XCC_GAS_DEFAULT),
-                    )
-                    .then(
-                        Self::ext(env::current_account_id())
-                            .with_static_gas(Gas(XCC_GAS_DEFAULT))
-                            .transfer_funds_callback(
-                                remainder,
-                                donation.clone(),
-                                Some(ft_id.clone()),
-                                false,
-                                false,
-                                true,
-                            ),
-                    );
+                self.handle_transfer(
+                    referrer_id.clone(),
+                    referrer_fee.clone(),
+                    remainder,
+                    donation.clone(),
+                    false,
+                    false,
+                    true,
+                );
             }
 
             // transfer donation
+            // TODO: transfer donation FIRST and only transfer fees if donation transfer succeeds (otherwise return fees to donor)
             log!(format!(
                 "Transferring donation {} ({}) to {}",
                 remainder, ft_id, recipient_id
             ));
-            let donation_transfer_args =
-                json!({ "receiver_id": recipient_id, "amount": U128(remainder) })
-                    .to_string()
-                    .into_bytes();
-            Promise::new(AccountId::new_unchecked(ft_id.to_string()))
-                .function_call(
-                    "ft_transfer".to_string(),
-                    donation_transfer_args,
-                    ONE_YOCTO,
-                    Gas(XCC_GAS_DEFAULT),
-                )
-                .then(
-                    Self::ext(env::current_account_id())
-                        .with_static_gas(Gas(XCC_GAS_DEFAULT))
-                        .transfer_funds_callback(
-                            remainder,
-                            donation.clone(),
-                            Some(ft_id.clone()),
-                            true,
-                            false,
-                            false,
-                        ),
-                );
+            self.handle_transfer(
+                recipient_id.clone(),
+                U128(remainder),
+                remainder,
+                donation.clone(),
+                true,
+                false,
+                false,
+            );
 
             // return # unused tokens as per NEP-144 standard
             "0".to_string()
@@ -227,40 +154,24 @@ impl Contract {
         message: Option<String>,
         referrer_id: Option<AccountId>,
     ) -> Donation {
-        // user has to pay for storage
-        let initial_storage_usage = env::storage_usage();
-
-        // calculate fees
-        // calculate protocol fee
+        // calculate amounts
         let amount = env::attached_deposit();
-        let mut remainder = amount;
-        let protocol_fee = self.calculate_protocol_fee(amount);
-        remainder -= protocol_fee;
+        let (protocol_fee, referrer_fee, mut remainder) =
+            self.calculate_fees_and_remainder(amount.clone(), referrer_id.clone());
 
-        // calculate referrer fee, if applicable
-        let mut referrer_fee = None;
-        if let Some(_referrer_id) = referrer_id.clone() {
-            let referrer_amount = self.calculate_referrer_fee(amount);
-            remainder -= referrer_amount;
-            referrer_fee = Some(U128::from(referrer_amount));
-        }
-
-        // format donation record
-        let donation = Donation {
-            id: self.next_donation_id,
-            donor_id: env::predecessor_account_id(),
-            total_amount: U128::from(amount),
-            ft_id: AccountId::new_unchecked("near".to_string()), // for now, only NEAR is supported
+        // create and insert donation record
+        let initial_storage_usage = env::storage_usage();
+        let donation = self.create_and_insert_donation_record(
+            env::predecessor_account_id(),
+            U128::from(amount),
+            AccountId::new_unchecked("near".to_string()),
             message,
-            donated_at_ms: env::block_timestamp_ms(),
-            recipient_id: recipient_id.clone(),
-            protocol_fee: U128::from(protocol_fee),
-            referrer_id: referrer_id.clone(),
+            env::block_timestamp_ms(),
+            recipient_id.clone(),
+            U128::from(protocol_fee),
+            referrer_id.clone(),
             referrer_fee,
-        };
-
-        // insert mapping records
-        self.insert_donation_record(&donation);
+        );
 
         // assert that donation after fees > storage cost
         let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
@@ -273,19 +184,20 @@ impl Contract {
         );
         remainder -= required_deposit;
 
-        // transfer fees
         // transfer protocol fee
         log!(format!(
             "Transferring protocol fee {} to {}",
             protocol_fee, self.protocol_fee_recipient_account
         ));
-        Promise::new(self.protocol_fee_recipient_account.clone())
-            .transfer(protocol_fee)
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(Gas(XCC_GAS_DEFAULT))
-                    .transfer_funds_callback(remainder, donation.clone(), None, false, true, false),
-            );
+        self.handle_transfer(
+            self.protocol_fee_recipient_account.clone(),
+            U128(protocol_fee),
+            remainder,
+            donation.clone(),
+            false,
+            true,
+            false,
+        );
 
         // transfer referrer fee
         if let (Some(referrer_fee), Some(referrer_id)) = (referrer_fee, referrer_id) {
@@ -293,26 +205,158 @@ impl Contract {
                 "Transferring referrer fee {} to {}",
                 referrer_fee.0, referrer_id
             ));
-            Promise::new(referrer_id).transfer(referrer_fee.0).then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(Gas(XCC_GAS_DEFAULT))
-                    .transfer_funds_callback(remainder, donation.clone(), None, false, false, true),
+            self.handle_transfer(
+                referrer_id.clone(),
+                referrer_fee.clone(),
+                remainder,
+                donation.clone(),
+                false,
+                false,
+                true,
             );
         }
 
         // transfer donation
+        // TODO: transfer donation FIRST and only transfer fees if donation transfer succeeds (otherwise return fees to donor)
         log!(format!(
             "Transferring donation {} to {}",
             remainder, recipient_id
         ));
-        Promise::new(recipient_id).transfer(remainder).then(
-            Self::ext(env::current_account_id())
-                .with_static_gas(Gas(XCC_GAS_DEFAULT))
-                .transfer_funds_callback(remainder, donation.clone(), None, true, false, false),
+        self.handle_transfer(
+            recipient_id.clone(),
+            U128(remainder),
+            remainder,
+            donation.clone(),
+            true,
+            false,
+            false,
         );
 
         // return donation
         donation
+    }
+
+    pub(crate) fn calculate_fees_and_remainder(
+        &self,
+        amount: u128,
+        referrer_id: Option<AccountId>,
+    ) -> (u128, Option<U128>, u128) {
+        // calculate protocol fee
+        let mut remainder = amount;
+        let protocol_fee = self.calculate_protocol_fee(amount);
+        remainder -= protocol_fee;
+
+        // calculate referrer fee, if applicable
+        let mut referrer_fee = None;
+        if let Some(_referrer_id) = referrer_id.clone() {
+            let referrer_amount = self.calculate_referrer_fee(amount);
+            remainder -= referrer_amount;
+            referrer_fee = Some(U128::from(referrer_amount));
+        }
+
+        (protocol_fee, referrer_fee, remainder)
+    }
+
+    pub(crate) fn create_and_insert_donation_record(
+        &mut self,
+        donor_id: AccountId,
+        total_amount: U128,
+        ft_id: AccountId,
+        message: Option<String>,
+        donated_at_ms: TimestampMs,
+        recipient_id: AccountId,
+        protocol_fee: U128,
+        referrer_id: Option<AccountId>,
+        referrer_fee: Option<U128>,
+    ) -> Donation {
+        let donation = Donation {
+            id: self.next_donation_id,
+            donor_id,
+            total_amount,
+            ft_id,
+            message,
+            donated_at_ms,
+            recipient_id,
+            protocol_fee,
+            referrer_id,
+            referrer_fee,
+        };
+
+        // increment next_donation_id
+        self.next_donation_id += 1;
+
+        // insert mapping records
+        self.insert_donation_record(&donation);
+
+        donation
+    }
+
+    pub(crate) fn verify_and_update_storage_balance(
+        &mut self,
+        sender_id: AccountId,
+        initial_storage_usage: u64,
+    ) {
+        // verify that deposit is sufficient to cover storage
+        let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
+        let storage_balance = self.storage_balance_of(&sender_id);
+        assert!(
+            storage_balance.0 >= required_deposit,
+            "{} must add storage deposit of at least {} yoctoNEAR to cover Donation storage",
+            sender_id,
+            required_deposit
+        );
+
+        // deduct storage deposit from user's balance
+        let new_storage_balance = storage_balance.0 - required_deposit;
+        self.storage_deposits
+            .insert(&sender_id, &new_storage_balance);
+    }
+
+    pub(crate) fn handle_transfer(
+        &self,
+        recipient_id: AccountId,
+        amount: U128,
+        remainder: Balance,
+        donation: Donation,
+        is_donation_transfer: bool,
+        is_protocol_fee_transfer: bool,
+        is_referrer_fee_transfer: bool,
+    ) {
+        if donation.ft_id == AccountId::new_unchecked("near".to_string()) {
+            Promise::new(recipient_id).transfer(amount.0).then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(Gas(XCC_GAS_DEFAULT))
+                    .transfer_funds_callback(
+                        remainder,
+                        donation.clone(),
+                        is_donation_transfer,
+                        is_protocol_fee_transfer,
+                        is_referrer_fee_transfer,
+                    ),
+            );
+        } else {
+            let ft_transfer_args = json!({ "receiver_id": recipient_id, "amount": amount })
+                .to_string()
+                .into_bytes();
+            Promise::new(donation.ft_id.clone())
+                .function_call(
+                    "ft_transfer".to_string(),
+                    ft_transfer_args,
+                    ONE_YOCTO,
+                    Gas(XCC_GAS_DEFAULT),
+                )
+                .then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(Gas(XCC_GAS_DEFAULT))
+                        .transfer_funds_callback(
+                            remainder,
+                            donation.clone(),
+                            is_donation_transfer,
+                            is_protocol_fee_transfer,
+                            is_referrer_fee_transfer,
+                        ),
+                );
+        }
     }
 
     /// Verifies whether donation & fees have been paid out for a given donation
@@ -321,30 +365,35 @@ impl Contract {
         &mut self,
         remainder: Balance,
         mut donation: Donation,
-        ft_id: Option<AccountId>,
         is_donation_transfer: bool,
         is_protocol_fee_transfer: bool,
         is_referrer_fee_transfer: bool,
         #[callback_result] call_result: Result<(), PromiseError>,
     ) {
+        let is_ft_transfer = donation.ft_id != AccountId::new_unchecked("near".to_string());
         if call_result.is_err() {
+            // ERROR CASE HANDLING
+            // 1. If donation transfer failed, delete Donation record and return funds to donor
+            // 2. If protocol fee transfer failed, update donation record to indicate protocol fee of "0"
+            // 3. If referrer fee transfer failed, update donation record to indicate referrer fee of "0"
             if is_donation_transfer {
                 log!(format!(
                     "Error transferring donation {} to {}. Returning funds to donor.",
                     remainder, donation.recipient_id
                 ));
                 // return funds to donor
-                if let Some(ft_id) = ft_id {
+                if is_ft_transfer {
                     let donation_transfer_args =
                         json!({ "receiver_id": donation.donor_id, "amount": U128(remainder) })
                             .to_string()
                             .into_bytes();
-                    Promise::new(AccountId::new_unchecked(ft_id.to_string())).function_call(
-                        "ft_transfer".to_string(),
-                        donation_transfer_args,
-                        ONE_YOCTO,
-                        Gas(XCC_GAS_DEFAULT),
-                    );
+                    Promise::new(AccountId::new_unchecked(donation.ft_id.to_string()))
+                        .function_call(
+                            "ft_transfer".to_string(),
+                            donation_transfer_args,
+                            ONE_YOCTO,
+                            Gas(XCC_GAS_DEFAULT),
+                        );
                 } else {
                     Promise::new(donation.donor_id.clone()).transfer(remainder);
                 }
@@ -363,17 +412,18 @@ impl Contract {
                     donation.protocol_fee, self.protocol_fee_recipient_account
                 ));
                 // return funds to donor
-                if let Some(ft_id) = ft_id {
+                if is_ft_transfer {
                     let donation_transfer_args =
                         json!({ "receiver_id": donation.donor_id, "amount": donation.protocol_fee })
                             .to_string()
                             .into_bytes();
-                    Promise::new(AccountId::new_unchecked(ft_id.to_string())).function_call(
-                        "ft_transfer".to_string(),
-                        donation_transfer_args,
-                        ONE_YOCTO,
-                        Gas(XCC_GAS_DEFAULT),
-                    );
+                    Promise::new(AccountId::new_unchecked(donation.ft_id.to_string()))
+                        .function_call(
+                            "ft_transfer".to_string(),
+                            donation_transfer_args,
+                            ONE_YOCTO,
+                            Gas(XCC_GAS_DEFAULT),
+                        );
                 } else {
                     Promise::new(donation.donor_id.clone()).transfer(donation.protocol_fee.0);
                 }
@@ -387,17 +437,18 @@ impl Contract {
                     donation.referrer_fee, donation.referrer_id
                 ));
                 // return funds to donor
-                if let Some(ft_id) = ft_id {
+                if is_ft_transfer {
                     let donation_transfer_args =
                         json!({ "receiver_id": donation.donor_id, "amount": donation.referrer_fee })
                             .to_string()
                             .into_bytes();
-                    Promise::new(AccountId::new_unchecked(ft_id.to_string())).function_call(
-                        "ft_transfer".to_string(),
-                        donation_transfer_args,
-                        ONE_YOCTO,
-                        Gas(XCC_GAS_DEFAULT),
-                    );
+                    Promise::new(AccountId::new_unchecked(donation.ft_id.to_string()))
+                        .function_call(
+                            "ft_transfer".to_string(),
+                            donation_transfer_args,
+                            ONE_YOCTO,
+                            Gas(XCC_GAS_DEFAULT),
+                        );
                 } else {
                     Promise::new(donation.donor_id.clone())
                         .transfer(donation.referrer_fee.unwrap().0);
@@ -409,7 +460,7 @@ impl Contract {
             }
         } else {
             if is_donation_transfer {
-                // log event
+                // log event indicating successful donation/transfer!
                 log_donation_event(&donation);
             }
         }
