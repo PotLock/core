@@ -261,8 +261,6 @@ impl Contract {
                 .get(&project_id)
                 .expect("Application does not exist"),
         );
-        // check that max_projects hasn't been reached
-        self.assert_max_projects_not_reached();
         // update application
         let previous_status = application.status.clone();
         application.status = status;
@@ -275,6 +273,8 @@ impl Contract {
         );
         // insert into approved applications mapping if approved
         if application.status == ApplicationStatus::Approved {
+            // check that max_projects hasn't been reached
+            self.assert_max_projects_not_reached();
             self.approved_application_ids.insert(&project_id);
         } else {
             // setting application status as something other than Approved; if it was previously approved, remove from approved mapping

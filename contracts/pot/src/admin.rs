@@ -60,8 +60,9 @@ impl Contract {
     pub fn owner_set_admins(&mut self, account_ids: Vec<AccountId>) {
         self.assert_owner();
         let initial_storage_usage = env::storage_usage();
+        self.admins.clear();
         for account_id in account_ids {
-            self.admins.remove(&account_id);
+            self.admins.insert(&account_id);
         }
         refund_deposit(initial_storage_usage);
     }

@@ -12,11 +12,13 @@ impl Contract {
         // check that provider exists
         if let Some(versioned_provider) = self.providers_by_id.get(&provider_id) {
             // update provider
+            let initial_storage_usage = env::storage_usage();
             let mut provider = Provider::from(versioned_provider);
             provider.is_active = true;
             provider.default_weight = default_weight;
             self.providers_by_id
                 .insert(&provider_id, &VersionedProvider::Current(provider.clone()));
+            refund_deposit(initial_storage_usage);
             provider
         } else {
             env::panic_str("Provider does not exist");
@@ -29,12 +31,14 @@ impl Contract {
         // check that provider exists
         if let Some(versioned_provider) = self.providers_by_id.get(&provider_id) {
             // update provider
+            let initial_storage_usage = env::storage_usage();
             let mut provider = Provider::from(versioned_provider);
             provider.is_active = false;
             self.providers_by_id
                 .insert(&provider_id, &VersionedProvider::Current(provider.clone()));
             // remove provider from devault providers
             self.default_provider_ids.remove(&provider_id);
+            refund_deposit(initial_storage_usage);
             // return provider
             provider
         } else {
@@ -48,10 +52,12 @@ impl Contract {
         // check that provider exists
         if let Some(versioned_provider) = self.providers_by_id.get(&provider_id) {
             // update provider
+            let initial_storage_usage = env::storage_usage();
             let mut provider = Provider::from(versioned_provider);
             provider.is_flagged = true;
             self.providers_by_id
                 .insert(&provider_id, &VersionedProvider::Current(provider.clone()));
+            refund_deposit(initial_storage_usage);
             provider
         } else {
             env::panic_str("Provider does not exist");
@@ -64,10 +70,12 @@ impl Contract {
         // check that provider exists
         if let Some(versioned_provider) = self.providers_by_id.get(&provider_id) {
             // update provider
+            let initial_storage_usage = env::storage_usage();
             let mut provider = Provider::from(versioned_provider);
             provider.is_flagged = false;
             self.providers_by_id
                 .insert(&provider_id, &VersionedProvider::Current(provider.clone()));
+            refund_deposit(initial_storage_usage);
             provider
         } else {
             env::panic_str("Provider does not exist");
@@ -84,10 +92,12 @@ impl Contract {
         // check that provider exists
         if let Some(versioned_provider) = self.providers_by_id.get(&provider_id) {
             // update its ID by replacing the old key with the new key
+            let initial_storage_usage = env::storage_usage();
             let (contract_id, old_method_name) = provider_id.decompose();
             let new_id = ProviderId::new(contract_id, method_name.clone());
             self.providers_by_id.remove(&provider_id);
             self.providers_by_id.insert(&new_id, &versioned_provider);
+            refund_deposit(initial_storage_usage);
             Provider::from(self.providers_by_id.get(&new_id).unwrap())
         } else {
             env::panic_str("Provider does not exist");
