@@ -10,7 +10,9 @@ use near_sdk::{
 /// SybilProvider Contract
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
-pub struct Contract {}
+pub struct Contract {
+    account_ids_to_bool: UnorderedMap<AccountId, bool>,
+}
 
 #[derive(BorshSerialize, BorshDeserialize)]
 pub enum VersionedContract {
@@ -26,33 +28,19 @@ impl From<VersionedContract> for Contract {
     }
 }
 
+#[derive(BorshSerialize, BorshStorageKey)]
+pub enum StorageKey {
+    AccountIdsToBool,
+}
+
 #[near_bindgen]
 impl Contract {
-    // #[init]
-    // pub fn new(
-    //     source_metadata: Option<ContractSourceMetadata>,
-    //     owner: AccountId,
-    //     admins: Option<Vec<AccountId>>,
-    // ) -> Self {
-    //     assert!(!env::state_exists(), "Already initialized");
-    //     let versioned_metadata = source_metadata.map(VersionedContractSourceMetadata::Current);
-    //     Self {
-    //         contract_source_metadata: LazyOption::new(
-    //             StorageKey::SourceMetadata,
-    //             versioned_metadata.as_ref(),
-    //         ),
-    //         owner,
-    //         admins: account_vec_to_set(
-    //             if admins.is_some() {
-    //                 admins.unwrap()
-    //             } else {
-    //                 vec![]
-    //             },
-    //             StorageKey::Admins,
-    //         ),
-    //         providers_by_id: UnorderedMap::new(StorageKey::ProvidersById),
-    //     }
-    // }
+    #[init]
+    pub fn new() -> Self {
+        Self {
+            account_ids_to_bool: UnorderedMap::new(StorageKey::AccountIdsToBool),
+        }
+    }
 
     pub fn return_true(&self, account_id: AccountId) -> bool {
         true
@@ -61,10 +49,26 @@ impl Contract {
     pub fn return_false(&self, account_id: AccountId) -> bool {
         false
     }
+
+    pub fn get_check(&mut self) {
+        self.account_ids_to_bool
+            .insert(&env::predecessor_account_id(), &true);
+    }
+
+    pub fn remove_check(&mut self) {
+        self.account_ids_to_bool
+            .remove(&env::predecessor_account_id());
+    }
+
+    pub fn has_check(&self, account_id: AccountId) -> bool {
+        self.account_ids_to_bool.get(&account_id).is_some()
+    }
 }
 
 impl Default for Contract {
     fn default() -> Self {
-        Self {}
+        Self {
+            account_ids_to_bool: UnorderedMap::new(StorageKey::AccountIdsToBool),
+        }
     }
 }
