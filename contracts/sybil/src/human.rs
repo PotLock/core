@@ -2,9 +2,34 @@ use crate::*;
 
 const XCC_GAS: Gas = Gas(10u64.pow(13));
 
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct HumanScoreResponse {
+    pub is_human: bool,
+    pub score: u32,
+}
+
 #[near_bindgen]
 impl Contract {
-    pub fn is_human(&self, account_id: String) -> Promise {
+    pub fn get_human_score(&self, account_id: AccountId) -> HumanScoreResponse {
+        // get user stamps and add up default weights
+        let mut total_score = 0;
+        let user_providers = self.provider_ids_for_user.get(&account_id);
+        if let Some(user_providers) = user_providers {
+            for provider_id in user_providers.iter() {
+                if let Some(versioned_provider) = self.providers_by_id.get(&provider_id) {
+                    let provider = Provider::from(versioned_provider);
+                    total_score += provider.default_weight;
+                }
+            }
+        }
+        HumanScoreResponse {
+            is_human: total_score >= self.default_human_threshold,
+            score: total_score,
+        }
+    }
+
+    pub fn is_human(&self, account_id: AccountId) -> Promise {
         // TODO: add option for caller to specify providers
         let mut current_promise: Option<Promise> = None;
         let mut providers: Vec<ProviderExternal> = Vec::new();

@@ -302,7 +302,14 @@ pub fn get_providers_submitted_by_user(
 
 // IS-HUMAN
 
-pub fn is_human(&self, account_id: String) -> bool // TODO: add option for caller to specify providers (with weights) + min_human_threshold
+pub struct HumanScoreResponse {
+    pub is_human: bool,
+    pub score: u32,
+}
+
+pub fn get_human_score(&self, account_id: AccountId) -> HumanScoreResponse
+
+pub fn is_human(&self, account_id: AccountId) -> bool // TODO: add option for caller to specify providers (with weights) + min_human_threshold
 
 
 // OWNER/ADMINS
