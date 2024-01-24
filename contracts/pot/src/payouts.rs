@@ -137,7 +137,7 @@ impl Contract {
         );
     }
 
-    pub fn get_payouts(&self, from_index: Option<u64>, limit: Option<u64>) -> Vec<Payout> {
+    pub fn get_payouts(&self, from_index: Option<u64>, limit: Option<u64>) -> Vec<PayoutExternal> {
         let start_index: u64 = from_index.unwrap_or_default();
         assert!(
             (self.applications_by_id.len() as u64) >= start_index,
@@ -149,7 +149,7 @@ impl Contract {
             .iter()
             .skip(start_index as usize)
             .take(limit as usize)
-            .map(|(_payout_id, payout)| Payout::from(payout))
+            .map(|(_payout_id, payout)| Payout::from(payout).to_external())
             .collect()
     }
 

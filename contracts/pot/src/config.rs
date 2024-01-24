@@ -27,7 +27,7 @@ pub struct PotConfig {
     pub matching_pool_balance: U128,
     pub total_public_donations: U128,
     pub public_donations_count: u32,
-    pub payouts: Vec<Payout>,
+    pub payouts: Vec<PayoutExternal>,
     pub cooldown_end_ms: Option<TimestampMs>,
     pub all_paid_out: bool,
     pub protocol_config_provider: Option<ProviderId>,
