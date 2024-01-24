@@ -153,7 +153,7 @@ pub struct Contract {
     /// * Optional because not all Pots will require registration, and those that do might set after deployment.
     registry_provider: LazyOption<ProviderId>,
     /// Minimum amount that can be donated to the matching pool
-    min_matching_pool_donation_amount: U128,
+    min_matching_pool_donation_amount: u128,
 
     // SYBIL RESISTANCE
     /// Sybil contract address & method name that will be called to verify humanness. If `None`, no checks will be made.
@@ -174,11 +174,11 @@ pub struct Contract {
 
     // FUNDS & BALANCES
     /// Total matching pool donations
-    total_matching_pool_donations: U128,
+    total_matching_pool_donations: u128,
     /// Amount of matching funds available (not yet paid out)
-    matching_pool_balance: U128,
+    matching_pool_balance: u128,
     /// Total public donations
-    total_public_donations: U128,
+    total_public_donations: u128,
 
     // PAYOUTS
     /// Cooldown period starts when Chef sets payouts
@@ -301,7 +301,9 @@ impl Contract {
                 StorageKey::RegistryProvider,
                 registry_provider.as_ref(),
             ),
-            min_matching_pool_donation_amount: min_matching_pool_donation_amount.unwrap_or(U128(1)), // default to 1 YoctoNEAR
+            min_matching_pool_donation_amount: min_matching_pool_donation_amount
+                .unwrap_or(U128(1))
+                .into(), // default to 1 YoctoNEAR
 
             // sybil resistance
             sybil_wrapper_provider: LazyOption::new(
@@ -323,9 +325,9 @@ impl Contract {
             chef_fee_basis_points,
 
             // funds and balances
-            total_matching_pool_donations: U128(0),
-            matching_pool_balance: U128(0),
-            total_public_donations: U128(0),
+            total_matching_pool_donations: 0,
+            matching_pool_balance: 0,
+            total_public_donations: 0,
 
             // payouts
             cooldown_end_ms: LazyOption::new(StorageKey::CooldownEndMs, None),
@@ -378,16 +380,16 @@ impl Default for Contract {
             public_round_end_ms: 0,
             deployed_by: env::signer_account_id(),
             registry_provider: LazyOption::new(StorageKey::RegistryProvider, None),
-            min_matching_pool_donation_amount: U128(1),
+            min_matching_pool_donation_amount: 1,
             sybil_wrapper_provider: LazyOption::new(StorageKey::SybilContractId, None),
             custom_sybil_checks: LazyOption::new(StorageKey::CustomSybilChecks, None),
             custom_min_threshold_score: LazyOption::new(StorageKey::CustomMinThresholdScore, None),
             referral_fee_matching_pool_basis_points: 0,
             referral_fee_public_round_basis_points: 0,
             chef_fee_basis_points: 0,
-            total_matching_pool_donations: U128(0),
-            matching_pool_balance: U128(0),
-            total_public_donations: U128(0),
+            total_matching_pool_donations: 0,
+            matching_pool_balance: 0,
+            total_public_donations: 0,
             cooldown_end_ms: LazyOption::new(StorageKey::CooldownEndMs, None),
             all_paid_out: false,
             applications_by_id: UnorderedMap::new(StorageKey::ApplicationsById),

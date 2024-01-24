@@ -9,7 +9,7 @@ pub struct Donation {
     /// ID of the donor               
     pub donor_id: AccountId,
     /// Amount donated         
-    pub total_amount: U128,
+    pub total_amount: u128,
     /// Optional message from the donor          
     pub message: Option<String>,
     /// Timestamp when the donation was made
@@ -19,13 +19,13 @@ pub struct Donation {
     /// Referrer ID
     pub referrer_id: Option<AccountId>,
     /// Referrer fee
-    pub referrer_fee: Option<U128>,
+    pub referrer_fee: Option<u128>,
     /// Protocol fee
-    pub protocol_fee: U128,
+    pub protocol_fee: u128,
     /// Chef ID
     pub chef_id: Option<AccountId>,
     /// Chef fee
-    pub chef_fee: Option<U128>,
+    pub chef_fee: Option<u128>,
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -275,9 +275,9 @@ impl Contract {
         let caller_id = env::predecessor_account_id();
         if matching_pool {
             assert!(
-                deposit >= self.min_matching_pool_donation_amount.0,
+                deposit >= self.min_matching_pool_donation_amount,
                 "Matching pool donations must be at least {} yoctoNEAR",
-                self.min_matching_pool_donation_amount.0
+                self.min_matching_pool_donation_amount
             );
             // matching pool donations not subject to sybil checks, so go to always_allow callback
             Self::ext(env::current_account_id())
@@ -554,48 +554,42 @@ impl Contract {
         let donation_id = (self.donations_by_id.len() + 1) as DonationId;
         let donation = Donation {
             donor_id: env::signer_account_id(),
-            total_amount: U128::from(deposit),
+            total_amount: deposit,
             message,
             donated_at: env::block_timestamp_ms(),
             project_id: project_id.clone(),
-            protocol_fee: U128::from(protocol_fee),
+            protocol_fee,
             referrer_id: referrer_id.clone(),
-            referrer_fee,
+            referrer_fee: referrer_fee.map(|v| v.0),
             chef_id: chef_id.clone(),
-            chef_fee,
+            chef_fee: chef_fee.map(|v| v.0),
         };
         self.insert_donation_record(&donation_id, &donation, matching_pool);
 
         // update totals
         if matching_pool {
-            self.total_matching_pool_donations = U128::from(
+            self.total_matching_pool_donations = 
                 self.total_matching_pool_donations
-                    .0
                     .checked_add(remainder)
                     .expect(&format!(
                         "Overflow occurred when calculating self.total_matching_pool_donations ({} + {})",
-                        self.total_matching_pool_donations.0, remainder,
-                    )),
-            );
-            self.matching_pool_balance = U128::from(
+                        self.total_matching_pool_donations, remainder,
+                    ));
+            self.matching_pool_balance = 
                 self.matching_pool_balance
-                    .0
                     .checked_add(remainder)
                     .expect(&format!(
                         "Overflow occurred when calculating self.matching_pool_balance ({} + {})",
-                        self.matching_pool_balance.0, remainder,
-                    )),
-            );
+                        self.matching_pool_balance, remainder,
+                    ));
         } else {
-            self.total_public_donations = U128::from(
+            self.total_public_donations = 
                 self.total_public_donations
-                    .0
                     .checked_add(remainder)
                     .expect(&format!(
                         "Overflow occurred when calculating self.total_public_donations ({} + {})",
-                        self.total_public_donations.0, remainder,
-                    )),
-            );
+                        self.total_public_donations, remainder,
+                    ));
         }
 
         // assert that donation after fees > storage cost
@@ -692,16 +686,16 @@ impl Contract {
         DonationExternal {
             id,
             donor_id: donation.donor_id.clone(),
-            total_amount: donation.total_amount,
+            total_amount: U128(donation.total_amount),
             message: donation.message.clone(),
             donated_at: donation.donated_at,
             project_id: donation.project_id.clone(),
             referrer_id: donation.referrer_id.clone(),
-            referrer_fee: donation.referrer_fee.clone(),
-            protocol_fee: donation.protocol_fee,
+            referrer_fee: donation.referrer_fee.map(U128),
+            protocol_fee: U128(donation.protocol_fee),
             matching_pool: self.matching_pool_donation_ids.contains(&id),
             chef_id: donation.chef_id.clone(),
-            chef_fee: donation.chef_fee.clone(),
+            chef_fee: donation.chef_fee.map(U128),
         }
     }
 }
