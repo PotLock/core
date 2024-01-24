@@ -13,7 +13,7 @@ pub struct Payout {
     /// ID of the application receiving the payout
     pub project_id: ProjectId,
     /// Amount to be paid out
-    pub amount: U128,
+    pub amount: u128,
     /// Timestamp when the payout was made. None if not yet paid out.
     pub paid_at: Option<TimestampMs>,
 }
@@ -37,6 +37,30 @@ impl From<VersionedPayout> for Payout {
 pub struct PayoutInput {
     pub amount: U128,
     pub project_id: ProjectId,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct PayoutExternal {
+    /// Unique identifier for the payout
+    pub id: PayoutId,
+    /// ID of the application receiving the payout
+    pub project_id: ProjectId,
+    /// Amount to be paid out
+    pub amount: U128,
+    /// Timestamp when the payout was made. None if not yet paid out.
+    pub paid_at: Option<TimestampMs>,
+}
+
+impl Payout {
+    pub fn to_external(&self) -> PayoutExternal {
+        PayoutExternal {
+            id: self.id.clone(),
+            project_id: self.project_id.clone(),
+            amount: U128(self.amount),
+            paid_at: self.paid_at,
+        }
+    }
 }
 
 #[near_bindgen]
@@ -96,7 +120,7 @@ impl Contract {
             );
             let payout = Payout {
                 id: payout_id.clone(),
-                amount: U128::from(payout.amount.0),
+                amount: payout.amount.0,
                 project_id: payout.project_id.clone(),
                 paid_at: None,
             };
@@ -108,12 +132,12 @@ impl Contract {
         }
         // error if running total is not equal to matching_pool_balance (NB: this logic will change once milestones are supported)
         assert!(
-            running_total == self.matching_pool_balance.0,
+            running_total == self.matching_pool_balance,
             "Total payouts must equal matching pool balance"
         );
     }
 
-    pub fn get_payouts(&self, from_index: Option<u64>, limit: Option<u64>) -> Vec<Payout> {
+    pub fn get_payouts(&self, from_index: Option<u64>, limit: Option<u64>) -> Vec<PayoutExternal> {
         let start_index: u64 = from_index.unwrap_or_default();
         assert!(
             (self.applications_by_id.len() as u64) >= start_index,
@@ -125,7 +149,7 @@ impl Contract {
             .iter()
             .skip(start_index as usize)
             .take(limit as usize)
-            .map(|(_payout_id, payout)| Payout::from(payout))
+            .map(|(_payout_id, payout)| Payout::from(payout).to_external())
             .collect()
     }
 
@@ -165,7 +189,7 @@ impl Contract {
                         if payout.paid_at.is_none() {
                             // ...transfer funds...
                             Promise::new(application.project_id.clone())
-                                .transfer(payout.amount.0)
+                                .transfer(payout.amount)
                                 .then(
                                     Self::ext(env::current_account_id())
                                         .with_static_gas(XCC_GAS)

@@ -158,7 +158,7 @@ impl Contract {
         if let Some(min_matching_pool_donation_amount) =
             update_args.min_matching_pool_donation_amount
         {
-            self.min_matching_pool_donation_amount = min_matching_pool_donation_amount;
+            self.min_matching_pool_donation_amount = min_matching_pool_donation_amount.0;
         }
         if let Some(sybil_wrapper_provider) = update_args.sybil_wrapper_provider {
             self.sybil_wrapper_provider.set(&sybil_wrapper_provider);
@@ -321,7 +321,7 @@ impl Contract {
     ) {
         self.assert_admin_or_greater();
         let initial_storage_usage = env::storage_usage();
-        self.min_matching_pool_donation_amount = min_matching_pool_donation_amount;
+        self.min_matching_pool_donation_amount = min_matching_pool_donation_amount.0;
         refund_deposit(initial_storage_usage);
     }
 
