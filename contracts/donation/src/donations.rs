@@ -39,6 +39,14 @@ impl From<VersionedDonation> for Donation {
     }
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct FtReceiverMsg {
+    pub recipient_id: AccountId,
+    pub referrer_id: Option<AccountId>,
+    pub message: Option<String>,
+}
+
 #[near_bindgen]
 impl Contract {
     /// FT equivalent of donate, for use with FTs that implement NEP-144
@@ -49,72 +57,50 @@ impl Contract {
         msg: String,
     ) -> PromiseOrValue<U128> {
         let ft_id = env::predecessor_account_id();
-        // deconstruct msg, should contain recipient_id and optional referrer_id
-        let mut recipient_id = None;
-        let mut referrer_id = None;
-        let mut message = None;
-        let mut parts = msg.split("|");
-        if let Some(recipient_id_str) = parts.next() {
-            if recipient_id_str != "" {
-                recipient_id = Some(AccountId::new_unchecked(recipient_id_str.to_string()));
-            }
-        }
-        if let Some(referrer_id_str) = parts.next() {
-            if referrer_id_str != "" {
-                referrer_id = Some(AccountId::new_unchecked(referrer_id_str.to_string()));
-            }
-        }
-        if let Some(message_str) = parts.next() {
-            if message_str != "" {
-                message = Some(message_str.to_string());
-            }
-        }
+        let msg_json: FtReceiverMsg = near_sdk::serde_json::from_str(&msg)
+            .expect("Invalid msg string. Must implement FtReceiverMsg.");
         log!(format!(
             "Recipient ID {:?}, Referrer ID {:?}, Amount {}, Message {:?}",
-            recipient_id, referrer_id, amount.0, message
+            msg_json.recipient_id, msg_json.referrer_id, amount.0, msg_json.message
         ));
 
-        if let Some(recipient_id) = recipient_id {
-            // calculate amounts
-            let (protocol_fee, referrer_fee, remainder) =
-                self.calculate_fees_and_remainder(amount.0, referrer_id.clone());
+        // calculate amounts
+        let (protocol_fee, referrer_fee, remainder) =
+            self.calculate_fees_and_remainder(amount.0, msg_json.referrer_id.clone());
 
-            // create and insert donation record
-            let initial_storage_usage = env::storage_usage();
-            let donation = self.create_and_insert_donation_record(
-                sender_id.clone(),
-                amount,
-                ft_id.clone(),
-                message,
-                env::block_timestamp_ms(),
-                recipient_id.clone(),
-                U128::from(protocol_fee),
-                referrer_id.clone(),
-                referrer_fee,
-            );
+        // create and insert donation record
+        let initial_storage_usage = env::storage_usage();
+        let donation = self.create_and_insert_donation_record(
+            sender_id.clone(),
+            amount,
+            ft_id.clone(),
+            msg_json.message.clone(),
+            env::block_timestamp_ms(),
+            msg_json.recipient_id.clone(),
+            U128::from(protocol_fee),
+            msg_json.referrer_id.clone(),
+            referrer_fee,
+        );
 
-            // verify and update storage balance for FT donation
-            self.verify_and_update_storage_balance(sender_id.clone(), initial_storage_usage);
+        // verify and update storage balance for FT donation
+        self.verify_and_update_storage_balance(sender_id.clone(), initial_storage_usage);
 
-            // transfer donation
-            log!(format!(
-                "Transferring donation {} ({}) to {}",
-                remainder, ft_id, recipient_id
-            ));
-            self.handle_transfer_donation(
-                recipient_id.clone(),
-                U128(remainder),
-                remainder,
-                donation.clone(),
-            );
+        // transfer donation
+        log!(format!(
+            "Transferring donation {} ({}) to {}",
+            remainder, ft_id, msg_json.recipient_id
+        ));
+        self.handle_transfer_donation(
+            msg_json.recipient_id.clone(),
+            U128(remainder),
+            remainder,
+            donation.clone(),
+        );
 
-            // NB: fees will be transferred in transfer_funds_callback after successful transfer of donation
+        // NB: fees will be transferred in transfer_funds_callback after successful transfer of donation
 
-            // return # unused tokens as per NEP-144 standard
-            PromiseOrValue::Value(U128(0))
-        } else {
-            panic!("Must provide recipient ID in msg");
-        }
+        // return # unused tokens as per NEP-144 standard
+        PromiseOrValue::Value(U128(0))
     }
 
     #[payable]
