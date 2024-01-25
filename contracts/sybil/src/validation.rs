@@ -16,9 +16,9 @@ pub(crate) fn assert_valid_provider_description(description: &str) {
 
 pub(crate) fn assert_valid_provider_gas(gas: &u64) {
     assert!(
-        gas <= &XCC_GAS_DEFAULT,
-        "Provider gas is too high, must be less than or equal to {}",
-        XCC_GAS_DEFAULT
+        gas > &0 && gas <= &MAX_GAS as &u64,
+        "Provider gas is too high, must be greater than zero and less than or equal to {}",
+        MAX_GAS
     );
 }
 

@@ -11,3 +11,4 @@ pub const MAX_PROVIDER_EXTERNAL_URL_LENGTH: usize = 256;
 pub const MAX_PROVIDER_ICON_URL_LENGTH: usize = 256;
 pub const MAX_TAGS_PER_PROVIDER: usize = 10;
 pub const MAX_TAG_LENGTH: usize = 32;
+pub const MAX_GAS: u64 = 100_000_000_000_000;
