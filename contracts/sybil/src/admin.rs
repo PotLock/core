@@ -3,10 +3,10 @@ use crate::*;
 #[near_bindgen]
 impl Contract {
     #[payable]
-    pub fn admin_activate_provider(
+    pub fn admin_update_provider_status(
         &mut self,
         provider_id: ProviderId,
-        default_weight: u32,
+        status: ProviderStatus,
     ) -> Provider {
         self.assert_owner_or_admin();
         // check that provider exists
@@ -14,10 +14,35 @@ impl Contract {
             // update provider
             let initial_storage_usage = env::storage_usage();
             let mut provider = Provider::from(versioned_provider);
-            provider.is_active = true;
-            provider.default_weight = default_weight;
+            let old_status = provider.status;
+            provider.status = status.clone();
+            // add provider to mapping
             self.providers_by_id
                 .insert(&provider_id, &VersionedProvider::Current(provider.clone()));
+            // remove provider from old status set
+            match old_status {
+                ProviderStatus::Pending => {
+                    self.pending_provider_ids.remove(&provider_id);
+                }
+                ProviderStatus::Activated => {
+                    self.activated_provider_ids.remove(&provider_id);
+                }
+                ProviderStatus::Deactivated => {
+                    self.deactivated_provider_ids.remove(&provider_id);
+                }
+            }
+            // add provider to new status set
+            match status {
+                ProviderStatus::Pending => {
+                    self.pending_provider_ids.insert(&provider_id);
+                }
+                ProviderStatus::Activated => {
+                    self.activated_provider_ids.insert(&provider_id);
+                }
+                ProviderStatus::Deactivated => {
+                    self.deactivated_provider_ids.insert(&provider_id);
+                }
+            }
             refund_deposit(initial_storage_usage);
             // log event
             log_update_provider_event(&provider_id, &provider);
@@ -28,26 +53,13 @@ impl Contract {
     }
 
     #[payable]
+    pub fn admin_activate_provider(&mut self, provider_id: ProviderId) -> Provider {
+        self.admin_update_provider_status(provider_id, ProviderStatus::Activated)
+    }
+
+    #[payable]
     pub fn admin_deactivate_provider(&mut self, provider_id: ProviderId) -> Provider {
-        self.assert_owner_or_admin();
-        // check that provider exists
-        if let Some(versioned_provider) = self.providers_by_id.get(&provider_id) {
-            // update provider
-            let initial_storage_usage = env::storage_usage();
-            let mut provider = Provider::from(versioned_provider);
-            provider.is_active = false;
-            self.providers_by_id
-                .insert(&provider_id, &VersionedProvider::Current(provider.clone()));
-            // remove provider from devault providers
-            self.default_provider_ids.remove(&provider_id);
-            refund_deposit(initial_storage_usage);
-            // log event
-            log_update_provider_event(&provider_id, &provider);
-            // return provider
-            provider
-        } else {
-            env::panic_str("Provider does not exist");
-        }
+        self.admin_update_provider_status(provider_id, ProviderStatus::Deactivated)
     }
 
     #[payable]
