@@ -42,7 +42,12 @@ impl From<VersionedDonation> for Donation {
 #[near_bindgen]
 impl Contract {
     /// FT equivalent of donate, for use with FTs that implement NEP-144
-    pub fn ft_on_transfer(&mut self, sender_id: AccountId, amount: U128, msg: String) -> String {
+    pub fn ft_on_transfer(
+        &mut self,
+        sender_id: AccountId,
+        amount: U128,
+        msg: String,
+    ) -> PromiseOrValue<U128> {
         let ft_id = env::predecessor_account_id();
         // deconstruct msg, should contain recipient_id and optional referrer_id
         let mut recipient_id = None;
@@ -106,7 +111,7 @@ impl Contract {
             // NB: fees will be transferred in transfer_funds_callback after successful transfer of donation
 
             // return # unused tokens as per NEP-144 standard
-            "0".to_string()
+            PromiseOrValue::Value(U128(0))
         } else {
             panic!("Must provide recipient ID in msg");
         }

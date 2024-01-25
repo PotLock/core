@@ -9,6 +9,7 @@ crate-type = ["cdylib"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 near-sdk = "4.1.1"
+near-contract-standards = { version = "4.1.1", git = "https://github.com/near/near-sdk-rs.git", rev = "ee5cf867741d6d0d4db15857609b9e9268cc9b32" }
 # near-sdk = "5.0.0-alpha.2"
 # [profile.release] # removed as added to root Cargo.toml
 # codegen-units = 1
