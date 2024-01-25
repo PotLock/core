@@ -60,7 +60,10 @@ impl Contract {
                 .expect("Provider does not exist"),
         );
         // verify that provider is active
-        assert!(provider.is_active, "Provider is not active");
+        assert!(
+            provider.status == ProviderStatus::Active,
+            "Provider is not active"
+        );
         // warn if provider is flagged
         if provider.is_flagged {
             log!(format!("Provider is flagged"));

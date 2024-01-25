@@ -28,7 +28,7 @@ impl ProviderId {
 #[serde(crate = "near_sdk::serde")]
 pub enum ProviderStatus {
     Pending,
-    Activated,
+    Active,
     Deactivated,
 }
 
@@ -42,9 +42,6 @@ pub struct Provider {
     pub description: Option<String>,
     /// Status of the provider
     pub status: ProviderStatus,
-    /// Whether this provider is active (updated by admin)
-    /// TODO: REMOVE IS_ACTIVE
-    pub is_active: bool,
     /// Whether this provider is flagged (updated by admin)
     /// TODO: REMOVE IS_FLAGGED
     pub is_flagged: bool,
@@ -97,9 +94,6 @@ pub struct ProviderExternal {
     pub description: Option<String>,
     /// Status of the provider
     pub status: ProviderStatus,
-    /// Whether this provider is active (updated by admin)
-    /// TODO: REMOVE IS_ACTIVE
-    pub is_active: bool,
     /// Whether this provider is flagged (updated by admin)
     /// TODO: REMOVE IS_FLAGGED
     pub is_flagged: bool,
@@ -149,7 +143,6 @@ impl ProviderExternal {
             default_weight: provider.default_weight,
             description: provider.description,
             status: provider.status,
-            is_active: provider.is_active,
             is_flagged: provider.is_flagged,
             admin_notes: provider.admin_notes,
             gas: provider.gas,
@@ -220,7 +213,6 @@ impl Contract {
             name,
             description,
             status: ProviderStatus::Pending,
-            is_active: false,
             is_flagged: false,
             admin_notes: None,
             default_weight: PROVIDER_DEFAULT_WEIGHT,
@@ -233,10 +225,7 @@ impl Contract {
             stamp_count: 0,
         };
 
-        // set provider to active if caller is owner/admin
-        if self.is_owner_or_admin() {
-            provider.is_active = true;
-        }
+        // TODO: consider setting status to active by default if caller is owner/admin
 
         // validate contract ID and method name
         let gas = Gas(gas.unwrap_or(XCC_GAS_DEFAULT));
@@ -385,8 +374,8 @@ impl Contract {
                         ProviderStatus::Pending => {
                             self.pending_provider_ids.insert(&provider_id);
                         }
-                        ProviderStatus::Activated => {
-                            self.activated_provider_ids.insert(&provider_id);
+                        ProviderStatus::Active => {
+                            self.active_provider_ids.insert(&provider_id);
                         }
                         ProviderStatus::Deactivated => {
                             self.deactivated_provider_ids.insert(&provider_id);
@@ -397,8 +386,8 @@ impl Contract {
                         ProviderStatus::Pending => {
                             self.pending_provider_ids.remove(&provider_id);
                         }
-                        ProviderStatus::Activated => {
-                            self.activated_provider_ids.remove(&provider_id);
+                        ProviderStatus::Active => {
+                            self.active_provider_ids.remove(&provider_id);
                         }
                         ProviderStatus::Deactivated => {
                             self.deactivated_provider_ids.remove(&provider_id);
@@ -430,8 +419,8 @@ impl Contract {
             ProviderStatus::Pending => {
                 self.pending_provider_ids.insert(&provider_id);
             }
-            ProviderStatus::Activated => {
-                self.activated_provider_ids.insert(&provider_id);
+            ProviderStatus::Active => {
+                self.active_provider_ids.insert(&provider_id);
             }
             ProviderStatus::Deactivated => {
                 self.deactivated_provider_ids.insert(&provider_id);
@@ -486,12 +475,12 @@ impl Contract {
                         })
                         .collect()
                 }
-                ProviderStatus::Activated => {
+                ProviderStatus::Active => {
                     assert!(
-                        (self.activated_provider_ids.len() as u64) >= start_index,
+                        (self.active_provider_ids.len() as u64) >= start_index,
                         "Out of bounds, please use a smaller from_index."
                     );
-                    self.activated_provider_ids
+                    self.active_provider_ids
                         .iter()
                         .skip(start_index as usize)
                         .take(limit)

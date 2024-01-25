@@ -24,8 +24,8 @@ impl Contract {
                 ProviderStatus::Pending => {
                     self.pending_provider_ids.remove(&provider_id);
                 }
-                ProviderStatus::Activated => {
-                    self.activated_provider_ids.remove(&provider_id);
+                ProviderStatus::Active => {
+                    self.active_provider_ids.remove(&provider_id);
                 }
                 ProviderStatus::Deactivated => {
                     self.deactivated_provider_ids.remove(&provider_id);
@@ -36,8 +36,8 @@ impl Contract {
                 ProviderStatus::Pending => {
                     self.pending_provider_ids.insert(&provider_id);
                 }
-                ProviderStatus::Activated => {
-                    self.activated_provider_ids.insert(&provider_id);
+                ProviderStatus::Active => {
+                    self.active_provider_ids.insert(&provider_id);
                 }
                 ProviderStatus::Deactivated => {
                     self.deactivated_provider_ids.insert(&provider_id);
@@ -54,7 +54,7 @@ impl Contract {
 
     #[payable]
     pub fn admin_activate_provider(&mut self, provider_id: ProviderId) -> Provider {
-        self.admin_update_provider_status(provider_id, ProviderStatus::Activated)
+        self.admin_update_provider_status(provider_id, ProviderStatus::Active)
     }
 
     #[payable]
