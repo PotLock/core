@@ -74,12 +74,12 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(gas)
-                    .verify_callback(user_id, provider_id, provider, attached_deposit),
+                    .verify_stamp_callback(user_id, provider_id, provider, attached_deposit),
             )
     }
 
     #[private]
-    pub fn verify_callback(
+    pub fn verify_stamp_callback(
         &mut self,
         user_id: AccountId,
         provider_id: ProviderId,

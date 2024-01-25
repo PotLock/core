@@ -17,6 +17,7 @@ pub mod providers;
 pub mod source;
 pub mod stamps;
 pub mod utils;
+pub mod validation;
 pub use crate::admin::*;
 pub use crate::constants::*;
 pub use crate::events::*;
@@ -27,6 +28,7 @@ pub use crate::providers::*;
 pub use crate::source::*;
 pub use crate::stamps::*;
 pub use crate::utils::*;
+pub use crate::validation::*;
 
 /// log prefix constant
 pub const EVENT_JSON_PREFIX: &str = "EVENT_JSON:";

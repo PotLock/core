@@ -159,31 +159,58 @@ impl Contract {
         tags: Option<Vec<String>>,
         icon_url: Option<String>,
         external_url: Option<String>,
-    ) -> ProviderExternal {
-        // Get initial storage usage so user can pay for what they use
-        let initial_storage_usage = env::storage_usage();
-
+    ) -> Promise {
         // generate provider ID
-        let provider_id = ProviderId::new(contract_id, method_name);
+        let provider_id = ProviderId::new(contract_id.clone(), method_name.clone());
 
         // check that provider doesn't already exist
         if let Some(_) = self.providers_by_id.get(&provider_id) {
             env::panic_str(&format!("Provider {:#?} already exists", provider_id));
         }
 
-        // create provider
+        // validate name
+        assert_valid_provider_name(&name);
+
+        // validate description
+        if let Some(description) = &description {
+            assert_valid_provider_description(description);
+        }
+
+        // validate gas
+        if let Some(gas) = &gas {
+            assert_valid_provider_gas(gas);
+        }
+
+        // validate tags
+        if let Some(tags) = &tags {
+            assert_valid_provider_tags(tags);
+        }
+
+        // validate icon_url
+        if let Some(icon_url) = &icon_url {
+            assert_valid_provider_icon_url(icon_url);
+        }
+
+        // validate external_url
+        if let Some(external_url) = &external_url {
+            assert_valid_provider_external_url(external_url);
+        }
+
+        let submitter_id = env::signer_account_id();
+
+        // create provider (but don't store yet)
         let mut provider = Provider {
             name,
             description,
             is_active: false,
             is_flagged: false,
             admin_notes: None,
-            default_weight: 100,
+            default_weight: PROVIDER_DEFAULT_WEIGHT,
             gas,
             tags,
             icon_url,
             external_url,
-            submitted_by: env::signer_account_id(),
+            submitted_by: submitter_id.clone(),
             submitted_at_ms: env::block_timestamp_ms(),
             stamp_count: 0,
         };
@@ -193,19 +220,80 @@ impl Contract {
             provider.is_active = true;
         }
 
-        // create & store provider
-        self.providers_by_id.insert(
-            &provider_id,
-            &VersionedProvider::from(VersionedProvider::Current(provider.clone())),
-        );
+        // validate contract ID and method name
+        let gas = Gas(gas.unwrap_or(XCC_GAS_DEFAULT));
+        let args = json!({ "account_id": env::current_account_id() })
+            .to_string()
+            .into_bytes();
+        Promise::new(AccountId::new_unchecked(contract_id.clone()))
+            .function_call(method_name.clone(), args, NO_DEPOSIT, gas)
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(gas)
+                    .verify_provider_callback(
+                        submitter_id,
+                        provider_id,
+                        provider,
+                        env::attached_deposit(),
+                    ),
+            )
+    }
 
-        // TODO: consider adding event logging
+    #[private]
+    pub fn verify_provider_callback(
+        &mut self,
+        submitter_id: AccountId,
+        provider_id: ProviderId,
+        provider: Provider,
+        attached_deposit: Balance,
+        #[callback_result] call_result: Result<near_sdk::serde_json::Value, PromiseError>,
+    ) -> Option<ProviderExternal> {
+        match call_result {
+            Ok(val) => {
+                if val.as_bool().is_some() {
+                    // provider returns a bool; proceed with normal processing
+                    // Get initial storage usage so submitter can pay for what they use
+                    let initial_storage_usage = env::storage_usage();
 
-        // refund any unused deposit
-        refund_deposit(initial_storage_usage);
+                    // create & store provider
+                    self.providers_by_id.insert(
+                        &provider_id,
+                        &VersionedProvider::from(VersionedProvider::Current(provider.clone())),
+                    );
 
-        // return provider
-        ProviderExternal::from_provider_id(&provider_id.0, provider)
+                    // log event
+                    log_add_provider_event(&provider_id, &provider);
+
+                    // calculate storage cost
+                    let required_deposit =
+                        calculate_required_storage_deposit(initial_storage_usage);
+                    // refund any unused deposit
+                    if attached_deposit > required_deposit {
+                        Promise::new(submitter_id.clone())
+                            .transfer(attached_deposit - required_deposit);
+                    } else if attached_deposit < required_deposit {
+                        env::panic_str(&format!(
+                            "Must attach {} yoctoNEAR to cover storage",
+                            required_deposit
+                        ));
+                    }
+
+                    // return provider
+                    Some(ProviderExternal::from_provider_id(&provider_id.0, provider))
+                } else {
+                    // Response type is incorrect. Refund deposit.
+                    log!("Received invalid response type for provider verification. Returning deposit.");
+                    Promise::new(submitter_id).transfer(attached_deposit);
+                    return None;
+                }
+            }
+            Err(_) => {
+                // Error occurred in cross-contract call. Refund deposit.
+                log!("Error occurred while verifying provider; refunding deposit");
+                Promise::new(submitter_id).transfer(attached_deposit);
+                return None;
+            }
+        }
     }
 
     #[payable]
@@ -244,21 +332,27 @@ impl Contract {
 
         // update provider
         if let Some(name) = name {
+            assert_valid_provider_name(&name);
             provider.name = name;
         }
         if let Some(description) = description {
+            assert_valid_provider_description(&description);
             provider.description = Some(description);
         }
         if let Some(gas) = gas {
+            assert_valid_provider_gas(&gas);
             provider.gas = Some(gas);
         }
         if let Some(tags) = tags {
+            assert_valid_provider_tags(&tags);
             provider.tags = Some(tags);
         }
         if let Some(icon_url) = icon_url {
+            assert_valid_provider_icon_url(&icon_url);
             provider.icon_url = Some(icon_url);
         }
         if let Some(external_url) = external_url {
+            assert_valid_provider_external_url(&external_url);
             provider.external_url = Some(external_url);
         }
 

@@ -50,6 +50,10 @@ impl Contract {
         false
     }
 
+    pub fn return_none(&self, account_id: AccountId) -> Option<bool> {
+        None
+    }
+
     pub fn get_check(&mut self) {
         self.account_ids_to_bool
             .insert(&env::predecessor_account_id(), &true);
