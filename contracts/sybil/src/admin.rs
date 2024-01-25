@@ -19,6 +19,8 @@ impl Contract {
             self.providers_by_id
                 .insert(&provider_id, &VersionedProvider::Current(provider.clone()));
             refund_deposit(initial_storage_usage);
+            // log event
+            log_update_provider_event(&provider_id, &provider);
             provider
         } else {
             env::panic_str("Provider does not exist");
@@ -39,6 +41,8 @@ impl Contract {
             // remove provider from devault providers
             self.default_provider_ids.remove(&provider_id);
             refund_deposit(initial_storage_usage);
+            // log event
+            log_update_provider_event(&provider_id, &provider);
             // return provider
             provider
         } else {
@@ -58,6 +62,8 @@ impl Contract {
             self.providers_by_id
                 .insert(&provider_id, &VersionedProvider::Current(provider.clone()));
             refund_deposit(initial_storage_usage);
+            // log event
+            log_update_provider_event(&provider_id, &provider);
             provider
         } else {
             env::panic_str("Provider does not exist");
@@ -76,29 +82,9 @@ impl Contract {
             self.providers_by_id
                 .insert(&provider_id, &VersionedProvider::Current(provider.clone()));
             refund_deposit(initial_storage_usage);
+            // log event
+            log_update_provider_event(&provider_id, &provider);
             provider
-        } else {
-            env::panic_str("Provider does not exist");
-        }
-    }
-
-    #[payable]
-    pub fn admin_update_provider_method_name(
-        &mut self,
-        provider_id: ProviderId,
-        method_name: String,
-    ) -> Provider {
-        self.assert_owner_or_admin();
-        // check that provider exists
-        if let Some(versioned_provider) = self.providers_by_id.get(&provider_id) {
-            // update its ID by replacing the old key with the new key
-            let initial_storage_usage = env::storage_usage();
-            let (contract_id, old_method_name) = provider_id.decompose();
-            let new_id = ProviderId::new(contract_id, method_name.clone());
-            self.providers_by_id.remove(&provider_id);
-            self.providers_by_id.insert(&new_id, &versioned_provider);
-            refund_deposit(initial_storage_usage);
-            Provider::from(self.providers_by_id.get(&new_id).unwrap())
         } else {
             env::panic_str("Provider does not exist");
         }

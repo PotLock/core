@@ -372,6 +372,9 @@ impl Contract {
         // Refund any unused deposit
         refund_deposit(initial_storage_usage);
 
+        // log event
+        log_update_provider_event(&provider_id, &provider);
+
         ProviderExternal::from_provider_id(&provider_id.0, provider)
     }
 
