@@ -21,6 +21,9 @@ pub struct Contract {
     owner: AccountId,
     admins: UnorderedSet<AccountId>,
     providers_by_id: UnorderedMap<ProviderId, VersionedProvider>,
+    pending_provider_ids: UnorderedSet<ProviderId>,
+    active_provider_ids: UnorderedSet<ProviderId>,
+    deactivated_provider_ids: UnorderedSet<ProviderId>,
     default_provider_ids: UnorderedSet<ProviderId>,
     default_human_threshold: u32,
     // MAPPINGS
@@ -57,10 +60,8 @@ pub struct Provider {
     pub name: String,
     /// Description of the provider
     pub description: Option<String>,
-    /// Whether this provider is active (updated by admin)
-    pub is_active: bool,
-    /// Whether this provider is flagged (updated by admin)
-    pub is_flagged: bool,
+    /// Status of the provider
+    pub status: ProviderStatus,
     /// Admin notes, e.g. reason for flagging or marking inactive
     pub admin_notes: Option<String>,
     /// Default weight for this provider, e.g. 100
@@ -81,6 +82,12 @@ pub struct Provider {
     pub stamp_count: u64,
 }
 
+pub enum ProviderStatus {
+    Pending,
+    Active,
+    Deactivated,
+}
+
 // External-only/ephemeral Provider struct (not stored internally) that contains contract_id and method_name
 pub struct ProviderExternal {
     /// Provider ID
@@ -93,10 +100,8 @@ pub struct ProviderExternal {
     pub name: String,
     /// Description of the provider
     pub description: Option<String>,
-    /// Whether this provider is active (updated by admin)
-    pub is_active: bool,
-    /// Whether this provider is flagged (updated by admin)
-    pub is_flagged: bool,
+    /// Status of the provider
+    pub status: ProviderStatus,
     /// Admin notes, e.g. reason for flagging or marking inactive
     pub admin_notes: Option<String>,
     /// Default weight for this provider, e.g. 100
@@ -145,6 +150,19 @@ pub struct StampExternal {
 }
 ```
 
+### Constants & Input Validation
+
+```rs
+pub const PROVIDER_DEFAULT_WEIGHT: u32 = 100;
+pub const MAX_PROVIDER_NAME_LENGTH: usize = 64;
+pub const MAX_PROVIDER_DESCRIPTION_LENGTH: usize = 256;
+pub const MAX_PROVIDER_EXTERNAL_URL_LENGTH: usize = 256;
+pub const MAX_PROVIDER_ICON_URL_LENGTH: usize = 256;
+pub const MAX_TAGS_PER_PROVIDER: usize = 10;
+pub const MAX_TAG_LENGTH: usize = 32;
+pub const MAX_GAS: u64 = 100_000_000_000_000;
+```
+
 ### Contract Source Metadata
 
 _NB: Below implemented as per NEP 0330 (https://github.com/near/NEPs/blob/master/neps/nep-0330.md), with addition of `commit_hash`_
@@ -189,7 +207,7 @@ pub fn register_provider(
     tags: Option<Vec<String>>,
     icon_url: Option<String>,
     external_url: Option<String>,
-) -> ProviderExternal // NB: anyone can call this method to register a provider. If caller is admin, provider is automatically activated.
+) -> ProviderExternal // NB: anyone can call this method to register a provider.
 
 /// NB: this method can only be called by the provider's original submitter, or sybil contract owner/admin.
 #[payable]
@@ -202,7 +220,9 @@ pub fn update_provider(
     tags: Option<Vec<String>>,
     icon_url: Option<String>,
     external_url: Option<String>,
-    default_weight: Option<u32>, // owner/admin-only
+    default_weight: Option<u32>,    // owner/admin-only
+    status: Option<ProviderStatus>, // owner/admin-only
+    admin_notes: Option<String>,    // owner/admin-only
 ) -> ProviderExternal
 
 // STAMPS
@@ -231,20 +251,16 @@ pub fn owner_add_admins(&mut self, account_ids: Vec<AccountId>)
 pub fn owner_remove_admins(&mut self, account_ids: Vec<AccountId>)
 
 #[payable]
-pub fn admin_activate_provider(
-    &mut self,
-    provider_id: ProviderId,
-    default_weight: u32,
-) -> Provider
+pub fn admin_activate_provider(&mut self, provider_id: ProviderId) -> Provider
 
 #[payable]
 pub fn admin_deactivate_provider(&mut self, provider_id: ProviderId) -> Provider
 
-#[payable]
-pub fn admin_flag_provider(&mut self, provider_id: ProviderId) -> Provider
-
-#[payable]
-pub fn admin_unflag_provider(&mut self, provider_id: ProviderId) -> Provider
+pub fn admin_update_provider_status( // NB: this can also be done via update_provider method
+    &mut self,
+    provider_id: ProviderId,
+    status: ProviderStatus,
+) -> Provider
 
 #[payable]
 pub fn admin_set_default_providers(&mut self, provider_ids: Vec<ProviderId>)
@@ -273,7 +289,12 @@ pub fn get_config(&self) -> Config
 // PROVIDERS
 pub fn get_provider(&self, contract_id: String, method_name: String) -> Option<ProviderJson>
 
-pub fn get_providers(&self) -> Vec<ProviderJson>
+pub fn get_providers(
+    &self,
+    status: Option<ProviderStatus>,
+    from_index: Option<u64>,
+    limit: Option<u64>,
+) -> Vec<ProviderExternal>
 
 
 // STAMPS
