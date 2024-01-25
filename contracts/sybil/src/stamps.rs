@@ -64,10 +64,6 @@ impl Contract {
             provider.status == ProviderStatus::Active,
             "Provider is not active"
         );
-        // warn if provider is flagged
-        if provider.is_flagged {
-            log!(format!("Provider is flagged"));
-        }
         // verify against provider, using custom gas if specified
         let (contract_id, method_name) = provider_id.decompose();
         let gas = Gas(provider.gas.unwrap_or(XCC_GAS_DEFAULT));

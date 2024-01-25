@@ -62,46 +62,6 @@ impl Contract {
         self.admin_update_provider_status(provider_id, ProviderStatus::Deactivated)
     }
 
-    #[payable]
-    pub fn admin_flag_provider(&mut self, provider_id: ProviderId) -> Provider {
-        self.assert_owner_or_admin();
-        // check that provider exists
-        if let Some(versioned_provider) = self.providers_by_id.get(&provider_id) {
-            // update provider
-            let initial_storage_usage = env::storage_usage();
-            let mut provider = Provider::from(versioned_provider);
-            provider.is_flagged = true;
-            self.providers_by_id
-                .insert(&provider_id, &VersionedProvider::Current(provider.clone()));
-            refund_deposit(initial_storage_usage);
-            // log event
-            log_update_provider_event(&provider_id, &provider);
-            provider
-        } else {
-            env::panic_str("Provider does not exist");
-        }
-    }
-
-    #[payable]
-    pub fn admin_unflag_provider(&mut self, provider_id: ProviderId) -> Provider {
-        self.assert_owner_or_admin();
-        // check that provider exists
-        if let Some(versioned_provider) = self.providers_by_id.get(&provider_id) {
-            // update provider
-            let initial_storage_usage = env::storage_usage();
-            let mut provider = Provider::from(versioned_provider);
-            provider.is_flagged = false;
-            self.providers_by_id
-                .insert(&provider_id, &VersionedProvider::Current(provider.clone()));
-            refund_deposit(initial_storage_usage);
-            // log event
-            log_update_provider_event(&provider_id, &provider);
-            provider
-        } else {
-            env::panic_str("Provider does not exist");
-        }
-    }
-
     // config
 
     #[payable]

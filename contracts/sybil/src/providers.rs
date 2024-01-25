@@ -42,9 +42,6 @@ pub struct Provider {
     pub description: Option<String>,
     /// Status of the provider
     pub status: ProviderStatus,
-    /// Whether this provider is flagged (updated by admin)
-    /// TODO: REMOVE IS_FLAGGED
-    pub is_flagged: bool,
     /// Admin notes, e.g. reason for flagging or marking inactive
     pub admin_notes: Option<String>,
     /// Default weight for this provider, e.g. 100
@@ -94,9 +91,6 @@ pub struct ProviderExternal {
     pub description: Option<String>,
     /// Status of the provider
     pub status: ProviderStatus,
-    /// Whether this provider is flagged (updated by admin)
-    /// TODO: REMOVE IS_FLAGGED
-    pub is_flagged: bool,
     /// Admin notes, e.g. reason for flagging or marking inactive
     pub admin_notes: Option<String>,
     /// Default weight for this provider, e.g. 100
@@ -143,7 +137,6 @@ impl ProviderExternal {
             default_weight: provider.default_weight,
             description: provider.description,
             status: provider.status,
-            is_flagged: provider.is_flagged,
             admin_notes: provider.admin_notes,
             gas: provider.gas,
             tags: provider.tags,
@@ -213,7 +206,6 @@ impl Contract {
             name,
             description,
             status: ProviderStatus::Pending,
-            is_flagged: false,
             admin_notes: None,
             default_weight: PROVIDER_DEFAULT_WEIGHT,
             gas,
@@ -312,6 +304,7 @@ impl Contract {
         external_url: Option<String>,
         default_weight: Option<u32>,    // owner/admin-only
         status: Option<ProviderStatus>, // owner/admin-only
+        admin_notes: Option<String>,    // owner/admin-only
     ) -> ProviderExternal {
         // Ensure caller is Provider submitter or Owner/Admin
         assert!(
@@ -395,6 +388,9 @@ impl Contract {
                     }
                     provider.status = status;
                 }
+            }
+            if let Some(admin_notes) = admin_notes {
+                provider.admin_notes = Some(admin_notes);
             }
         }
 
