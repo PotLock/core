@@ -1,7 +1,5 @@
 use crate::*;
 
-const XCC_GAS: Gas = Gas(10u64.pow(13));
-
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct HumanScoreResponse {
@@ -11,6 +9,19 @@ pub struct HumanScoreResponse {
 
 #[near_bindgen]
 impl Contract {
+    pub fn get_human_score(&self, account_id: AccountId) -> HumanScoreResponse {
+        let total_score = self.get_score_for_account_id(account_id);
+        HumanScoreResponse {
+            is_human: total_score >= self.default_human_threshold,
+            score: total_score,
+        }
+    }
+
+    pub fn is_human(&self, account_id: AccountId) -> bool {
+        // TODO: add option for caller to specify providers or custom default_human_threshold
+        self.get_human_score(account_id).is_human
+    }
+
     pub(crate) fn get_score_for_account_id(&self, account_id: AccountId) -> u32 {
         // get user stamps and add up default weights
         let mut total_score = 0;
@@ -24,18 +35,6 @@ impl Contract {
             }
         }
         total_score
-    }
-
-    pub fn get_human_score(&self, account_id: AccountId) -> HumanScoreResponse {
-        let total_score = self.get_score_for_account_id(account_id);
-        HumanScoreResponse {
-            is_human: total_score >= self.default_human_threshold,
-            score: total_score,
-        }
-    }
-
-    pub fn is_human(&self, account_id: AccountId) -> bool {
-        self.get_human_score(account_id).is_human
     }
 
     // DEPRECATED IMPLEMENTATION
@@ -70,7 +69,7 @@ impl Contract {
     //                 .with_static_gas(XCC_GAS)
     //                 .is_human_callback(providers),
     //         ),
-    //         None => Promise::new(env::current_account_id()), // No providers available // TODO: come back here
+    //         None => Promise::new(env::current_account_id()), // No providers available
     //     }
     // }
 
@@ -88,7 +87,7 @@ impl Contract {
     //                     total_score += providers[index].default_weight;
     //                 }
     //             }
-    //             _ => {} // Handle failed or not ready promises as needed // TODO: come back here
+    //             _ => {} // Handle failed or not ready promises as needed
     //         }
     //     }
     //     log!("total_score: {}", total_score);
