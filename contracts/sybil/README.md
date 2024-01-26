@@ -43,6 +43,9 @@ pub struct Config {
     pub admins: Vec<AccountId>,
     pub default_provider_ids: Vec<ProviderId>,
     pub default_human_threshold: u32,
+    pub pending_provider_count: u64, // may want to change these to U64 (string) to avoid JSON overflow, but this is highly unlikely. Easy to change later since this is ephemeral.
+    pub active_provider_count: u64,
+    pub deactivated_provider_count: u64,
 }
 ```
 

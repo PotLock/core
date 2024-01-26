@@ -80,6 +80,9 @@ pub struct Config {
     pub admins: Vec<AccountId>,
     pub default_provider_ids: Vec<ProviderId>,
     pub default_human_threshold: u32,
+    pub pending_provider_count: u64, // may want to change these to U64 (string) to avoid JSON overflow, but this is highly unlikely. Easy to change later since this is ephemeral.
+    pub active_provider_count: u64,
+    pub deactivated_provider_count: u64,
 }
 
 #[derive(BorshSerialize, BorshStorageKey)]
@@ -143,6 +146,9 @@ impl Contract {
             admins: self.admins.to_vec(),
             default_provider_ids: self.default_provider_ids.to_vec(),
             default_human_threshold: self.default_human_threshold,
+            pending_provider_count: self.pending_provider_ids.len(),
+            active_provider_count: self.active_provider_ids.len(),
+            deactivated_provider_count: self.deactivated_provider_ids.len(),
         }
     }
 }
