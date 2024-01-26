@@ -369,3 +369,67 @@ Indicates that `ContractSourceMetadata` object has been set/updated.
     ]
 }
 ```
+
+### `add_provider`
+
+Indicates that a new provider has been added.
+
+**Example:**
+
+```json
+{
+    "standard": "potlock",
+    "version": "1.0.0",
+    "event": "add_provider",
+    "data": [
+        {
+            "provider_id": "provider.near:is_human",
+            "provider": {
+                "name": "Provider Name",
+                "description": "Description of the provider",
+                "tags": ["face-scan", "twitter"],
+                "icon_url": "https://google.com/myimage.png",
+                "external_url": "https://provider.example.com",
+                "submitted_by": "user.near",
+                "submitted_at_ms": 1706289760834,
+                "stamp_count": 0,
+                "status": "Pending",
+                "default_weight": 100,
+                "admin_notes": null,
+            }
+        }
+    ]
+}
+```
+
+### `update_provider`
+
+Indicates that an existing provider has been updated.
+
+**Example:**
+
+```json
+{
+    "standard": "potlock",
+    "version": "1.0.0",
+    "event": "update_provider",
+    "data": [
+        {
+            "provider_id": "provider.near:is_human",
+            "provider": {
+                "name": "Provider Name",
+                "description": "Description of the provider",
+                "tags": ["face-scan", "twitter"],
+                "icon_url": "https://google.com/myimage.png",
+                "external_url": "https://provider.example.com",
+                "submitted_by": "user.near",
+                "submitted_at_ms": 1706289760834,
+                "stamp_count": 0,
+                "status": "Active",
+                "default_weight": 20,
+                "admin_notes": null,
+            }
+        }
+    ]
+}
+```
