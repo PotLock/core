@@ -17,6 +17,7 @@ pub mod providers;
 pub mod source;
 pub mod stamps;
 pub mod utils;
+pub mod validation;
 pub use crate::admin::*;
 pub use crate::constants::*;
 pub use crate::events::*;
@@ -27,6 +28,7 @@ pub use crate::providers::*;
 pub use crate::source::*;
 pub use crate::stamps::*;
 pub use crate::utils::*;
+pub use crate::validation::*;
 
 /// log prefix constant
 pub const EVENT_JSON_PREFIX: &str = "EVENT_JSON:";
@@ -40,7 +42,9 @@ pub struct Contract {
     owner: AccountId,
     admins: UnorderedSet<AccountId>,
     providers_by_id: UnorderedMap<ProviderId, VersionedProvider>,
-    // TODO: add active providers count, or sets of active provider IDs for easier targeted fetching
+    pending_provider_ids: UnorderedSet<ProviderId>,
+    active_provider_ids: UnorderedSet<ProviderId>,
+    deactivated_provider_ids: UnorderedSet<ProviderId>,
     default_provider_ids: UnorderedSet<ProviderId>,
     default_human_threshold: u32,
     // MAPPINGS
@@ -83,6 +87,9 @@ pub enum StorageKey {
     SourceMetadata,
     Admins,
     ProvidersById,
+    PendingProviderIds,
+    ActiveProviderIds,
+    DeactivatedProviderIds,
     DefaultProviderIds,
     StampsById,
     ProviderIdsForUser,
@@ -118,6 +125,9 @@ impl Contract {
                 StorageKey::Admins,
             ),
             providers_by_id: UnorderedMap::new(StorageKey::ProvidersById),
+            pending_provider_ids: UnorderedSet::new(StorageKey::PendingProviderIds),
+            active_provider_ids: UnorderedSet::new(StorageKey::ActiveProviderIds),
+            deactivated_provider_ids: UnorderedSet::new(StorageKey::DeactivatedProviderIds),
             default_provider_ids: UnorderedSet::new(StorageKey::DefaultProviderIds),
             default_human_threshold: 0,
             stamps_by_id: UnorderedMap::new(StorageKey::StampsById),
@@ -153,6 +163,9 @@ impl Default for Contract {
             owner: AccountId::new_unchecked("".to_string()),
             admins: account_vec_to_set(vec![], StorageKey::Admins),
             providers_by_id: UnorderedMap::new(StorageKey::ProvidersById),
+            pending_provider_ids: UnorderedSet::new(StorageKey::PendingProviderIds),
+            active_provider_ids: UnorderedSet::new(StorageKey::ActiveProviderIds),
+            deactivated_provider_ids: UnorderedSet::new(StorageKey::DeactivatedProviderIds),
             default_provider_ids: UnorderedSet::new(StorageKey::DefaultProviderIds),
             default_human_threshold: 0,
             stamps_by_id: UnorderedMap::new(StorageKey::StampsById),

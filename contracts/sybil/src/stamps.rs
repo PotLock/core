@@ -60,11 +60,10 @@ impl Contract {
                 .expect("Provider does not exist"),
         );
         // verify that provider is active
-        assert!(provider.is_active, "Provider is not active");
-        // warn if provider is flagged
-        if provider.is_flagged {
-            log!(format!("Provider is flagged"));
-        }
+        assert!(
+            provider.status == ProviderStatus::Active,
+            "Provider is not active"
+        );
         // verify against provider, using custom gas if specified
         let (contract_id, method_name) = provider_id.decompose();
         let gas = Gas(provider.gas.unwrap_or(XCC_GAS_DEFAULT));
@@ -74,65 +73,85 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(gas)
-                    .verify_callback(user_id, provider_id, provider, attached_deposit),
+                    .verify_stamp_callback(user_id, provider_id, provider, attached_deposit),
             )
     }
 
     #[private]
-    pub fn verify_callback(
+    pub fn verify_stamp_callback(
         &mut self,
         user_id: AccountId,
         provider_id: ProviderId,
         mut provider: Provider,
         attached_deposit: Balance,
-        #[callback_result] call_result: Result<bool, PromiseError>,
+        #[callback_result] call_result: Result<near_sdk::serde_json::Value, PromiseError>,
     ) -> Option<StampExternal> {
-        if call_result.is_err() {
-            log!(format!("Error verifying user; refunding deposit",));
-            Promise::new(user_id).transfer(attached_deposit);
-            return None;
-        } else if !call_result.unwrap() {
-            log!(format!("User not verified; refunding deposit",));
-            Promise::new(user_id).transfer(attached_deposit);
-            return None;
-        } else {
-            log!(format!("User verified; creating stamp",));
-            let stamp_id = StampId::new(user_id.clone(), provider_id.clone());
-            let stamp = Stamp {
-                validated_at_ms: env::block_timestamp_ms(),
-            };
+        match call_result {
+            Ok(val) => {
+                if let Some(is_valid) = val.as_bool() {
+                    // provider returned a bool; so far so good
+                    if !is_valid {
+                        // provider returned false (user not verified); refund deposit
+                        log!("User not verified; refunding deposit");
+                        Promise::new(user_id).transfer(attached_deposit);
+                        return None;
+                    } else {
+                        // provider returned true (user verified); create stamp
+                        log!(format!("User verified; creating stamp",));
+                        let stamp_id = StampId::new(user_id.clone(), provider_id.clone());
+                        let stamp = Stamp {
+                            validated_at_ms: env::block_timestamp_ms(),
+                        };
 
-            // update state
-            let initial_storage_usage = env::storage_usage();
-            self.insert_stamp_record(
-                stamp_id.clone(),
-                stamp.clone(),
-                provider_id.clone(),
-                user_id.clone(),
-            );
+                        // update state
+                        let initial_storage_usage = env::storage_usage();
+                        self.insert_stamp_record(
+                            stamp_id.clone(),
+                            stamp.clone(),
+                            provider_id.clone(),
+                            user_id.clone(),
+                        );
 
-            provider.stamp_count += 1;
-            self.providers_by_id
-                .insert(&provider_id, &VersionedProvider::Current(provider.clone()));
+                        provider.stamp_count += 1;
+                        self.providers_by_id
+                            .insert(&provider_id, &VersionedProvider::Current(provider.clone()));
 
-            // calculate storage cost
-            let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
-            // refund any unused deposit
-            if attached_deposit > required_deposit {
-                Promise::new(user_id.clone()).transfer(attached_deposit - required_deposit);
-            } else if attached_deposit < required_deposit {
-                env::panic_str(&format!(
-                    "Must attach {} yoctoNEAR to cover storage",
-                    required_deposit
-                ));
+                        // calculate storage cost
+                        let required_deposit =
+                            calculate_required_storage_deposit(initial_storage_usage);
+                        // refund any unused deposit
+                        if attached_deposit > required_deposit {
+                            Promise::new(user_id.clone())
+                                .transfer(attached_deposit - required_deposit);
+                        } else if attached_deposit < required_deposit {
+                            env::panic_str(&format!(
+                                "Must attach {} yoctoNEAR to cover storage",
+                                required_deposit
+                            ));
+                        }
+
+                        // return stamp
+                        return Some(StampExternal {
+                            user_id,
+                            provider: ProviderExternal::from_provider_id(&provider_id.0, provider),
+                            validated_at_ms: stamp.validated_at_ms,
+                        });
+                    }
+                } else {
+                    // Response type is incorrect. Refund deposit.
+                    log!(
+                        "Received invalid response type for stamp verification. Returning deposit."
+                    );
+                    Promise::new(user_id).transfer(attached_deposit);
+                    return None;
+                }
             }
-
-            // return stamp
-            return Some(StampExternal {
-                user_id,
-                provider: ProviderExternal::from_provider_id(&provider_id.0, provider),
-                validated_at_ms: stamp.validated_at_ms,
-            });
+            Err(_) => {
+                // Error occurred in cross-contract call. Refund deposit.
+                log!("Error occurred while verifying stamp; refunding deposit");
+                Promise::new(user_id).transfer(attached_deposit);
+                return None;
+            }
         }
     }
 
