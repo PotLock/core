@@ -6,8 +6,8 @@ Provides an example of an extremely 3rd party Sybil resistance provider that can
 
 ## Deployed Contracts
 
-**- Staging (Mainnet): `sybilprovidersimulator-1.staging.nadabot.near`**
-**- Testnet: `sybilprovidersimulator-1.nadabot.testnet`**
+- **Staging (Mainnet): `sybilprovidersimulator-1.staging.nadabot.near`**
+- **Testnet: `sybilprovidersimulator-1.nadabot.testnet`**
 
 ## Contract Structure
 
