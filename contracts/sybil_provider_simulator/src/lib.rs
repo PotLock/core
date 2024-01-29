@@ -7,6 +7,9 @@ use near_sdk::{
     PanicOnDefault, Promise,
 };
 
+pub mod utils;
+pub use crate::utils::*;
+
 /// SybilProvider Contract
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -42,26 +45,21 @@ impl Contract {
         }
     }
 
-    pub fn return_true(&self, account_id: AccountId) -> bool {
-        true
-    }
-
-    pub fn return_false(&self, account_id: AccountId) -> bool {
-        false
-    }
-
-    pub fn return_none(&self, account_id: AccountId) -> Option<bool> {
-        None
-    }
-
+    #[payable]
     pub fn get_check(&mut self) {
+        let initial_storage_usage = env::storage_usage();
         self.account_ids_to_bool
             .insert(&env::predecessor_account_id(), &true);
+        // Refund any unused deposit after storage cost is covered
+        refund_deposit(initial_storage_usage);
     }
 
     pub fn remove_check(&mut self) {
+        let initial_storage_usage = env::storage_usage();
         self.account_ids_to_bool
             .remove(&env::predecessor_account_id());
+        // Refund user for storage freed
+        refund_deposit(initial_storage_usage);
     }
 
     pub fn has_check(&self, account_id: AccountId) -> bool {
