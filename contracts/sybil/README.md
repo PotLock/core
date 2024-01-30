@@ -208,7 +208,7 @@ pub fn register_provider(
     &mut self,
     contract_id: String,
     method_name: String,
-    account_id_arg_name: String,
+    account_id_arg_name: Option<String>, // defaults to "account_id"
     name: String,
     description: Option<String>,
     gas: Option<u64>,

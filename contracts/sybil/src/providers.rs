@@ -207,7 +207,7 @@ impl Contract {
         &mut self,
         contract_id: String,
         method_name: String,
-        account_id_arg_name: String,
+        account_id_arg_name: Option<String>, // defaults to "account_id" if None
         name: String,
         description: Option<String>,
         gas: Option<u64>,
@@ -255,7 +255,7 @@ impl Contract {
 
         // create provider (but don't store yet)
         let provider = Provider {
-            account_id_arg_name: account_id_arg_name.clone(),
+            account_id_arg_name: account_id_arg_name.unwrap_or("account_id".to_string()),
             name,
             description,
             status: ProviderStatus::Pending,
@@ -277,7 +277,7 @@ impl Contract {
         // Create a HashMap and insert the dynamic account_id_arg_name and value
         let mut args_map = std::collections::HashMap::new();
         args_map.insert(
-            account_id_arg_name.clone(),
+            provider.account_id_arg_name.clone(),
             env::current_account_id().to_string(),
         );
 
