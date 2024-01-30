@@ -59,6 +59,8 @@ type ProviderId = String; // NB: this is stored internally as a struct
 // Provider struct that is versioned & stored internally
 pub struct Provider {
     // NB: contract address/ID and method name are contained in the Provider's ID (see `ProviderId`) so do not need to be stored here
+    /// Name of account ID arg, e.g. `"account_id"` or `"accountId"` or `"account"`
+    pub account_id_arg_name: String,
     /// Name of the provider, e.g. "I Am Human"
     pub name: String,
     /// Description of the provider
@@ -99,6 +101,8 @@ pub struct ProviderExternal {
     pub contract_id: String,
     /// Method name of the external contract that is the source of this provider
     pub method_name: String,
+    /// Account ID arg name
+    pub account_id_arg_name: String,
     /// Name of the provider, e.g. "I Am Human"
     pub name: String,
     /// Description of the provider
@@ -204,6 +208,7 @@ pub fn register_provider(
     &mut self,
     contract_id: String,
     method_name: String,
+    account_id_arg_name: String,
     name: String,
     description: Option<String>,
     gas: Option<u64>,
@@ -217,6 +222,7 @@ pub fn register_provider(
 pub fn update_provider(
     &mut self,
     provider_id: ProviderId,
+    account_id_arg_name: Option<String>,
     name: Option<String>,
     description: Option<String>,
     gas: Option<u64>,

@@ -34,8 +34,40 @@ pub enum ProviderStatus {
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
+pub struct ProviderV1 {
+    // NB: contract address/ID and method name are contained in the Provider's ID (see `ProviderId`) so do not need to be stored here
+    /// Name of the provider, e.g. "I Am Human"
+    pub name: String,
+    /// Description of the provider
+    pub description: Option<String>,
+    /// Status of the provider
+    pub status: ProviderStatus,
+    /// Admin notes, e.g. reason for flagging or marking inactive
+    pub admin_notes: Option<String>,
+    /// Default weight for this provider, e.g. 100
+    pub default_weight: u32,
+    /// Custom gas amount required
+    pub gas: Option<u64>,
+    /// Optional tags
+    pub tags: Option<Vec<String>>,
+    /// Optional icon URL
+    pub icon_url: Option<String>,
+    /// Optional external URL
+    pub external_url: Option<String>,
+    /// User who submitted this provider
+    pub submitted_by: AccountId,
+    /// Timestamp of when this provider was submitted
+    pub submitted_at_ms: TimestampMs,
+    /// Total number of times this provider has been used successfully
+    pub stamp_count: u64,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
+#[serde(crate = "near_sdk::serde")]
 pub struct Provider {
     // NB: contract address/ID and method name are contained in the Provider's ID (see `ProviderId`) so do not need to be stored here
+    /// Name of account ID arg, e.g. `"account_id"` or `"accountId"` or `"account"`
+    pub account_id_arg_name: String,
     /// Name of the provider, e.g. "I Am Human"
     pub name: String,
     /// Description of the provider
@@ -64,12 +96,28 @@ pub struct Provider {
 
 #[derive(BorshSerialize, BorshDeserialize)]
 pub enum VersionedProvider {
+    V1(ProviderV1),
     Current(Provider),
 }
 
 impl From<VersionedProvider> for Provider {
     fn from(provider: VersionedProvider) -> Self {
         match provider {
+            VersionedProvider::V1(v1) => Provider {
+                account_id_arg_name: "account_id".to_string(),
+                name: v1.name,
+                description: v1.description,
+                status: v1.status,
+                admin_notes: v1.admin_notes,
+                default_weight: v1.default_weight,
+                gas: v1.gas,
+                tags: v1.tags,
+                icon_url: v1.icon_url,
+                external_url: v1.external_url,
+                submitted_by: v1.submitted_by,
+                submitted_at_ms: v1.submitted_at_ms,
+                stamp_count: v1.stamp_count,
+            },
             VersionedProvider::Current(current) => current,
         }
     }
@@ -85,6 +133,8 @@ pub struct ProviderExternal {
     pub contract_id: String,
     /// Method name of the external contract that is the source of this provider
     pub method_name: String,
+    /// Account ID arg name
+    pub account_id_arg_name: String,
     /// Name of the provider, e.g. "I Am Human"
     pub name: String,
     /// Description of the provider
@@ -133,6 +183,7 @@ impl ProviderExternal {
             provider_id: ProviderId(provider_id.to_string()),
             contract_id: parts[0].to_string(),
             method_name: parts[1].to_string(),
+            account_id_arg_name: provider.account_id_arg_name,
             name: provider.name,
             default_weight: provider.default_weight,
             description: provider.description,
@@ -156,6 +207,7 @@ impl Contract {
         &mut self,
         contract_id: String,
         method_name: String,
+        account_id_arg_name: String,
         name: String,
         description: Option<String>,
         gas: Option<u64>,
@@ -202,7 +254,8 @@ impl Contract {
         let submitter_id = env::signer_account_id();
 
         // create provider (but don't store yet)
-        let mut provider = Provider {
+        let provider = Provider {
+            account_id_arg_name: account_id_arg_name.clone(),
             name,
             description,
             status: ProviderStatus::Pending,
@@ -219,11 +272,20 @@ impl Contract {
 
         // TODO: consider setting status to active by default if caller is owner/admin
 
-        // validate contract ID and method name
+        // validate contract ID, method name and account ID arg name
         let gas = Gas(gas.unwrap_or(XCC_GAS_DEFAULT));
-        let args = json!({ "account_id": env::current_account_id() })
-            .to_string()
+        // Create a HashMap and insert the dynamic account_id_arg_name and value
+        let mut args_map = std::collections::HashMap::new();
+        args_map.insert(
+            account_id_arg_name.clone(),
+            env::current_account_id().to_string(),
+        );
+
+        // Serialize the HashMap to JSON string and then to bytes
+        let args = near_sdk::serde_json::to_string(&args_map)
+            .expect("Failed to serialize args")
             .into_bytes();
+
         Promise::new(AccountId::new_unchecked(contract_id.clone()))
             .function_call(method_name.clone(), args, NO_DEPOSIT, gas)
             .then(
@@ -296,6 +358,7 @@ impl Contract {
     pub fn update_provider(
         &mut self,
         provider_id: ProviderId,
+        account_id_arg_name: Option<String>,
         name: Option<String>,
         description: Option<String>,
         gas: Option<u64>,
@@ -329,6 +392,11 @@ impl Contract {
             .into();
 
         // update provider
+        if let Some(account_id_arg_name) = account_id_arg_name {
+            provider.account_id_arg_name = account_id_arg_name;
+            // TODO: validate account_id_arg_name against provider contract
+        }
+
         if let Some(name) = name {
             assert_valid_provider_name(&name);
             provider.name = name;
