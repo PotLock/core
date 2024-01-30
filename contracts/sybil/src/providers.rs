@@ -358,6 +358,7 @@ impl Contract {
     pub fn update_provider(
         &mut self,
         provider_id: ProviderId,
+        account_id_arg_name: Option<String>,
         name: Option<String>,
         description: Option<String>,
         gas: Option<u64>,
@@ -391,6 +392,11 @@ impl Contract {
             .into();
 
         // update provider
+        if let Some(account_id_arg_name) = account_id_arg_name {
+            provider.account_id_arg_name = account_id_arg_name;
+            // TODO: validate account_id_arg_name against provider contract
+        }
+
         if let Some(name) = name {
             assert_valid_provider_name(&name);
             provider.name = name;
