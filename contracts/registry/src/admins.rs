@@ -58,6 +58,12 @@ impl Contract {
             ProjectStatus::Rejected => {
                 self.rejected_project_ids.insert(&project_id);
             }
+            ProjectStatus::Graylisted => {
+                self.graylisted_project_ids.insert(&project_id);
+            }
+            ProjectStatus::Blacklisted => {
+                self.blacklisted_project_ids.insert(&project_id);
+            }
         }
         match old_status {
             ProjectStatus::Pending => {
@@ -68,6 +74,12 @@ impl Contract {
             }
             ProjectStatus::Rejected => {
                 self.rejected_project_ids.remove(&project_id);
+            }
+            ProjectStatus::Graylisted => {
+                self.graylisted_project_ids.remove(&project_id);
+            }
+            ProjectStatus::Blacklisted => {
+                self.blacklisted_project_ids.remove(&project_id);
             }
         }
     }

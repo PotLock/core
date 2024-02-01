@@ -61,6 +61,10 @@ pub struct Contract {
     approved_project_ids: UnorderedSet<ProjectId>,
     /// Projects rejected
     rejected_project_ids: UnorderedSet<ProjectId>,
+    /// Projects graylisted
+    graylisted_project_ids: UnorderedSet<ProjectId>,
+    /// Projects blacklisted
+    blacklisted_project_ids: UnorderedSet<ProjectId>,
     /// Contract "source" metadata, as specified in NEP 0330 (https://github.com/near/NEPs/blob/master/neps/nep-0330.md), with addition of `commit_hash`
     contract_source_metadata: LazyOption<VersionedContractSourceMetadata>,
     /// Default status when project registers
@@ -90,6 +94,8 @@ pub enum StorageKey {
     PendingProjectIds,
     ApprovedProjectIds,
     RejectedProjectIds,
+    GraylistedProjectIds,
+    BlacklistedProjectIds,
     SourceMetadata,
 }
 
@@ -103,6 +109,8 @@ pub struct ContractConfig {
     pub pending_project_count: u64,
     pub approved_project_count: u64,
     pub rejected_project_count: u64,
+    pub graylisted_project_count: u64,
+    pub blacklisted_project_count: u64,
 }
 
 #[near_bindgen]
@@ -122,6 +130,8 @@ impl Contract {
             pending_project_ids: UnorderedSet::new(StorageKey::PendingProjectIds),
             approved_project_ids: UnorderedSet::new(StorageKey::ApprovedProjectIds),
             rejected_project_ids: UnorderedSet::new(StorageKey::RejectedProjectIds),
+            graylisted_project_ids: UnorderedSet::new(StorageKey::GraylistedProjectIds),
+            blacklisted_project_ids: UnorderedSet::new(StorageKey::BlacklistedProjectIds),
             contract_source_metadata: LazyOption::new(
                 StorageKey::SourceMetadata,
                 Some(&VersionedContractSourceMetadata::Current(source_metadata)),
@@ -138,6 +148,8 @@ impl Contract {
             pending_project_count: self.pending_project_ids.len(),
             approved_project_count: self.approved_project_ids.len(),
             rejected_project_count: self.rejected_project_ids.len(),
+            graylisted_project_count: self.graylisted_project_ids.len(),
+            blacklisted_project_count: self.blacklisted_project_ids.len(),
         }
     }
 
@@ -150,6 +162,8 @@ impl Contract {
         let mut pending_project_ids = UnorderedSet::new(StorageKey::PendingProjectIds);
         let mut approved_project_ids = UnorderedSet::new(StorageKey::ApprovedProjectIds);
         let mut rejected_project_ids = UnorderedSet::new(StorageKey::RejectedProjectIds);
+        let mut graylisted_project_ids = UnorderedSet::new(StorageKey::GraylistedProjectIds);
+        let mut blacklisted_project_ids = UnorderedSet::new(StorageKey::BlacklistedProjectIds);
         for project_id in old_state.project_ids.iter() {
             let project_internal =
                 ProjectInternal::from(old_state.projects_by_id.get(&project_id).unwrap());
@@ -163,6 +177,12 @@ impl Contract {
                 ProjectStatus::Rejected => {
                     rejected_project_ids.insert(&project_id);
                 }
+                ProjectStatus::Graylisted => {
+                    graylisted_project_ids.insert(&project_id);
+                }
+                ProjectStatus::Blacklisted => {
+                    blacklisted_project_ids.insert(&project_id);
+                }
             }
         }
         Self {
@@ -174,6 +194,8 @@ impl Contract {
             pending_project_ids: UnorderedSet::new(StorageKey::PendingProjectIds),
             approved_project_ids: UnorderedSet::new(StorageKey::ApprovedProjectIds),
             rejected_project_ids: UnorderedSet::new(StorageKey::RejectedProjectIds),
+            graylisted_project_ids: UnorderedSet::new(StorageKey::GraylistedProjectIds),
+            blacklisted_project_ids: UnorderedSet::new(StorageKey::BlacklistedProjectIds),
             contract_source_metadata: LazyOption::new(StorageKey::SourceMetadata, None),
             default_project_status: ProjectStatus::Approved,
         }
@@ -191,6 +213,8 @@ impl Default for Contract {
             pending_project_ids: UnorderedSet::new(StorageKey::PendingProjectIds),
             approved_project_ids: UnorderedSet::new(StorageKey::ApprovedProjectIds),
             rejected_project_ids: UnorderedSet::new(StorageKey::RejectedProjectIds),
+            graylisted_project_ids: UnorderedSet::new(StorageKey::GraylistedProjectIds),
+            blacklisted_project_ids: UnorderedSet::new(StorageKey::BlacklistedProjectIds),
             contract_source_metadata: LazyOption::new(StorageKey::SourceMetadata, None),
             default_project_status: ProjectStatus::Approved,
         }

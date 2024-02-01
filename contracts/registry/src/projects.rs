@@ -17,6 +17,8 @@ pub enum ProjectStatus {
     Pending,
     Approved,
     Rejected,
+    Graylisted,
+    Blacklisted,
 }
 
 // OLD (v1) - ProjectInternal is the data structure that is stored within the contract
@@ -122,6 +124,12 @@ impl Contract {
             ProjectStatus::Rejected => {
                 self.rejected_project_ids.insert(&project_id);
             }
+            ProjectStatus::Graylisted => {
+                self.graylisted_project_ids.insert(&project_id);
+            }
+            ProjectStatus::Blacklisted => {
+                self.blacklisted_project_ids.insert(&project_id);
+            }
         }
 
         // refund any unused deposit
@@ -180,6 +188,38 @@ impl Contract {
                         "Out of bounds, please use a smaller from_index."
                     );
                     self.rejected_project_ids
+                        .iter()
+                        .skip(start_index as usize)
+                        .take(limit)
+                        .map(|project_id| {
+                            self.format_project(ProjectInternal::from(
+                                self.projects_by_id.get(&project_id).expect("No project"),
+                            ))
+                        })
+                        .collect()
+                }
+                ProjectStatus::Graylisted => {
+                    assert!(
+                        (self.graylisted_project_ids.len() as u64) >= start_index,
+                        "Out of bounds, please use a smaller from_index."
+                    );
+                    self.graylisted_project_ids
+                        .iter()
+                        .skip(start_index as usize)
+                        .take(limit)
+                        .map(|project_id| {
+                            self.format_project(ProjectInternal::from(
+                                self.projects_by_id.get(&project_id).expect("No project"),
+                            ))
+                        })
+                        .collect()
+                }
+                ProjectStatus::Blacklisted => {
+                    assert!(
+                        (self.blacklisted_project_ids.len() as u64) >= start_index,
+                        "Out of bounds, please use a smaller from_index."
+                    );
+                    self.blacklisted_project_ids
                         .iter()
                         .skip(start_index as usize)
                         .take(limit)
