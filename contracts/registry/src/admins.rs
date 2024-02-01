@@ -24,7 +24,7 @@ impl Contract {
 
     #[payable]
     pub fn admin_set_default_project_status(&mut self, status: ProjectStatus) {
-        self.assert_admin();
+        self.assert_admin_or_greater();
         let initial_storage_usage = env::storage_usage();
         self.default_project_status = status;
         refund_deposit(initial_storage_usage);
@@ -37,7 +37,7 @@ impl Contract {
         status: ProjectStatus,
         review_notes: Option<String>,
     ) {
-        self.assert_admin();
+        self.assert_admin_or_greater();
         self.assert_project_exists(&project_id);
         let mut project =
             ProjectInternal::from(self.projects_by_id.get(&project_id).expect("No project"));

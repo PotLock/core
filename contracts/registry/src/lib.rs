@@ -158,7 +158,8 @@ impl Contract {
     pub fn migrate() -> Self {
         let mut old_state: ContractV1 = env::state_read().expect("state read failed");
         old_state.project_ids.clear(); // don't need these anymore, but still need to keep mapping at StorageKey::ProjectIds
-                                       // populate new sets
+                                       // populate new maps/sets
+        let mut projects_by_id = UnorderedMap::new(StorageKey::ProjectsById2);
         let mut pending_project_ids = UnorderedSet::new(StorageKey::PendingProjectIds);
         let mut approved_project_ids = UnorderedSet::new(StorageKey::ApprovedProjectIds);
         let mut rejected_project_ids = UnorderedSet::new(StorageKey::RejectedProjectIds);
@@ -167,6 +168,11 @@ impl Contract {
         for project_id in old_state.project_ids.iter() {
             let project_internal =
                 ProjectInternal::from(old_state.projects_by_id.get(&project_id).unwrap());
+            // add to projects_by_id
+            projects_by_id.insert(
+                &project_id,
+                &VersionedProjectInternal::Current(project_internal.clone()),
+            );
             match project_internal.status {
                 ProjectStatus::Pending => {
                     pending_project_ids.insert(&project_id);
@@ -190,7 +196,7 @@ impl Contract {
             admins: old_state.admins,
             _deprecated_project_ids: old_state.project_ids,
             _deprecated_projects_by_id: old_state.projects_by_id,
-            projects_by_id: UnorderedMap::new(StorageKey::ProjectsById2),
+            projects_by_id,
             pending_project_ids: UnorderedSet::new(StorageKey::PendingProjectIds),
             approved_project_ids: UnorderedSet::new(StorageKey::ApprovedProjectIds),
             rejected_project_ids: UnorderedSet::new(StorageKey::RejectedProjectIds),

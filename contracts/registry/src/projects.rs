@@ -90,7 +90,7 @@ impl Contract {
 
         // _project_id can only be specified by admin; otherwise, it is the caller
         let project_id = if let Some(_project_id) = _project_id {
-            self.assert_admin();
+            self.assert_admin_or_greater();
             _project_id
         } else {
             env::predecessor_account_id()
