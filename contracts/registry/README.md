@@ -58,6 +58,8 @@ pub enum ProjectStatus {
     Pending,
     Approved,
     Rejected,
+    Graylisted,
+    Blacklisted,
 }
 
 // ProjectInternal is the data structure that is stored within the contract
