@@ -124,7 +124,7 @@ impl Contract {
         Self {
             owner,
             admins: account_vec_to_set(admins, StorageKey::Admins),
-            _deprecated_project_ids: UnorderedSet::new(StorageKey::ProjectIds), // TODO: remove if nuking
+            _deprecated_project_ids: UnorderedSet::new(StorageKey::ProjectIds),
             _deprecated_projects_by_id: LookupMap::new(StorageKey::ProjectsById),
             projects_by_id: UnorderedMap::new(StorageKey::ProjectsById2),
             pending_project_ids: UnorderedSet::new(StorageKey::PendingProjectIds),
