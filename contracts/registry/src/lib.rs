@@ -157,8 +157,7 @@ impl Contract {
     #[init(ignore_state)]
     pub fn migrate() -> Self {
         let mut old_state: ContractV1 = env::state_read().expect("state read failed");
-        old_state.project_ids.clear(); // don't need these anymore, but still need to keep mapping at StorageKey::ProjectIds
-                                       // populate new maps/sets
+        // populate new maps/sets
         let mut projects_by_id = UnorderedMap::new(StorageKey::ProjectsById2);
         let mut pending_project_ids = UnorderedSet::new(StorageKey::PendingProjectIds);
         let mut approved_project_ids = UnorderedSet::new(StorageKey::ApprovedProjectIds);
@@ -196,6 +195,7 @@ impl Contract {
                 }
             }
         }
+        old_state.project_ids.clear(); // don't need these anymore, but still need to keep mapping at StorageKey::ProjectIds
         Self {
             owner: old_state.owner,
             admins: old_state.admins,
