@@ -29,14 +29,14 @@ impl Contract {
 
     pub(crate) fn assert_project_exists(&self, project_id: &AccountId) {
         assert!(
-            self.project_ids.contains(project_id),
+            self.projects_by_id.get(project_id).is_some(),
             "Project does not exist"
         );
     }
 
     pub(crate) fn assert_project_does_not_exist(&self, project_id: &AccountId) {
         assert!(
-            !self.project_ids.contains(project_id),
+            !self.projects_by_id.get(project_id).is_some(),
             "Project already exists"
         );
     }

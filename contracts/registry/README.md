@@ -21,11 +21,31 @@ pub struct Contract {
     owner: AccountId,
     /// Contract admins (can be added/removed by owner)
     admins: UnorderedSet<AccountId>,
+    /// Old set (deprecated but empty set must be retained in state or serialization will break)
+    _deprecated_project_ids: UnorderedSet<ProjectId>,
+    /// Old map (deprecated but empty map must be retained in state or serialization will break)
+    _deprecated_projects_by_id: LookupMap<ProjectId, VersionedProjectInternal>,
     /// Records of all Projects deployed by this Registry, indexed at their account ID, versioned for easy upgradeability
-    project_ids: UnorderedSet<ProjectId>, // NB: this is unnecessary, but retained for now as it is implemented in v0
-    projects_by_id: LookupMap<ProjectId, VersionedProjectInternal>,
+    projects_by_id: UnorderedMap<ProjectId, VersionedProjectInternal>,
+    /// Projects pending approval
+    pending_project_ids: UnorderedSet<ProjectId>,
+    /// Projects approved
+    approved_project_ids: UnorderedSet<ProjectId>,
+    /// Projects rejected
+    rejected_project_ids: UnorderedSet<ProjectId>,
     /// Contract "source" metadata, as specified in NEP 0330 (https://github.com/near/NEPs/blob/master/neps/nep-0330.md), with addition of `commit_hash`
     contract_source_metadata: LazyOption<VersionedContractSourceMetadata>,
+    /// Default status when project registers
+    default_project_status: ProjectStatus,
+}
+
+pub struct ContractConfig {
+    pub owner: AccountId,
+    pub admins: Vec<AccountId>,
+    pub default_project_status: ProjectStatus,
+    pub pending_project_count: u64,
+    pub approved_project_count: u64,
+    pub rejected_project_count: u64,
 }
 ```
 
@@ -35,8 +55,7 @@ _NB: Projects are automatically approved by default._
 
 ```rs
 pub enum ProjectStatus {
-    Submitted,
-    InReview,
+    Pending,
     Approved,
     Rejected,
 }
@@ -44,7 +63,6 @@ pub enum ProjectStatus {
 // ProjectInternal is the data structure that is stored within the contract
 pub struct ProjectInternal {
     pub id: ProjectId,
-    pub name: String,
     pub status: ProjectStatus,
     pub submitted_ms: TimestampMs,
     pub updated_ms: TimestampMs,
@@ -77,21 +95,10 @@ pub fn new(
 ) -> Self
 
 
-// PROJECTS
+// OWNER
 
 #[payable]
-pub fn register(
-    &mut self,
-    _project_id: Option<AccountId>, // NB: _project_id can only be specified by admin; otherwise, it is the caller
-) -> ProjectExternal 
-
-#[payable]
-pub fn admin_set_project_status(
-    &mut self,
-    project_id: ProjectId,
-    status: ProjectStatus,
-    review_notes: Option<String>,
-) -> ()
+pub fn owner_change_owner(&mut self, owner: AccountId)
 
 
 // ADMINS
@@ -102,11 +109,25 @@ pub fn owner_add_admins(&mut self, admins: Vec<AccountId>)
 #[payable]
 pub fn owner_remove_admins(&mut self, admins: Vec<AccountId>)
 
-
-// OWNER
+#[payable]
+pub fn admin_set_default_project_status(&mut self, status: ProjectStatus)
 
 #[payable]
-pub fn owner_change_owner(&mut self, owner: AccountId)
+pub fn admin_set_project_status(
+    &mut self,
+    project_id: ProjectId,
+    status: ProjectStatus,
+    review_notes: Option<String>,
+) -> ()
+
+
+// PROJECTS
+
+#[payable]
+pub fn register(
+    &mut self,
+    _project_id: Option<AccountId>, // NB: _project_id can only be specified by admin; otherwise, it is the caller
+) -> ProjectExternal 
 
 
 // SOURCE METADATA
@@ -117,26 +138,23 @@ pub fn self_set_source_metadata(&mut self, source_metadata: ContractSourceMetada
 ### Read Methods
 
 ```rs
-// IS REGISTERED BOOLEAN
+// CONTRACT
 
-pub fn is_registered(&self, account_id: ProjectId) -> bool
+pub fn get_config(&self) -> ContractConfig
 
 
 // PROJECTS
 
-pub fn get_projects(&self) -> Vec<ProjectExternal>
+pub fn is_registered(&self, account_id: ProjectId) -> bool
+
+pub fn get_projects(
+    &self,
+    status: Option<ProjectStatus>,
+    from_index: Option<u64>,
+    limit: Option<u64>,
+) -> Vec<ProjectExternal>
 
 pub fn get_project_by_id(&self, project_id: ProjectId) -> ProjectExternal
-
-
-// ADMINS
-
-pub fn get_admins(&self) -> Vec<AccountId>
-
-
-// OWNER
-
-pub fn get_owner(&self) -> AccountId
 
 
 // SOURCE METADATA

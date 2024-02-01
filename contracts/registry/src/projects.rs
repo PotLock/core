@@ -2,7 +2,7 @@ use crate::*;
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug, Clone)]
 #[serde(crate = "near_sdk::serde")]
-pub enum ProjectStatus {
+pub enum ProjectStatusV1 {
     Submitted,
     InReview,
     Approved,
@@ -11,7 +11,26 @@ pub enum ProjectStatus {
     Blacklisted,
 }
 
-// ProjectInternal is the data structure that is stored within the contract
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub enum ProjectStatus {
+    Pending,
+    Approved,
+    Rejected,
+}
+
+// OLD (v1) - ProjectInternal is the data structure that is stored within the contract
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct ProjectInternalV1 {
+    pub id: ProjectId,
+    pub status: ProjectStatusV1,
+    pub submitted_ms: TimestampMs,
+    pub updated_ms: TimestampMs,
+    pub review_notes: Option<String>,
+}
+
+// CURRENT - ProjectInternal is the data structure that is stored within the contract
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct ProjectInternal {
@@ -24,12 +43,27 @@ pub struct ProjectInternal {
 
 #[derive(BorshSerialize, BorshDeserialize)]
 pub enum VersionedProjectInternal {
+    V1(ProjectInternalV1),
     Current(ProjectInternal),
 }
 
 impl From<VersionedProjectInternal> for ProjectInternal {
     fn from(project_internal: VersionedProjectInternal) -> Self {
         match project_internal {
+            VersionedProjectInternal::V1(v1) => ProjectInternal {
+                id: v1.id,
+                status: match v1.status {
+                    ProjectStatusV1::Submitted => ProjectStatus::Pending,
+                    ProjectStatusV1::InReview => ProjectStatus::Pending,
+                    ProjectStatusV1::Approved => ProjectStatus::Approved,
+                    ProjectStatusV1::Rejected => ProjectStatus::Rejected,
+                    ProjectStatusV1::Graylisted => ProjectStatus::Rejected,
+                    ProjectStatusV1::Blacklisted => ProjectStatus::Rejected,
+                },
+                submitted_ms: v1.submitted_ms,
+                updated_ms: v1.updated_ms,
+                review_notes: v1.review_notes,
+            },
             VersionedProjectInternal::Current(current) => current,
         }
     }
@@ -66,18 +100,29 @@ impl Contract {
         // create project
         let project_internal = ProjectInternal {
             id: project_id.clone(),
-            status: ProjectStatus::Approved, // approved by default - TODO: double-check that this is desired functionality
+            status: self.default_project_status.clone(),
             submitted_ms: env::block_timestamp_ms(),
             updated_ms: env::block_timestamp_ms(),
             review_notes: None,
         };
 
         // update mappings
-        self.project_ids.insert(&project_id);
+        // self.project_ids.insert(&project_id);
         self.projects_by_id.insert(
             &project_id,
             &VersionedProjectInternal::Current(project_internal.clone()),
         );
+        match project_internal.status {
+            ProjectStatus::Pending => {
+                self.pending_project_ids.insert(&project_id);
+            }
+            ProjectStatus::Approved => {
+                self.approved_project_ids.insert(&project_id);
+            }
+            ProjectStatus::Rejected => {
+                self.rejected_project_ids.insert(&project_id);
+            }
+        }
 
         // refund any unused deposit
         refund_deposit(initial_storage_usage);
@@ -86,15 +131,80 @@ impl Contract {
         self.format_project(project_internal)
     }
 
-    pub fn get_projects(&self) -> Vec<ProjectExternal> {
-        self.project_ids
-            .iter()
-            .map(|project_id| {
-                self.format_project(ProjectInternal::from(
-                    self.projects_by_id.get(&project_id).expect("No project"),
-                ))
-            })
-            .collect()
+    pub fn get_projects(
+        &self,
+        status: Option<ProjectStatus>,
+        from_index: Option<u64>,
+        limit: Option<u64>,
+    ) -> Vec<ProjectExternal> {
+        let start_index: u64 = from_index.unwrap_or_default();
+        let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
+        assert_ne!(limit, 0, "Cannot provide limit of 0.");
+        if let Some(status) = status {
+            match status {
+                ProjectStatus::Pending => {
+                    assert!(
+                        (self.pending_project_ids.len() as u64) >= start_index,
+                        "Out of bounds, please use a smaller from_index."
+                    );
+                    self.pending_project_ids
+                        .iter()
+                        .skip(start_index as usize)
+                        .take(limit)
+                        .map(|project_id| {
+                            self.format_project(ProjectInternal::from(
+                                self.projects_by_id.get(&project_id).expect("No project"),
+                            ))
+                        })
+                        .collect()
+                }
+                ProjectStatus::Approved => {
+                    assert!(
+                        (self.approved_project_ids.len() as u64) >= start_index,
+                        "Out of bounds, please use a smaller from_index."
+                    );
+                    self.approved_project_ids
+                        .iter()
+                        .skip(start_index as usize)
+                        .take(limit)
+                        .map(|project_id| {
+                            self.format_project(ProjectInternal::from(
+                                self.projects_by_id.get(&project_id).expect("No project"),
+                            ))
+                        })
+                        .collect()
+                }
+                ProjectStatus::Rejected => {
+                    assert!(
+                        (self.rejected_project_ids.len() as u64) >= start_index,
+                        "Out of bounds, please use a smaller from_index."
+                    );
+                    self.rejected_project_ids
+                        .iter()
+                        .skip(start_index as usize)
+                        .take(limit)
+                        .map(|project_id| {
+                            self.format_project(ProjectInternal::from(
+                                self.projects_by_id.get(&project_id).expect("No project"),
+                            ))
+                        })
+                        .collect()
+                }
+            }
+        } else {
+            assert!(
+                (self.projects_by_id.len() as u64) >= start_index,
+                "Out of bounds, please use a smaller from_index."
+            );
+            self.projects_by_id
+                .iter()
+                .skip(start_index as usize)
+                .take(limit.try_into().unwrap())
+                .map(|(_project_id, project_internal)| {
+                    self.format_project(ProjectInternal::from(project_internal))
+                })
+                .collect()
+        }
     }
 
     pub fn get_project_by_id(&self, project_id: ProjectId) -> ProjectExternal {
@@ -104,7 +214,7 @@ impl Contract {
     }
 
     pub fn is_registered(&self, account_id: ProjectId) -> bool {
-        self.project_ids.contains(&account_id)
+        self.projects_by_id.get(&account_id).is_some()
     }
 
     pub(crate) fn format_project(&self, project_internal: ProjectInternal) -> ProjectExternal {
@@ -115,23 +225,5 @@ impl Contract {
             updated_ms: project_internal.updated_ms,
             review_notes: project_internal.review_notes,
         }
-    }
-
-    #[payable]
-    pub fn admin_set_project_status(
-        &mut self,
-        project_id: ProjectId,
-        status: ProjectStatus,
-        review_notes: Option<String>,
-    ) {
-        self.assert_admin();
-        self.assert_project_exists(&project_id);
-        let mut project =
-            ProjectInternal::from(self.projects_by_id.get(&project_id).expect("No project"));
-        project.status = status;
-        project.review_notes = review_notes;
-        project.updated_ms = env::block_timestamp_ms();
-        self.projects_by_id
-            .insert(&project_id, &VersionedProjectInternal::Current(project));
     }
 }
