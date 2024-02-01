@@ -173,6 +173,11 @@ impl Contract {
                 &project_id,
                 &VersionedProjectInternal::Current(project_internal.clone()),
             );
+            log!(
+                "Migrated project {} with status {:?}",
+                project_id,
+                project_internal.status
+            );
             match project_internal.status {
                 ProjectStatus::Pending => {
                     pending_project_ids.insert(&project_id);
