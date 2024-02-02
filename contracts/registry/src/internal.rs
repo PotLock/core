@@ -18,9 +18,10 @@ impl Contract {
         self.assert_at_least_one_yocto();
     }
 
-    pub(crate) fn assert_admin(&self) {
+    pub(crate) fn assert_admin_or_greater(&self) {
+        let predecessor_account_id = env::predecessor_account_id();
         assert!(
-            self.admins.contains(&env::predecessor_account_id()),
+            self.owner == predecessor_account_id || self.admins.contains(&predecessor_account_id),
             "Admin-only action"
         );
         // require caller to attach at least one yoctoNEAR for security purposes
@@ -29,14 +30,14 @@ impl Contract {
 
     pub(crate) fn assert_project_exists(&self, project_id: &AccountId) {
         assert!(
-            self.project_ids.contains(project_id),
+            self.projects_by_id.get(project_id).is_some(),
             "Project does not exist"
         );
     }
 
     pub(crate) fn assert_project_does_not_exist(&self, project_id: &AccountId) {
         assert!(
-            !self.project_ids.contains(project_id),
+            !self.projects_by_id.get(project_id).is_some(),
             "Project already exists"
         );
     }

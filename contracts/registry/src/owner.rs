@@ -7,8 +7,4 @@ impl Contract {
         self.assert_owner();
         self.owner = owner;
     }
-
-    pub fn get_owner(&self) -> AccountId {
-        self.owner.clone()
-    }
 }
