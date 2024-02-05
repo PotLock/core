@@ -20,6 +20,7 @@ pub mod internal;
 pub mod payouts;
 pub mod source;
 pub mod utils;
+pub mod validation;
 pub use crate::admin::*;
 pub use crate::applications::*;
 pub use crate::config::*;
@@ -30,6 +31,7 @@ pub use crate::internal::*;
 pub use crate::payouts::*;
 pub use crate::source::*;
 pub use crate::utils::*;
+pub use crate::validation::*;
 
 // TODO: move Provider stuff elsewhere?
 #[derive(
