@@ -52,9 +52,7 @@ impl Contract {
     #[payable]
     pub fn admin_set_protocol_fee_basis_points(&mut self, protocol_fee_basis_points: u32) {
         self.assert_admin_or_greater();
-        let initial_storage_usage = env::storage_usage();
         self.protocol_fee_basis_points = protocol_fee_basis_points;
-        refund_deposit(initial_storage_usage);
     }
 
     #[payable]
@@ -84,9 +82,7 @@ impl Contract {
     #[payable]
     pub fn admin_set_default_chef_fee_basis_points(&mut self, default_chef_fee_basis_points: u32) {
         self.assert_admin_or_greater();
-        let initial_storage_usage = env::storage_usage();
         self.default_chef_fee_basis_points = default_chef_fee_basis_points;
-        refund_deposit(initial_storage_usage);
     }
 
     #[payable]
@@ -112,8 +108,6 @@ impl Contract {
     #[payable]
     pub fn admin_set_require_whitelist(&mut self, require_whitelist: bool) {
         self.assert_admin_or_greater();
-        let initial_storage_usage = env::storage_usage();
         self.require_whitelist = require_whitelist;
-        refund_deposit(initial_storage_usage);
     }
 }

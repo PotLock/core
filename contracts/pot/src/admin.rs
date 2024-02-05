@@ -103,10 +103,8 @@ impl Contract {
     pub fn admin_set_chef_fee_basis_points(&mut self, chef_fee_basis_points: u32) {
         self.assert_admin_or_greater();
         assert_valid_chef_fee_basis_points(chef_fee_basis_points);
-        let initial_storage_usage = env::storage_usage();
         self.chef_fee_basis_points = chef_fee_basis_points;
         log_update_pot_config_event(&self.get_config());
-        refund_deposit(initial_storage_usage);
     }
 
     // POT CONFIG
@@ -134,10 +132,8 @@ impl Contract {
     pub fn admin_set_max_projects(&mut self, max_projects: u32) {
         self.assert_admin_or_greater();
         assert_valid_max_projects(max_projects);
-        let initial_storage_usage = env::storage_usage();
         self.max_projects = max_projects;
         log_update_pot_config_event(&self.get_config());
-        refund_deposit(initial_storage_usage);
     }
 
     #[payable]
@@ -171,7 +167,6 @@ impl Contract {
             public_round_start_ms,
             public_round_end_ms,
         );
-        let initial_storage_usage = env::storage_usage();
         if let Some(application_start_ms) = application_start_ms {
             self.application_start_ms = application_start_ms;
         }
@@ -185,7 +180,6 @@ impl Contract {
             self.public_round_end_ms = public_round_end_ms;
         }
         log_update_pot_config_event(&self.get_config());
-        refund_deposit(initial_storage_usage);
     }
 
     #[payable]
@@ -302,10 +296,8 @@ impl Contract {
         assert_valid_referral_fee_matching_pool_basis_points(
             referral_fee_matching_pool_basis_points,
         );
-        let initial_storage_usage = env::storage_usage();
         self.referral_fee_matching_pool_basis_points = referral_fee_matching_pool_basis_points;
         log_update_pot_config_event(&self.get_config());
-        refund_deposit(initial_storage_usage);
     }
 
     #[payable]
@@ -315,10 +307,8 @@ impl Contract {
     ) {
         self.assert_admin_or_greater();
         assert_valid_referral_fee_public_round_basis_points(referral_fee_public_round_basis_points);
-        let initial_storage_usage = env::storage_usage();
         self.referral_fee_public_round_basis_points = referral_fee_public_round_basis_points;
         log_update_pot_config_event(&self.get_config());
-        refund_deposit(initial_storage_usage);
     }
 
     #[payable]
