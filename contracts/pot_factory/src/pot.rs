@@ -38,25 +38,25 @@ pub struct PotExternal {
 #[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct PotArgs {
-    owner: Option<AccountId>,
-    admins: Option<Vec<AccountId>>,
-    chef: Option<AccountId>,
-    pot_name: String,
-    pot_description: String,
-    max_projects: u32,
-    application_start_ms: TimestampMs,
-    application_end_ms: TimestampMs,
-    public_round_start_ms: TimestampMs,
-    public_round_end_ms: TimestampMs,
-    registry_provider: Option<ProviderId>,
-    sybil_wrapper_provider: Option<ProviderId>,
-    custom_sybil_checks: Option<Vec<CustomSybilCheck>>,
-    custom_min_threshold_score: Option<u32>,
-    referral_fee_matching_pool_basis_points: u32,
-    referral_fee_public_round_basis_points: u32,
-    chef_fee_basis_points: u32,
-    protocol_config_provider: Option<ProviderId>,
-    source_metadata: ContractSourceMetadata,
+    pub owner: Option<AccountId>,
+    pub admins: Option<Vec<AccountId>>,
+    pub chef: Option<AccountId>,
+    pub pot_name: String,
+    pub pot_description: String,
+    pub max_projects: u32,
+    pub application_start_ms: TimestampMs,
+    pub application_end_ms: TimestampMs,
+    pub public_round_start_ms: TimestampMs,
+    pub public_round_end_ms: TimestampMs,
+    pub registry_provider: Option<ProviderId>,
+    pub sybil_wrapper_provider: Option<ProviderId>,
+    pub custom_sybil_checks: Option<Vec<CustomSybilCheck>>,
+    pub custom_min_threshold_score: Option<u32>,
+    pub referral_fee_matching_pool_basis_points: u32,
+    pub referral_fee_public_round_basis_points: u32,
+    pub chef_fee_basis_points: u32,
+    pub protocol_config_provider: Option<ProviderId>,
+    pub source_metadata: ContractSourceMetadata,
 }
 
 #[near_bindgen]
@@ -86,6 +86,11 @@ impl Contract {
             "Pot with id {} already exists",
             pot_account_id
         );
+
+        // validate pot args
+        assert_valid_pot_args(&pot_args);
+
+        // TODO: validate registry & sybil wrapper providers (if present) by calling them
 
         // add protocol config provider to pot args
         pot_args.protocol_config_provider = Some(ProviderId::new(

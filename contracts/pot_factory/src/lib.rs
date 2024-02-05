@@ -16,6 +16,7 @@ pub mod internal;
 pub mod pot;
 pub mod source;
 pub mod utils;
+pub mod validation;
 pub use crate::admin::*;
 pub use crate::constants::*;
 pub use crate::events::*;
@@ -23,6 +24,7 @@ pub use crate::internal::*;
 pub use crate::pot::*;
 pub use crate::source::*;
 pub use crate::utils::*;
+pub use crate::validation::*;
 
 /// Pot Factory Contract
 #[near_bindgen]
