@@ -40,7 +40,7 @@ pub fn refund_deposit(initial_storage_usage: u64) {
         let cost_freed = env::storage_byte_cost() * Balance::from(storage_freed);
         refund += cost_freed;
     }
-    if refund > 1 {
+    if refund > 0 {
         Promise::new(env::predecessor_account_id()).transfer(refund);
     }
 }
