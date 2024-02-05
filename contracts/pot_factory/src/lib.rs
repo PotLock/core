@@ -1,5 +1,5 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{LazyOption, UnorderedMap, UnorderedSet};
+use near_sdk::collections::{LazyOption, TreeMap, UnorderedSet};
 use near_sdk::env::STORAGE_PRICE_PER_BYTE;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
@@ -35,7 +35,7 @@ pub struct Contract {
     /// Admins, which can be added/removed by the owner
     admins: UnorderedSet<AccountId>,
     /// Records of all Pots deployed by this Factory, indexed at their account ID, versioned for easy upgradeability
-    pots_by_id: UnorderedMap<PotId, VersionedPot>,
+    pots_by_id: TreeMap<PotId, VersionedPot>,
     /// Config for protocol fees (% * 100)
     protocol_fee_basis_points: u32,
     /// Config for protocol fees recipient
@@ -166,7 +166,7 @@ impl Contract {
         Self {
             owner,
             admins: admins_set,
-            pots_by_id: UnorderedMap::new(StorageKey::PotsById),
+            pots_by_id: TreeMap::new(StorageKey::PotsById),
             protocol_fee_basis_points,
             protocol_fee_recipient_account,
             default_chef_fee_basis_points,
@@ -205,7 +205,7 @@ impl Default for Contract {
         Self {
             owner: AccountId::new_unchecked("".to_string()),
             admins: UnorderedSet::new(StorageKey::Admins),
-            pots_by_id: UnorderedMap::new(StorageKey::PotsById),
+            pots_by_id: TreeMap::new(StorageKey::PotsById),
             protocol_fee_basis_points: 0,
             protocol_fee_recipient_account: AccountId::new_unchecked("".to_string()),
             default_chef_fee_basis_points: 0,
