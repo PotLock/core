@@ -81,18 +81,8 @@ impl Contract {
         } else {
             Self::ext(env::current_account_id())
                 .with_static_gas(XCC_GAS)
-                .apply_always_allow_callback(project_id.clone(), message, deposit)
+                .handle_apply(project_id.clone(), message, deposit)
         }
-    }
-
-    #[private] // Only callable by env::current_account_id()
-    pub fn apply_always_allow_callback(
-        &mut self,
-        project_id: ProjectId,
-        message: Option<String>,
-        deposit: Balance,
-    ) -> Application {
-        self.handle_apply(project_id, message, deposit)
     }
 
     #[private] // Only callable by env::current_account_id()
@@ -113,7 +103,8 @@ impl Contract {
         self.handle_apply(project_id, message, deposit)
     }
 
-    pub(crate) fn handle_apply(
+    #[private]
+    pub fn handle_apply(
         &mut self,
         project_id: ProjectId,
         message: Option<String>,

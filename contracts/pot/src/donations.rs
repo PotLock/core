@@ -294,7 +294,7 @@ impl Contract {
             // matching pool donations not subject to sybil checks, so go to always_allow callback
             Self::ext(env::current_account_id())
                 .with_static_gas(XCC_GAS)
-                .sybil_always_allow_callback(
+                .handle_protocol_fee(
                     deposit,
                     project_id.clone(),
                     message.clone(),
@@ -327,7 +327,7 @@ impl Contract {
                 // no sybil wrapper provider, so go to always_allow callback
                 Self::ext(env::current_account_id())
                     .with_static_gas(XCC_GAS)
-                    .sybil_always_allow_callback(
+                    .handle_protocol_fee(
                         deposit,
                         project_id.clone(),
                         message.clone(),
@@ -337,26 +337,6 @@ impl Contract {
                     )
             }
         }
-    }
-
-    #[private] // Public - but only callable by env::current_account_id()
-    pub fn sybil_always_allow_callback(
-        &mut self,
-        deposit: Balance,
-        project_id: Option<ProjectId>,
-        message: Option<String>,
-        referrer_id: Option<AccountId>,
-        matching_pool: bool,
-        bypass_protocol_fee: Option<bool>,
-    ) -> Promise {
-        self.handle_protocol_fee(
-            deposit,
-            project_id,
-            message,
-            referrer_id,
-            matching_pool,
-            bypass_protocol_fee,
-        )
     }
 
     #[private] // Public - but only callable by env::current_account_id()
@@ -403,7 +383,8 @@ impl Contract {
         }
     }
 
-    pub(crate) fn handle_protocol_fee(
+    #[private]
+    pub fn handle_protocol_fee(
         &mut self,
         deposit: Balance,
         project_id: Option<ProjectId>,
@@ -416,8 +397,10 @@ impl Contract {
             // bypass protocol fee
             Self::ext(env::current_account_id())
                 .with_static_gas(XCC_GAS)
-                .bypass_protocol_fee(
+                .process_donation(
                     deposit,
+                    0,
+                    None,
                     project_id.clone(),
                     message.clone(),
                     referrer_id.clone(),
@@ -443,8 +426,10 @@ impl Contract {
             // bypass protocol fee
             Self::ext(env::current_account_id())
                 .with_static_gas(XCC_GAS)
-                .bypass_protocol_fee(
+                .process_donation(
                     deposit,
+                    0,
+                    None,
                     project_id.clone(),
                     message.clone(),
                     referrer_id.clone(),
@@ -496,26 +481,7 @@ impl Contract {
     }
 
     #[private]
-    pub fn bypass_protocol_fee(
-        &mut self,
-        deposit: Balance,
-        project_id: Option<ProjectId>,
-        message: Option<String>,
-        referrer_id: Option<AccountId>,
-        matching_pool: bool,
-    ) -> DonationExternal {
-        self.process_donation(
-            deposit,
-            0,
-            None,
-            project_id,
-            message,
-            referrer_id,
-            matching_pool,
-        )
-    }
-
-    pub(crate) fn process_donation(
+    pub fn process_donation(
         &mut self,
         deposit: Balance,
         protocol_fee: u128,
