@@ -32,6 +32,7 @@ impl Contract {
         self.assert_owner();
         let initial_storage_usage = env::storage_usage();
         self.owner = new_owner;
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -43,6 +44,7 @@ impl Contract {
         for new_admin in new_admins.iter() {
             self.admins.insert(new_admin);
         }
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -53,6 +55,7 @@ impl Contract {
         for admin_to_remove in admins_to_remove.iter() {
             self.admins.remove(admin_to_remove);
         }
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -64,6 +67,7 @@ impl Contract {
         for account_id in account_ids {
             self.admins.insert(&account_id);
         }
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -72,6 +76,7 @@ impl Contract {
         self.assert_owner();
         let initial_storage_usage = env::storage_usage();
         self.admins.clear();
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -81,6 +86,7 @@ impl Contract {
         self.assert_admin_or_greater();
         let initial_storage_usage = env::storage_usage();
         self.chef.set(&chef);
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -89,6 +95,7 @@ impl Contract {
         self.assert_admin_or_greater();
         let initial_storage_usage = env::storage_usage();
         self.chef.remove();
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -98,6 +105,7 @@ impl Contract {
         assert_valid_chef_fee_basis_points(chef_fee_basis_points);
         let initial_storage_usage = env::storage_usage();
         self.chef_fee_basis_points = chef_fee_basis_points;
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -108,6 +116,7 @@ impl Contract {
         assert_valid_pot_name(&pot_name);
         let initial_storage_usage = env::storage_usage();
         self.pot_name = pot_name;
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -117,6 +126,7 @@ impl Contract {
         assert_valid_pot_description(&pot_description);
         let initial_storage_usage = env::storage_usage();
         self.pot_description = pot_description;
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -126,6 +136,7 @@ impl Contract {
         assert_valid_max_projects(max_projects);
         let initial_storage_usage = env::storage_usage();
         self.max_projects = max_projects;
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -141,6 +152,7 @@ impl Contract {
             "Only NEAR is supported"
         );
         self.base_currency = base_currency;
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -172,6 +184,7 @@ impl Contract {
         if let Some(public_round_end_ms) = public_round_end_ms {
             self.public_round_end_ms = public_round_end_ms;
         }
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -182,6 +195,7 @@ impl Contract {
         let initial_storage_usage = env::storage_usage();
         let provider_id = ProviderId::new(contract_id.to_string(), method_name);
         self.registry_provider.set(&provider_id);
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -190,6 +204,7 @@ impl Contract {
         self.assert_admin_or_greater();
         let initial_storage_usage = env::storage_usage();
         self.registry_provider.remove();
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -201,6 +216,7 @@ impl Contract {
         self.assert_admin_or_greater();
         let initial_storage_usage = env::storage_usage();
         self.min_matching_pool_donation_amount = min_matching_pool_donation_amount.0;
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -215,6 +231,7 @@ impl Contract {
         let initial_storage_usage = env::storage_usage();
         let provider_id = ProviderId::new(contract_id.to_string(), method_name);
         self.sybil_wrapper_provider.set(&provider_id);
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -223,6 +240,7 @@ impl Contract {
         self.assert_admin_or_greater();
         let initial_storage_usage = env::storage_usage();
         self.sybil_wrapper_provider.remove();
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -243,6 +261,7 @@ impl Contract {
                 })
                 .collect();
         self.custom_sybil_checks.set(&formatted_custom_sybil_checks);
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -251,6 +270,7 @@ impl Contract {
         self.assert_admin_or_greater();
         let initial_storage_usage = env::storage_usage();
         self.custom_sybil_checks.remove();
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -260,6 +280,7 @@ impl Contract {
         let initial_storage_usage = env::storage_usage();
         self.custom_min_threshold_score
             .set(&custom_min_threshold_score);
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -268,6 +289,7 @@ impl Contract {
         self.assert_admin_or_greater();
         let initial_storage_usage = env::storage_usage();
         self.custom_min_threshold_score.remove();
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -282,6 +304,7 @@ impl Contract {
         );
         let initial_storage_usage = env::storage_usage();
         self.referral_fee_matching_pool_basis_points = referral_fee_matching_pool_basis_points;
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -294,6 +317,7 @@ impl Contract {
         assert_valid_referral_fee_public_round_basis_points(referral_fee_public_round_basis_points);
         let initial_storage_usage = env::storage_usage();
         self.referral_fee_public_round_basis_points = referral_fee_public_round_basis_points;
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -302,6 +326,7 @@ impl Contract {
         self.assert_admin_or_greater();
         let initial_storage_usage = env::storage_usage();
         self.cooldown_end_ms.set(&env::block_timestamp_ms());
+        log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
@@ -424,8 +449,12 @@ impl Contract {
             self.chef_fee_basis_points = chef_fee_basis_points;
         }
 
+        let config = self.get_config();
+
+        log_update_pot_config_event(&config);
+
         refund_deposit(initial_storage_usage);
 
-        self.get_config()
+        config
     }
 }

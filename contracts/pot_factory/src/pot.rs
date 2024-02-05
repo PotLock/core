@@ -183,11 +183,15 @@ impl Contract {
             Promise::new(env::signer_account_id()).transfer(deposit - total_cost);
         }
 
-        Some(PotExternal {
+        let pot_external = PotExternal {
             id: pot_id,
             deployed_by: pot.deployed_by,
             deployed_at_ms: pot.deployed_at_ms,
-        })
+        };
+
+        log_deploy_pot_event(&pot_external);
+
+        Some(pot_external)
     }
 
     pub fn get_pots(&self) -> Vec<PotExternal> {
