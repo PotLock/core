@@ -235,9 +235,21 @@ impl Contract {
             self.assert_approved_application(&project_id);
         };
         let is_matching_pool = matching_pool.unwrap_or(false);
-        if !is_matching_pool {
+        if is_matching_pool {
+            // matching pool validations
+            // matching pool donations can be received at any point until public round closes
+            self.assert_round_not_closed();
+            // project_id must not be provided for matching pool donations
+            if project_id.is_some() {
+                env::panic_str(
+                    "project_id argument must not be provided for matching pool donations",
+                );
+            }
+        } else {
+            // public round validations
+            // public round donations can only be received while public round is open/active
             self.assert_round_active();
-            // error if this is an end-user donation and no project_id is provided
+            // project_id must be provided for public round donations
             if project_id.is_none() {
                 env::panic_str(
                     "project_id argument must be provided for public (non-matching pool) donations",
