@@ -100,7 +100,7 @@ impl Contract {
 
         let min_deployment_deposit = self.calculate_min_deployment_deposit(&pot_args);
 
-        // insert dummy record in advance to check required deposit
+        // insert record in advance to validate required deposit & avoid race conditions
         let pot = Pot {
             deployed_by: env::signer_account_id(),
             deployed_at_ms: env::block_timestamp_ms(),
@@ -125,8 +125,10 @@ impl Contract {
             total_required_deposit
         );
 
-        // delete temporarily created pot
-        self.pots_by_id.remove(&pot_account_id);
+        // if more is attached than needed, return the difference
+        if deposit > total_required_deposit {
+            Promise::new(env::signer_account_id()).transfer(deposit - total_required_deposit);
+        }
 
         // deploy pot
         Promise::new(pot_account_id.clone())
@@ -143,7 +145,11 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(XCC_GAS)
-                    .deploy_pot_callback(pot_account_id.clone(), min_deployment_deposit, deposit),
+                    .deploy_pot_callback(
+                        pot_account_id.clone(),
+                        pot.clone(),
+                        total_required_deposit,
+                    ),
             )
     }
 
@@ -151,8 +157,8 @@ impl Contract {
     pub fn deploy_pot_callback(
         &mut self,
         pot_id: AccountId,
-        min_deployment_deposit: Balance,
-        deposit: Balance,
+        pot: Pot,
+        total_required_deposit: Balance,
         #[callback_result] call_result: Result<(), PromiseError>,
     ) -> Option<PotExternal> {
         if call_result.is_err() {
@@ -160,38 +166,23 @@ impl Contract {
                 "There was an error deploying the Pot contract. Returning deposit to signer."
             );
             env::log_str(&error_message);
-            // return deposit to signer
-            Promise::new(env::signer_account_id()).transfer(deposit);
+            // delete pot that was created in initial call
+            self.pots_by_id.remove(&pot_id);
+            // return total_required_deposit to signer (difference between attached deposit and required deposit was already refunded in initial call)
+            Promise::new(env::signer_account_id()).transfer(total_required_deposit);
             // don't panic or refund transfer won't occur! instead, return `None`
-            return None;
+            None
+        } else {
+            let pot_external = PotExternal {
+                id: pot_id,
+                deployed_by: pot.deployed_by,
+                deployed_at_ms: pot.deployed_at_ms,
+            };
+
+            log_deploy_pot_event(&pot_external);
+
+            Some(pot_external)
         }
-
-        let pot = Pot {
-            deployed_by: env::signer_account_id(),
-            deployed_at_ms: env::block_timestamp_ms(),
-        };
-
-        let initial_storage_usage = env::storage_usage();
-
-        self.pots_by_id
-            .insert(&pot_id, &VersionedPot::Current(pot.clone()));
-
-        let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
-        // env::storage_byte_cost() * Balance::from(storage_used);
-        let total_cost = required_deposit + min_deployment_deposit;
-        if deposit > total_cost {
-            Promise::new(env::signer_account_id()).transfer(deposit - total_cost);
-        }
-
-        let pot_external = PotExternal {
-            id: pot_id,
-            deployed_by: pot.deployed_by,
-            deployed_at_ms: pot.deployed_at_ms,
-        };
-
-        log_deploy_pot_event(&pot_external);
-
-        Some(pot_external)
     }
 
     pub fn get_pots(&self) -> Vec<PotExternal> {
