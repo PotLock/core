@@ -208,10 +208,8 @@ impl Contract {
         min_matching_pool_donation_amount: U128,
     ) {
         self.assert_admin_or_greater();
-        let initial_storage_usage = env::storage_usage();
         self.min_matching_pool_donation_amount = min_matching_pool_donation_amount.0;
         log_update_pot_config_event(&self.get_config());
-        refund_deposit(initial_storage_usage);
     }
 
     #[payable]
@@ -271,20 +269,16 @@ impl Contract {
     #[payable]
     pub fn admin_set_custom_min_threshold_score(&mut self, custom_min_threshold_score: u32) {
         self.assert_admin_or_greater();
-        let initial_storage_usage = env::storage_usage();
         self.custom_min_threshold_score
             .set(&custom_min_threshold_score);
         log_update_pot_config_event(&self.get_config());
-        refund_deposit(initial_storage_usage);
     }
 
     #[payable]
     pub fn admin_remove_custom_min_threshold_score(&mut self) {
         self.assert_admin_or_greater();
-        let initial_storage_usage = env::storage_usage();
         self.custom_min_threshold_score.remove();
         log_update_pot_config_event(&self.get_config());
-        refund_deposit(initial_storage_usage);
     }
 
     #[payable]
@@ -314,10 +308,8 @@ impl Contract {
     #[payable]
     pub fn admin_set_cooldown_period_complete(&mut self) {
         self.assert_admin_or_greater();
-        let initial_storage_usage = env::storage_usage();
         self.cooldown_end_ms.set(&env::block_timestamp_ms());
         log_update_pot_config_event(&self.get_config());
-        refund_deposit(initial_storage_usage);
     }
 
     #[payable]
