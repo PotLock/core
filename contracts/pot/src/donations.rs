@@ -10,6 +10,8 @@ pub struct Donation {
     pub donor_id: AccountId,
     /// Amount donated         
     pub total_amount: u128,
+    /// Amount after all fees/expenses (incl. storage)
+    pub net_amount: u128,
     /// Optional message from the donor          
     pub message: Option<String>,
     /// Timestamp when the donation was made
@@ -51,6 +53,8 @@ pub struct DonationExternal {
     pub donor_id: AccountId,
     /// Amount donated         
     pub total_amount: U128,
+    /// Amount after all fees/expenses (incl. storage)
+    pub net_amount: U128,
     /// Optional message from the donor          
     pub message: Option<String>,
     /// Timestamp when the donation was made
@@ -525,6 +529,7 @@ impl Contract {
         let donation = Donation {
             donor_id: env::signer_account_id(),
             total_amount: deposit,
+            net_amount: 0, // this will be updated in a moment after storage cost is subtracted
             message,
             donated_at: env::block_timestamp_ms(),
             project_id: project_id.clone(),
@@ -551,6 +556,13 @@ impl Contract {
             "Overflow occurred when calculating remainder ({} - {})",
             remainder, required_deposit,
         ));
+
+        // update donation with net amount
+        self.donations_by_id
+            .insert(&donation_id, &VersionedDonation::Current(Donation {
+                net_amount: remainder,
+                ..donation.clone()
+            }));
 
         // update totals
         if matching_pool {
@@ -657,6 +669,7 @@ impl Contract {
             id,
             donor_id: donation.donor_id.clone(),
             total_amount: U128(donation.total_amount),
+            net_amount: U128(donation.net_amount),
             message: donation.message.clone(),
             donated_at: donation.donated_at,
             project_id: donation.project_id.clone(),
