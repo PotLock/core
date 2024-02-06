@@ -46,6 +46,10 @@ pub(crate) fn assert_valid_chef_fee_basis_points(basis_points: u32) {
     );
 }
 
+pub(crate) fn assert_valid_provider_id(provider_id: &ProviderId) {
+    provider_id.validate();
+}
+
 #[near_bindgen]
 impl Contract {
     pub(crate) fn assert_valid_timestamps(
@@ -100,6 +104,20 @@ impl Contract {
         }
         if let Some(chef_fee_basis_points) = args.chef_fee_basis_points {
             assert_valid_chef_fee_basis_points(chef_fee_basis_points);
+        }
+        if let Some(registry_provider) = &args.registry_provider {
+            assert_valid_provider_id(registry_provider);
+        }
+        if let Some(sybil_wrapper_provider) = &args.sybil_wrapper_provider {
+            assert_valid_provider_id(sybil_wrapper_provider);
+        }
+        if let Some(custom_sybil_checks) = &args.custom_sybil_checks {
+            for check in custom_sybil_checks {
+                assert_valid_provider_id(&ProviderId::new(
+                    check.contract_id.clone().to_string(),
+                    check.method_name.clone(),
+                ));
+            }
         }
         // validate timestamps
         self.assert_valid_timestamps(

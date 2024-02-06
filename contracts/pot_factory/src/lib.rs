@@ -127,6 +127,23 @@ impl ProviderId {
         }
         (parts[0].to_string(), parts[1].to_string())
     }
+
+    /// Validate (individual elements cannot be empty, cannot contain PROVIDER_ID_DELIMITER)
+    pub fn validate(&self) {
+        let (contract_id, method_name) = self.decompose();
+        assert!(!contract_id.is_empty(), "Contract ID cannot be empty");
+        assert!(!method_name.is_empty(), "Method name cannot be empty");
+        assert!(
+            !contract_id.contains(PROVIDER_ID_DELIMITER),
+            "Contract ID cannot contain delimiter ('{}')",
+            PROVIDER_ID_DELIMITER
+        );
+        assert!(
+            !method_name.contains(PROVIDER_ID_DELIMITER),
+            "Method name cannot contain delimiter ('{}')",
+            PROVIDER_ID_DELIMITER
+        );
+    }
 }
 
 /// Weighting for a given CustomSybilCheck

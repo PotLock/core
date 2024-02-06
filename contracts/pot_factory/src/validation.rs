@@ -61,6 +61,10 @@ pub(crate) fn assert_valid_pot_timestamps(args: &PotArgs) {
     );
 }
 
+pub(crate) fn assert_valid_provider_id(provider_id: &ProviderId) {
+    provider_id.validate();
+}
+
 pub(crate) fn assert_valid_pot_args(args: &PotArgs) {
     assert_valid_pot_name(&args.pot_name);
     assert_valid_pot_description(&args.pot_description);
@@ -73,4 +77,21 @@ pub(crate) fn assert_valid_pot_args(args: &PotArgs) {
     );
     assert_valid_chef_fee_basis_points(args.chef_fee_basis_points);
     assert_valid_pot_timestamps(args);
+    if let Some(provider_id) = &args.registry_provider {
+        assert_valid_provider_id(provider_id);
+    }
+    if let Some(provider_id) = &args.sybil_wrapper_provider {
+        assert_valid_provider_id(provider_id);
+    }
+    if let Some(custom_sybil_checks) = &args.custom_sybil_checks {
+        for check in custom_sybil_checks {
+            assert_valid_provider_id(&ProviderId::new(
+                check.contract_id.clone().to_string(),
+                check.method_name.clone(),
+            ));
+        }
+    }
+    if let Some(protocol_config_provider) = &args.protocol_config_provider {
+        assert_valid_provider_id(protocol_config_provider);
+    }
 }
