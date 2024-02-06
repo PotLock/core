@@ -154,7 +154,6 @@ impl Contract {
         require_whitelist: bool,
         source_metadata: ContractSourceMetadata,
     ) -> Self {
-        assert!(!env::state_exists(), "Already initialized");
         let mut admins_set = UnorderedSet::new(StorageKey::Admins);
         for admin in admins.iter() {
             admins_set.insert(admin);

@@ -275,7 +275,6 @@ impl Contract {
         protocol_config_provider: Option<ProviderId>,
         source_metadata: ContractSourceMetadata,
     ) -> Self {
-        assert!(!env::state_exists(), "Already initialized");
         Self {
             // permissioned accounts
             owner: owner.unwrap_or(env::signer_account_id()),
