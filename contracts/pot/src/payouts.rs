@@ -140,7 +140,7 @@ impl Contract {
     pub fn get_payouts(&self, from_index: Option<u64>, limit: Option<u64>) -> Vec<PayoutExternal> {
         let start_index: u64 = from_index.unwrap_or_default();
         assert!(
-            (self.applications_by_id.len() as u64) >= start_index,
+            (self.payouts_by_id.len() as u64) >= start_index,
             "Out of bounds, please use a smaller from_index."
         );
         let limit = limit.unwrap_or(usize::MAX as u64);
