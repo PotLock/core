@@ -278,8 +278,10 @@ impl Contract {
     #[payable]
     pub fn admin_remove_custom_min_threshold_score(&mut self) {
         self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
         self.custom_min_threshold_score.remove();
         log_update_pot_config_event(&self.get_config());
+        refund_deposit(initial_storage_usage);
     }
 
     #[payable]

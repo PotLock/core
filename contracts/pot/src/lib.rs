@@ -1,5 +1,5 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{LazyOption, LookupMap, TreeMap, UnorderedSet};
+use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap, UnorderedSet};
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
@@ -209,11 +209,11 @@ pub struct Contract {
 
     // MAPPINGS
     /// All application records
-    applications_by_id: TreeMap<ApplicationId, VersionedApplication>,
+    applications_by_id: UnorderedMap<ApplicationId, VersionedApplication>,
     /// Approved application IDs
     approved_application_ids: UnorderedSet<ApplicationId>,
     /// All donation records
-    donations_by_id: TreeMap<DonationId, VersionedDonation>,
+    donations_by_id: UnorderedMap<DonationId, VersionedDonation>,
     /// IDs of public round donations (made by donors who are not Patrons, during public round)
     public_round_donation_ids: UnorderedSet<DonationId>,
     /// IDs of matching pool donations (made by Patrons)
@@ -223,10 +223,10 @@ pub struct Contract {
     /// IDs of donations made by a given donor (user)
     donation_ids_by_donor_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
     // payouts
-    payouts_by_id: TreeMap<PayoutId, VersionedPayout>, // can iterate over this to get all payouts
+    payouts_by_id: UnorderedMap<PayoutId, VersionedPayout>, // can iterate over this to get all payouts
     payout_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<PayoutId>>,
     /// Challenges to payouts (if any) made during cooldown period
-    payouts_challenges: TreeMap<AccountId, VersionedPayoutsChallenge>,
+    payouts_challenges: UnorderedMap<AccountId, VersionedPayoutsChallenge>,
 
     // OTHER
     /// contract ID + method name of protocol config provider that should be queried for protocol fee basis points and protocol fee recipient account.
@@ -362,16 +362,16 @@ impl Contract {
             all_paid_out: false,
 
             // mappings
-            applications_by_id: TreeMap::new(StorageKey::ApplicationsById),
+            applications_by_id: UnorderedMap::new(StorageKey::ApplicationsById),
             approved_application_ids: UnorderedSet::new(StorageKey::ApprovedApplicationIds),
-            donations_by_id: TreeMap::new(StorageKey::DonationsById),
+            donations_by_id: UnorderedMap::new(StorageKey::DonationsById),
             public_round_donation_ids: UnorderedSet::new(StorageKey::PublicRoundDonationIds),
             matching_pool_donation_ids: UnorderedSet::new(StorageKey::MatchingPoolDonationIds),
             donation_ids_by_project_id: LookupMap::new(StorageKey::DonationIdsByProjectId),
             donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
             payout_ids_by_project_id: LookupMap::new(StorageKey::PayoutIdsByProjectId),
-            payouts_by_id: TreeMap::new(StorageKey::PayoutsById),
-            payouts_challenges: TreeMap::new(StorageKey::PayoutsChallenges),
+            payouts_by_id: UnorderedMap::new(StorageKey::PayoutsById),
+            payouts_challenges: UnorderedMap::new(StorageKey::PayoutsChallenges),
 
             // other
             protocol_config_provider: LazyOption::new(

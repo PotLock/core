@@ -136,7 +136,6 @@ impl Contract {
             .create_account()
             .transfer(min_deployment_deposit)
             .deploy_contract(POT_WASM_CODE.to_vec())
-            .add_full_access_key(env::signer_account_pk()) // TODO: REMOVE THIS AFTER TESTING - have to figure out the best way to allow pot contract updates
             .function_call(
                 "new".to_string(),
                 serde_json::to_vec(&pot_args).unwrap(),
