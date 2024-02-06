@@ -28,7 +28,7 @@ pub use crate::validation::*;
 
 /// Pot Factory Contract
 #[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Contract {
     /// Contract superuser (should be a DAO, but no restrictions made at the contract level on this matter)
     owner: AccountId,
@@ -199,18 +199,18 @@ impl Contract {
     }
 }
 
-impl Default for Contract {
-    fn default() -> Self {
-        Self {
-            owner: AccountId::new_unchecked("".to_string()),
-            admins: UnorderedSet::new(StorageKey::Admins),
-            pots_by_id: TreeMap::new(StorageKey::PotsById),
-            protocol_fee_basis_points: 0,
-            protocol_fee_recipient_account: AccountId::new_unchecked("".to_string()),
-            default_chef_fee_basis_points: 0,
-            whitelisted_deployers: UnorderedSet::new(StorageKey::WhitelistedDeployers),
-            require_whitelist: false,
-            contract_source_metadata: LazyOption::new(StorageKey::SourceMetadata, None),
-        }
-    }
-}
+// impl Default for Contract {
+//     fn default() -> Self {
+//         Self {
+//             owner: AccountId::new_unchecked("".to_string()),
+//             admins: UnorderedSet::new(StorageKey::Admins),
+//             pots_by_id: TreeMap::new(StorageKey::PotsById),
+//             protocol_fee_basis_points: 0,
+//             protocol_fee_recipient_account: AccountId::new_unchecked("".to_string()),
+//             default_chef_fee_basis_points: 0,
+//             whitelisted_deployers: UnorderedSet::new(StorageKey::WhitelistedDeployers),
+//             require_whitelist: false,
+//             contract_source_metadata: LazyOption::new(StorageKey::SourceMetadata, None),
+//         }
+//     }
+// }

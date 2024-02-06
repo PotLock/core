@@ -120,7 +120,7 @@ pub struct CustomSybilCheck {
 
 /// Pot Contract (funding round)
 #[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Contract {
     // PERMISSIONED ACCOUNTS
     /// Owner of the contract
@@ -361,49 +361,5 @@ impl Contract {
         let block_timestamp_ms = env::block_timestamp_ms();
         block_timestamp_ms >= self.public_round_start_ms
             && block_timestamp_ms < self.public_round_end_ms
-    }
-}
-
-// TODO: not sure why this is necessary
-impl Default for Contract {
-    fn default() -> Self {
-        Self {
-            chef: LazyOption::new(StorageKey::Chef, None),
-            owner: env::signer_account_id(),
-            admins: UnorderedSet::new(StorageKey::Admins),
-            pot_name: "".to_string(),
-            pot_description: "".to_string(),
-            max_projects: 0,
-            base_currency: AccountId::new_unchecked("near".to_string()),
-            application_start_ms: 0,
-            application_end_ms: 0,
-            public_round_start_ms: 0,
-            public_round_end_ms: 0,
-            deployed_by: env::signer_account_id(),
-            registry_provider: LazyOption::new(StorageKey::RegistryProvider, None),
-            min_matching_pool_donation_amount: 1,
-            sybil_wrapper_provider: LazyOption::new(StorageKey::SybilContractId, None),
-            custom_sybil_checks: LazyOption::new(StorageKey::CustomSybilChecks, None),
-            custom_min_threshold_score: LazyOption::new(StorageKey::CustomMinThresholdScore, None),
-            referral_fee_matching_pool_basis_points: 0,
-            referral_fee_public_round_basis_points: 0,
-            chef_fee_basis_points: 0,
-            total_matching_pool_donations: 0,
-            matching_pool_balance: 0,
-            total_public_donations: 0,
-            cooldown_end_ms: LazyOption::new(StorageKey::CooldownEndMs, None),
-            all_paid_out: false,
-            applications_by_id: TreeMap::new(StorageKey::ApplicationsById),
-            approved_application_ids: UnorderedSet::new(StorageKey::ApprovedApplicationIds),
-            donations_by_id: TreeMap::new(StorageKey::DonationsById),
-            public_round_donation_ids: UnorderedSet::new(StorageKey::PublicRoundDonationIds),
-            matching_pool_donation_ids: UnorderedSet::new(StorageKey::MatchingPoolDonationIds),
-            donation_ids_by_project_id: LookupMap::new(StorageKey::DonationIdsByProjectId),
-            donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
-            payout_ids_by_project_id: LookupMap::new(StorageKey::PayoutIdsByProjectId),
-            payouts_by_id: TreeMap::new(StorageKey::PayoutsById),
-            protocol_config_provider: LazyOption::new(StorageKey::ProtocolConfigProvider, None),
-            contract_source_metadata: LazyOption::new(StorageKey::SourceMetadata, None),
-        }
     }
 }
