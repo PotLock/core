@@ -40,8 +40,6 @@ pub struct Contract {
     protocol_fee_basis_points: u32,
     /// Config for protocol fees recipient
     protocol_fee_recipient_account: AccountId,
-    /// Default chef fee (% * 100)
-    default_chef_fee_basis_points: u32,
     /// Accounts that are allowed to deploy Pots
     whitelisted_deployers: UnorderedSet<AccountId>,
     /// Specifies whether a Pot deployer is required to be whitelisted
@@ -72,7 +70,6 @@ pub struct ContractConfigExternal {
     admins: Vec<AccountId>,
     protocol_fee_basis_points: u32,
     protocol_fee_recipient_account: AccountId,
-    default_chef_fee_basis_points: u32,
     whitelisted_deployers: Vec<AccountId>,
     require_whitelist: bool,
 }
@@ -166,7 +163,6 @@ impl Contract {
         admins: Vec<AccountId>,
         protocol_fee_basis_points: u32,
         protocol_fee_recipient_account: AccountId,
-        default_chef_fee_basis_points: u32,
         whitelisted_deployers: Vec<AccountId>,
         require_whitelist: bool,
         source_metadata: ContractSourceMetadata,
@@ -185,7 +181,6 @@ impl Contract {
             pots_by_id: TreeMap::new(StorageKey::PotsById),
             protocol_fee_basis_points,
             protocol_fee_recipient_account,
-            default_chef_fee_basis_points,
             whitelisted_deployers: whitelisted_deployers_set,
             require_whitelist,
             contract_source_metadata: LazyOption::new(
@@ -201,7 +196,6 @@ impl Contract {
             admins: self.admins.to_vec(),
             protocol_fee_basis_points: self.protocol_fee_basis_points,
             protocol_fee_recipient_account: self.protocol_fee_recipient_account.clone(),
-            default_chef_fee_basis_points: self.default_chef_fee_basis_points,
             whitelisted_deployers: self.whitelisted_deployers.to_vec(),
             require_whitelist: self.require_whitelist,
         }
@@ -215,19 +209,3 @@ impl Contract {
         }
     }
 }
-
-// impl Default for Contract {
-//     fn default() -> Self {
-//         Self {
-//             owner: AccountId::new_unchecked("".to_string()),
-//             admins: UnorderedSet::new(StorageKey::Admins),
-//             pots_by_id: TreeMap::new(StorageKey::PotsById),
-//             protocol_fee_basis_points: 0,
-//             protocol_fee_recipient_account: AccountId::new_unchecked("".to_string()),
-//             default_chef_fee_basis_points: 0,
-//             whitelisted_deployers: UnorderedSet::new(StorageKey::WhitelistedDeployers),
-//             require_whitelist: false,
-//             contract_source_metadata: LazyOption::new(StorageKey::SourceMetadata, None),
-//         }
-//     }
-// }

@@ -80,12 +80,6 @@ impl Contract {
     }
 
     #[payable]
-    pub fn admin_set_default_chef_fee_basis_points(&mut self, default_chef_fee_basis_points: u32) {
-        self.assert_admin_or_greater();
-        self.default_chef_fee_basis_points = default_chef_fee_basis_points;
-    }
-
-    #[payable]
     pub fn admin_add_whitelisted_deployers(&mut self, whitelisted_deployers: Vec<AccountId>) {
         self.assert_admin_or_greater();
         let initial_storage_usage = env::storage_usage();
