@@ -536,6 +536,22 @@ impl Contract {
         };
         self.insert_donation_record(&donation_id, &donation, matching_pool);
 
+        // assert that donation after fees > storage cost
+        let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
+        require!(
+            remainder > required_deposit,
+            format!(
+                "Must attach {} yoctoNEAR to cover storage",
+                required_deposit
+            )
+        );
+
+        // subtract storage cost
+        remainder = remainder.checked_sub(required_deposit).expect(&format!(
+            "Overflow occurred when calculating remainder ({} - {})",
+            remainder, required_deposit,
+        ));
+
         // update totals
         if matching_pool {
             self.total_matching_pool_donations = 
@@ -561,22 +577,6 @@ impl Contract {
                         self.total_public_donations, remainder,
                     ));
         }
-
-        // assert that donation after fees > storage cost
-        let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
-        require!(
-            remainder > required_deposit,
-            format!(
-                "Must attach {} yoctoNEAR to cover storage",
-                required_deposit
-            )
-        );
-
-        // subtract storage cost
-        remainder = remainder.checked_sub(required_deposit).expect(&format!(
-            "Overflow occurred when calculating remainder ({} - {})",
-            remainder, required_deposit,
-        ));
 
         // transfer protocol fee
         if let Some(protocol_fee_recipient_account) = protocol_fee_recipient_account {
