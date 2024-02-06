@@ -200,6 +200,8 @@ pub struct Contract {
     total_public_donations: u128,
 
     // PAYOUTS
+    /// Length of cooldown period (in ms) after which payouts can be set by Chef
+    cooldown_period_ms: u64,
     /// Cooldown period starts when Chef sets payouts
     cooldown_end_ms: LazyOption<TimestampMs>,
     /// Indicates whether all projects been paid out (this would be considered the "end-of-lifecycle" for the Pot)
@@ -277,6 +279,7 @@ impl Contract {
         public_round_end_ms: TimestampMs,
         registry_provider: Option<ProviderId>,
         min_matching_pool_donation_amount: Option<U128>,
+        cooldown_period_ms: Option<u64>,
 
         // sybil resistance
         sybil_wrapper_provider: Option<ProviderId>,
@@ -292,6 +295,9 @@ impl Contract {
         protocol_config_provider: Option<ProviderId>,
         source_metadata: ContractSourceMetadata,
     ) -> Self {
+        if let Some(cooldown_period_ms) = cooldown_period_ms {
+            assert_valid_cooldown_period_ms(cooldown_period_ms);
+        }
         Self {
             // permissioned accounts
             owner: owner.unwrap_or(env::signer_account_id()),
@@ -348,6 +354,7 @@ impl Contract {
             total_public_donations: 0,
 
             // payouts
+            cooldown_period_ms: cooldown_period_ms.unwrap_or(DEFAULT_COOLDOWN_PERIOD_MS),
             cooldown_end_ms: LazyOption::new(StorageKey::CooldownEndMs, None),
             all_paid_out: false,
 

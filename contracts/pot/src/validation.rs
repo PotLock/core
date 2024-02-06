@@ -50,6 +50,14 @@ pub(crate) fn assert_valid_provider_id(provider_id: &ProviderId) {
     provider_id.validate();
 }
 
+pub(crate) fn assert_valid_cooldown_period_ms(cooldown_period_ms: u64) {
+    assert!(
+        cooldown_period_ms >= MIN_COOLDOWN_PERIOD_MS,
+        "Cooldown period must be at least {} ms",
+        MIN_COOLDOWN_PERIOD_MS
+    );
+}
+
 #[near_bindgen]
 impl Contract {
     pub(crate) fn assert_valid_timestamps(

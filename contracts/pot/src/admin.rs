@@ -307,9 +307,19 @@ impl Contract {
     }
 
     #[payable]
-    pub fn admin_set_cooldown_period_complete(&mut self) {
+    pub fn admin_set_cooldown_end_ms(&mut self, cooldown_end_ms: TimestampMs) {
         self.assert_admin_or_greater();
-        self.cooldown_end_ms.set(&env::block_timestamp_ms());
+        // cooldown must be in process (self.cooldown_end_ms must be Some value)
+        // also, cooldown_end_ms must be greater than self.cooldown_end_ms (can only extend cooldown, not reduce)
+        assert!(
+            self.cooldown_end_ms.get().is_some(),
+            "Cooldown period not in process"
+        );
+        assert!(
+            cooldown_end_ms > self.cooldown_end_ms.get().unwrap(),
+            "Cooldown period can only be extended"
+        );
+        self.cooldown_end_ms.set(&cooldown_end_ms);
         log_update_pot_config_event(&self.get_config());
     }
 
