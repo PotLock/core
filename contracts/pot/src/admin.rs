@@ -1,3 +1,5 @@
+use std::hash::Hash;
+
 use crate::*;
 
 /// Used ephemerally in view methods
@@ -346,6 +348,32 @@ impl Contract {
                 &VersionedPayoutsChallenge::Current(payouts_challenge),
             );
             refund_deposit(initial_storage_usage);
+        }
+    }
+
+    pub fn admin_remove_resolved_payouts_challenges(&mut self) {
+        self.assert_admin_or_greater();
+        self.assert_cooldown_period_complete();
+        let removal_limit = 10; // conservative limit to prevent exceeding gas limit, which would fail to remove the challenges but still refund the storage cost
+        let mut to_remove = vec![];
+        let mut storage_refunds: HashMap<AccountId, u128> = HashMap::new();
+        for (challenger_id, payouts_challenge_versioned) in self.payouts_challenges.iter() {
+            let payouts_challenge = PayoutsChallenge::from(payouts_challenge_versioned);
+            if payouts_challenge.resolved {
+                to_remove.push(challenger_id);
+                if to_remove.len() >= removal_limit {
+                    break;
+                }
+            }
+        }
+        for challenger_id in to_remove {
+            let storage_before = env::storage_usage();
+            self.payouts_challenges.remove(&challenger_id);
+            let refund = calculate_required_storage_deposit(storage_before);
+            storage_refunds.insert(challenger_id, refund);
+        }
+        for (challenger_id, refund) in storage_refunds {
+            Promise::new(challenger_id).transfer(refund);
         }
     }
 
