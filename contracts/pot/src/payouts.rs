@@ -157,8 +157,8 @@ impl Contract {
             running_total += payout.amount.0;
             // set cooldown_end to now + 1 week (?)
             self.cooldown_end_ms
-                .set(&(env::block_timestamp_ms() + ONE_WEEK_MS)); // TODO: remove hardcoding to one week, allow owner/admin to configure
-                                                                  // add payout to payouts
+                .set(&(env::block_timestamp_ms() + &self.cooldown_period_ms));
+            // add payout to payouts
             let mut payout_ids_for_application = self
                 .payout_ids_by_project_id
                 .get(&payout.project_id)
