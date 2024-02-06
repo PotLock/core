@@ -188,10 +188,10 @@ impl Contract {
             self.applications_by_id
                 .iter()
                 .skip(start_index as usize)
-                .take(limit.try_into().unwrap())
                 .filter(|(_account_id, application)| {
                     Application::from(application).status == status
                 })
+                .take(limit.try_into().unwrap())
                 .map(|(_account_id, application)| Application::from(application))
                 .collect()
         } else {
