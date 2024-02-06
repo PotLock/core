@@ -249,6 +249,7 @@ impl Contract {
                         custom_sybil_check.contract_id.to_string(),
                         custom_sybil_check.method_name,
                     );
+                    provider_id.validate();
                     (provider_id, custom_sybil_check.weight)
                 })
                 .collect();
@@ -371,7 +372,8 @@ impl Contract {
             self.public_round_end_ms = public_round_end_ms;
         }
         if let Some(registry_provider) = update_args.registry_provider {
-            // TODO: validate contract_id and method_name by calling method
+            registry_provider.validate();
+            // TODO: validate contract_id and method_name further by calling method
             self.registry_provider.set(&registry_provider);
         } else {
             self.registry_provider.remove();
@@ -382,13 +384,14 @@ impl Contract {
             self.min_matching_pool_donation_amount = min_matching_pool_donation_amount.0;
         }
         if let Some(sybil_wrapper_provider) = update_args.sybil_wrapper_provider {
-            // TODO: validate contract_id and method_name by calling method
+            sybil_wrapper_provider.validate();
+            // TODO: validate contract_id and method_name further by calling method
             self.sybil_wrapper_provider.set(&sybil_wrapper_provider);
         } else {
             self.sybil_wrapper_provider.remove();
         };
         if let Some(custom_sybil_checks) = update_args.custom_sybil_checks {
-            // TODO: validate sybil checks
+            // TODO: validate sybil checks further by calling method
             let formatted_custom_sybil_checks: HashMap<ProviderId, SybilProviderWeight> =
                 custom_sybil_checks
                     .into_iter()
@@ -397,6 +400,7 @@ impl Contract {
                             custom_sybil_check.contract_id.to_string(),
                             custom_sybil_check.method_name,
                         );
+                        provider_id.validate();
                         (provider_id, custom_sybil_check.weight)
                     })
                     .collect();
