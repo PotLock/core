@@ -4,7 +4,7 @@ use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, log, near_bindgen, require, serde_json::json, AccountId, Balance, BorshStorageKey, Gas,
-    PanicOnDefault, Promise, PromiseError,
+    PanicOnDefault, Promise, PromiseError, PromiseOrValue,
 };
 use std::collections::HashMap;
 

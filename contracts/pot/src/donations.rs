@@ -230,7 +230,7 @@ impl Contract {
         referrer_id: Option<AccountId>,
         matching_pool: Option<bool>,
         bypass_protocol_fee: Option<bool>,
-    ) -> Promise {
+    ) -> PromiseOrValue<DonationExternal> {
         if let Some(project_id) = project_id.clone() {
             self.assert_approved_application(&project_id);
         };
@@ -283,7 +283,7 @@ impl Contract {
         referrer_id: Option<AccountId>,
         matching_pool: bool,
         bypass_protocol_fee: Option<bool>,
-    ) -> Promise {
+    ) -> PromiseOrValue<DonationExternal> {
         let caller_id = env::predecessor_account_id();
         if matching_pool {
             assert!(
@@ -291,24 +291,22 @@ impl Contract {
                 "Matching pool donations must be at least {} yoctoNEAR",
                 self.min_matching_pool_donation_amount
             );
-            // matching pool donations not subject to sybil checks, so go to always_allow callback
-            Self::ext(env::current_account_id())
-                .with_static_gas(XCC_GAS)
-                .handle_protocol_fee(
-                    deposit,
-                    project_id.clone(),
-                    message.clone(),
-                    referrer_id.clone(),
-                    matching_pool,
-                    bypass_protocol_fee,
-                )
+            // matching pool donations not subject to sybil checks, so move on to protocol fee handler
+            self.handle_protocol_fee(
+                deposit,
+                project_id.clone(),
+                message.clone(),
+                referrer_id.clone(),
+                matching_pool,
+                bypass_protocol_fee,
+            )
         } else {
             if let Some(sybil_wrapper_provider) = self.sybil_wrapper_provider.get() {
                 let (contract_id, method_name) = sybil_wrapper_provider.decompose();
                 let args = json!({ "account_id": caller_id.clone() })
                     .to_string()
                     .into_bytes();
-                Promise::new(AccountId::new_unchecked(contract_id.clone()))
+                PromiseOrValue::Promise(Promise::new(AccountId::new_unchecked(contract_id.clone()))
                     .function_call(method_name, args, 0, Gas(TGAS * 50))
                     .then(
                         Self::ext(env::current_account_id())
@@ -322,19 +320,17 @@ impl Contract {
                                 matching_pool,
                                 bypass_protocol_fee,
                             ),
-                    )
+                    ))
             } else {
-                // no sybil wrapper provider, so go to always_allow callback
-                Self::ext(env::current_account_id())
-                    .with_static_gas(XCC_GAS)
-                    .handle_protocol_fee(
-                        deposit,
-                        project_id.clone(),
-                        message.clone(),
-                        referrer_id.clone(),
-                        matching_pool,
-                        bypass_protocol_fee,
-                    )
+                // no sybil wrapper provider, so move on to protocol fee handler
+                self.handle_protocol_fee(
+                    deposit,
+                    project_id.clone(),
+                    message.clone(),
+                    referrer_id.clone(),
+                    matching_pool,
+                    bypass_protocol_fee,
+                )
             }
         }
     }
@@ -350,7 +346,7 @@ impl Contract {
         matching_pool: bool,
         bypass_protocol_fee: Option<bool>,
         #[callback_result] call_result: Result<bool, PromiseError>,
-    ) -> Promise {
+    ) -> PromiseOrValue<DonationExternal> {
         if call_result.is_err() {
             log!(format!(
                 "Error verifying sybil check; returning donation {} to donor {}",
@@ -392,12 +388,10 @@ impl Contract {
         referrer_id: Option<AccountId>,
         matching_pool: bool,
         bypass_protocol_fee: Option<bool>,
-    ) -> Promise {
+    ) -> PromiseOrValue<DonationExternal> {
         if bypass_protocol_fee.unwrap_or(false) {
             // bypass protocol fee
-            Self::ext(env::current_account_id())
-                .with_static_gas(XCC_GAS)
-                .process_donation(
+            PromiseOrValue::Value(self.process_donation(
                     deposit,
                     0,
                     None,
@@ -405,11 +399,11 @@ impl Contract {
                     message.clone(),
                     referrer_id.clone(),
                     matching_pool,
-                )
+                ))
         } else if let Some(protocol_config_provider) = self.protocol_config_provider.get() {
             let (contract_id, method_name) = protocol_config_provider.decompose();
             let args = json!({}).to_string().into_bytes();
-            Promise::new(AccountId::new_unchecked(contract_id.clone()))
+            PromiseOrValue::Promise(Promise::new(AccountId::new_unchecked(contract_id.clone()))
                 .function_call(method_name.clone(), args, 0, XCC_GAS)
                 .then(
                     Self::ext(env::current_account_id())
@@ -421,20 +415,18 @@ impl Contract {
                             referrer_id,
                             matching_pool,
                         ),
-                )
+                ))
         } else {
             // bypass protocol fee
-            Self::ext(env::current_account_id())
-                .with_static_gas(XCC_GAS)
-                .process_donation(
-                    deposit,
-                    0,
-                    None,
-                    project_id.clone(),
-                    message.clone(),
-                    referrer_id.clone(),
-                    matching_pool,
-                )
+            PromiseOrValue::Value(self.process_donation(
+                deposit,
+                0,
+                None,
+                project_id.clone(),
+                message.clone(),
+                referrer_id.clone(),
+                matching_pool,
+            ))
         }
     }
 

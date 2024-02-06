@@ -58,7 +58,7 @@ impl From<&VersionedApplication> for Application {
 #[near_bindgen]
 impl Contract {
     #[payable]
-    pub fn apply(&mut self, message: Option<String>) -> Promise {
+    pub fn apply(&mut self, message: Option<String>) -> PromiseOrValue<Application> {
         let project_id = env::predecessor_account_id(); // TODO: consider renaming to "applicant_id" to make it less opinionated (e.g. maybe developers are applying, and they are not exactly a "project")
                                                         // chef, admin & owner cannot apply
         assert!(
@@ -71,17 +71,17 @@ impl Contract {
             let (contract_id, method_name) = registry_provider.decompose();
             // call registry provider
             let args = json!({ "account_id": project_id }).to_string().into_bytes();
-            Promise::new(AccountId::new_unchecked(contract_id.clone()))
-                .function_call(method_name.clone(), args, 0, XCC_GAS)
-                .then(
-                    Self::ext(env::current_account_id())
-                        .with_static_gas(XCC_GAS)
-                        .assert_can_apply_callback(project_id.clone(), message, deposit),
-                )
+            PromiseOrValue::Promise(
+                Promise::new(AccountId::new_unchecked(contract_id.clone()))
+                    .function_call(method_name.clone(), args, 0, XCC_GAS)
+                    .then(
+                        Self::ext(env::current_account_id())
+                            .with_static_gas(XCC_GAS)
+                            .assert_can_apply_callback(project_id.clone(), message, deposit),
+                    ),
+            )
         } else {
-            Self::ext(env::current_account_id())
-                .with_static_gas(XCC_GAS)
-                .handle_apply(project_id.clone(), message, deposit)
+            PromiseOrValue::Value(self.handle_apply(project_id, message, deposit))
         }
     }
 
