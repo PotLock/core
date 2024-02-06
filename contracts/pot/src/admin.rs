@@ -324,6 +324,51 @@ impl Contract {
     }
 
     #[payable]
+    pub fn admin_add_notes_for_payouts_challenge(
+        &mut self,
+        challenger_id: AccountId,
+        notes: String,
+        resolve_challenge: Option<bool>,
+    ) {
+        self.assert_admin_or_greater();
+        let payouts_challenge_versioned = self.payouts_challenges.get(&challenger_id);
+        if let Some(payouts_challenge_versioned) = payouts_challenge_versioned {
+            let initial_storage_usage = env::storage_usage();
+            let mut payouts_challenge = PayoutsChallenge::from(payouts_challenge_versioned);
+            payouts_challenge.admin_notes = Some(notes);
+            payouts_challenge.resolved = resolve_challenge.unwrap_or(payouts_challenge.resolved);
+            self.payouts_challenges.insert(
+                &challenger_id,
+                &VersionedPayoutsChallenge::Current(payouts_challenge),
+            );
+            refund_deposit(initial_storage_usage);
+        }
+    }
+
+    #[payable]
+    pub fn admin_resolve_payouts_challenge(
+        &mut self,
+        challenger_id: AccountId,
+        notes: Option<String>,
+    ) {
+        self.assert_admin_or_greater();
+        let payouts_challenge_versioned = self.payouts_challenges.get(&challenger_id);
+        if let Some(payouts_challenge_versioned) = payouts_challenge_versioned {
+            let initial_storage_usage = env::storage_usage();
+            let mut payouts_challenge = PayoutsChallenge::from(payouts_challenge_versioned);
+            if let Some(notes) = notes {
+                payouts_challenge.admin_notes = Some(notes);
+            }
+            payouts_challenge.resolved = true;
+            self.payouts_challenges.insert(
+                &challenger_id,
+                &VersionedPayoutsChallenge::Current(payouts_challenge),
+            );
+            refund_deposit(initial_storage_usage);
+        }
+    }
+
+    #[payable]
     pub fn admin_dangerously_set_pot_config(&mut self, update_args: UpdatePotArgs) -> PotConfig {
         // TODO: CONSIDER REMOVING THIS METHOD DUE TO POTENTIAL FOR MISUSE
         self.assert_admin_or_greater();

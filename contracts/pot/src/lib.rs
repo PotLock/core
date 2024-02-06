@@ -225,6 +225,8 @@ pub struct Contract {
     // payouts
     payouts_by_id: TreeMap<PayoutId, VersionedPayout>, // can iterate over this to get all payouts
     payout_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<PayoutId>>,
+    /// Challenges to payouts (if any) made during cooldown period
+    payouts_challenges: TreeMap<AccountId, VersionedPayoutsChallenge>,
 
     // OTHER
     /// contract ID + method name of protocol config provider that should be queried for protocol fee basis points and protocol fee recipient account.
@@ -258,6 +260,7 @@ pub enum StorageKey {
     PayoutsById,
     PayoutIdsByProjectId,
     PayoutIdsByProjectIdInner { project_id: ProjectId },
+    PayoutsChallenges,
 }
 
 #[near_bindgen]
@@ -368,6 +371,7 @@ impl Contract {
             donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
             payout_ids_by_project_id: LookupMap::new(StorageKey::PayoutIdsByProjectId),
             payouts_by_id: TreeMap::new(StorageKey::PayoutsById),
+            payouts_challenges: TreeMap::new(StorageKey::PayoutsChallenges),
 
             // other
             protocol_config_provider: LazyOption::new(
