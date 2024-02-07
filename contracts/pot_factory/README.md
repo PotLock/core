@@ -23,8 +23,6 @@ pub struct Contract {
     protocol_fee_basis_points: u32,
     /// Config for protocol fees recipient
     protocol_fee_recipient_account: AccountId,
-    /// Default chef fee (% * 100)
-    default_chef_fee_basis_points: u32,
     /// Accounts that are allowed to deploy Pots
     whitelisted_deployers: UnorderedSet<AccountId>,
     /// Specifies whether a Pot deployer is required to be whitelisted
@@ -39,7 +37,6 @@ pub struct ContractConfigExternal {
     admins: Vec<AccountId>,
     protocol_fee_basis_points: u32,
     protocol_fee_recipient_account: AccountId,
-    default_chef_fee_basis_points: u32,
     whitelisted_deployers: Vec<AccountId>,
     require_whitelist: bool,
 }
@@ -79,6 +76,23 @@ impl ProviderId {
             panic!("Invalid provider ID format. Expected 'contract_id:method_name'.");
         }
         (parts[0].to_string(), parts[1].to_string())
+    }
+
+    /// Validate (individual elements cannot be empty, cannot contain PROVIDER_ID_DELIMITER)
+    pub fn validate(&self) {
+        let (contract_id, method_name) = self.decompose();
+        assert!(!contract_id.is_empty(), "Contract ID cannot be empty");
+        assert!(!method_name.is_empty(), "Method name cannot be empty");
+        assert!(
+            !contract_id.contains(PROVIDER_ID_DELIMITER),
+            "Contract ID cannot contain delimiter ('{}')",
+            PROVIDER_ID_DELIMITER
+        );
+        assert!(
+            !method_name.contains(PROVIDER_ID_DELIMITER),
+            "Method name cannot contain delimiter ('{}')",
+            PROVIDER_ID_DELIMITER
+        );
     }
 }
 ```
@@ -120,24 +134,25 @@ pub struct PotExternal {
 
 /// Arguments that must be provided to deploy a new Pot; these must be kept up-to-date with the Pot contract
 pub struct PotArgs {
-    owner: Option<AccountId>,
-    admins: Option<Vec<AccountId>>,
-    chef: Option<AccountId>,
-    pot_name: String,
-    pot_description: String,
-    max_projects: u32,
-    application_start_ms: TimestampMs,
-    application_end_ms: TimestampMs,
-    public_round_start_ms: TimestampMs,
-    public_round_end_ms: TimestampMs,
-    registry_provider: Option<ProviderId>,
-    sybil_wrapper_provider: Option<ProviderId>,
-    custom_sybil_checks: Option<Vec<CustomSybilCheck>>,
-    custom_min_threshold_score: Option<u32>,
-    referral_fee_matching_pool_basis_points: u32,
-    referral_fee_public_round_basis_points: u32,
-    chef_fee_basis_points: u32,
-    protocol_config_provider: Option<ProviderId>,
+    pub owner: Option<AccountId>,
+    pub admins: Option<Vec<AccountId>>,
+    pub chef: Option<AccountId>,
+    pub pot_name: String,
+    pub pot_description: String,
+    pub max_projects: u32,
+    pub application_start_ms: TimestampMs,
+    pub application_end_ms: TimestampMs,
+    pub public_round_start_ms: TimestampMs,
+    pub public_round_end_ms: TimestampMs,
+    pub registry_provider: Option<ProviderId>,
+    pub sybil_wrapper_provider: Option<ProviderId>,
+    pub custom_sybil_checks: Option<Vec<CustomSybilCheck>>,
+    pub custom_min_threshold_score: Option<u32>,
+    pub referral_fee_matching_pool_basis_points: u32,
+    pub referral_fee_public_round_basis_points: u32,
+    pub chef_fee_basis_points: u32,
+    pub protocol_config_provider: Option<ProviderId>,
+    pub source_metadata: ContractSourceMetadata,
 }
 ```
 
@@ -170,7 +185,6 @@ pub fn new(
     admins: Vec<AccountId>,
     protocol_fee_basis_points: u32,
     protocol_fee_recipient_account: AccountId,
-    default_chef_fee_basis_points: u32,
     whitelisted_deployers: Vec<AccountId>,
     require_whitelist: bool,
     source_metadata: ContractSourceMetadata,
@@ -190,13 +204,13 @@ pub fn deploy_pot(&mut self, mut pot_args: PotArgs) -> Option<PotExternal>
 pub fn owner_change_owner(&mut self, owner: AccountId) -> ()
 
 #[payable]
+pub fn owner_set_admins(&mut self, admins: Vec<AccountId>) -> ()
+
+#[payable]
 pub fn owner_add_admins(&mut self, admins: Vec<AccountId>) -> ()
 
 #[payable]
 pub fn owner_remove_admins(&mut self, admins: Vec<AccountId>) -> ()
-
-#[payable]
-pub fn owner_set_admins(&mut self, account_ids: Vec<AccountId>) -> ()
 
 #[payable]
 pub fn owner_clear_admins(&mut self) -> ()
@@ -209,9 +223,6 @@ pub fn admin_set_protocol_fee_recipient_account(&mut self, protocol_fee_recipien
 
 #[payable]
 pub fn admin_set_protocol_config(&mut self, protocol_fee_basis_points: u32, protocol_fee_recipient_account: AccountId) -> ()
-
-#[payable]
-pub fn admin_set_default_chef_fee_basis_points(&mut self, default_chef_fee_basis_points: u32) -> ()
 
 #[payable]
 pub fn admin_add_whitelisted_deployers(&mut self, whitelisted_deployers: Vec<AccountId>) -> ()
