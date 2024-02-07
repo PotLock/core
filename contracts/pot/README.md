@@ -306,6 +306,43 @@ pub struct PayoutInput {
     pub project_id: ProjectId,
 }
 
+pub struct PayoutsChallenge {
+    /// Timestamp when the payout challenge was made
+    pub created_at: TimestampMs,
+    /// Reason for the challenge
+    pub reason: String,
+    /// Notes from admin/owner
+    pub admin_notes: Option<String>,
+    /// Whether the challenge has been resolved
+    pub resolved: bool,
+}
+
+/// Ephemeral-only
+pub struct PayoutsChallengeExternal {
+    /// Account that made the challenge
+    pub challenger_id: AccountId,
+    /// Timestamp when the payout challenge was made
+    pub created_at: TimestampMs,
+    /// Reason for the challenge
+    pub reason: String,
+    /// Notes from admin/owner
+    pub admin_notes: Option<String>,
+    /// Whether the challenge has been resolved
+    pub resolved: bool,
+}
+
+impl PayoutsChallenge {
+    pub fn to_external(&self, challenger_id: AccountId) -> PayoutsChallengeExternal {
+        PayoutsChallengeExternal {
+            challenger_id,
+            created_at: self.created_at,
+            reason: self.reason.clone(),
+            admin_notes: self.admin_notes.clone(),
+            resolved: self.resolved,
+        }
+    }
+}
+
 ```
 
 ### Providers
@@ -333,6 +370,23 @@ impl ProviderId {
             panic!("Invalid provider ID format. Expected 'contract_id:method_name'.");
         }
         (parts[0].to_string(), parts[1].to_string())
+    }
+
+    /// Validate (individual elements cannot be empty, cannot contain PROVIDER_ID_DELIMITER)
+    pub fn validate(&self) {
+        let (contract_id, method_name) = self.decompose();
+        assert!(!contract_id.is_empty(), "Contract ID cannot be empty");
+        assert!(!method_name.is_empty(), "Method name cannot be empty");
+        assert!(
+            !contract_id.contains(PROVIDER_ID_DELIMITER),
+            "Contract ID cannot contain delimiter ('{}')",
+            PROVIDER_ID_DELIMITER
+        );
+        assert!(
+            !method_name.contains(PROVIDER_ID_DELIMITER),
+            "Method name cannot contain delimiter ('{}')",
+            PROVIDER_ID_DELIMITER
+        );
     }
 }
 ```
@@ -393,6 +447,7 @@ pub fn new(
     public_round_end_ms: TimestampMs,
     registry_provider: Option<ProviderId>,
     min_matching_pool_donation_amount: Option<U128>,
+    cooldown_period_ms: Option<u64>,
 
     // sybil resistance
     sybil_wrapper_provider: Option<ProviderId>,
@@ -414,7 +469,7 @@ pub fn new(
 
 /// The calling account should be the project/account that is applying
 #[payable]
-pub fn apply(&mut self) -> Application
+pub fn apply(&mut self, message: Option<String>) -> Application
 
 /// Only allowed for projects/applications that are in Pending status
 pub fn unapply(&mut self) -> ()
@@ -479,11 +534,13 @@ pub fn chef_set_payouts(&mut self, payouts: Vec<PayoutInput>) -> ()
 #[payable]
 pub fn admin_process_payouts(&mut self) -> ()
 
-
-// CONFIG
-
 #[payable]
-pub fn admin_dangerously_set_pot_config(&mut self, update_args: UpdatePotArgs) -> PotConfig
+pub fn challenge_payouts(&mut self, reason: String)
+
+pub fn remove_payouts_challenge(&mut self)
+
+
+// CONFIG / ADMIN
 
 #[payable]
 pub fn owner_change_owner(&mut self, owner: AccountId) -> ()
@@ -495,7 +552,7 @@ pub fn owner_add_admins(&mut self, admins: Vec<AccountId>) -> ()
 pub fn owner_remove_admins(&mut self, admins: Vec<AccountId>) -> ()
 
 #[payable]
-pub fn owner_set_admins(&mut self, account_ids: Vec<AccountId>) -> ()
+pub fn owner_set_admins(&mut self, admins: Vec<AccountId>) -> ()
 
 #[payable]
 pub fn owner_clear_admins(&mut self) -> ()
@@ -522,24 +579,13 @@ pub fn admin_set_max_projects(&mut self, max_projects: u32) -> ()
 pub fn admin_set_base_currency(&mut self, base_currency: AccountId) -> ()
 
 #[payable]
-pub fn admin_set_application_start_ms(&mut self, application_start_ms: u64) -> ()
-
-#[payable]
-pub fn admin_set_application_end_ms(&mut self, application_end_ms: u64) -> ()
-
-#[payable]
-pub fn admin_set_public_round_start_ms(&mut self, public_round_start_ms: u64) -> ()
-
-#[payable]
-pub fn admin_set_public_round_end_ms(&mut self, public_round_end_ms: u64) -> ()
-
-/// Sets `public_round_start_ms` to env::block_timestamp_ms()
-#[payable]
-pub fn admin_set_public_round_open(&mut self, public_round_end_ms: TimestampMs) -> ()
-
-/// Sets `public_round_end_ms` to env::block_timestamp_ms()
-#[payable]
-pub fn admin_set_public_round_closed(&mut self) -> ()
+pub fn admin_set_round_timestamps(
+    &mut self,
+    application_start_ms: Option<TimestampMs>,
+    application_end_ms: Option<TimestampMs>,
+    public_round_start_ms: Option<TimestampMs>,
+    public_round_end_ms: Option<TimestampMs>,
+)
 
 #[payable]
 pub fn admin_set_registry_provider(&mut self, contract_id: AccountId, method_name: String) -> ()
@@ -585,7 +631,20 @@ pub fn admin_set_referral_fee_public_round_basis_points(
 ) -> ()
 
 #[payable]
-pub fn admin_set_cooldown_period_complete(&mut self) -> ()
+pub fn admin_set_cooldown_end_ms(&mut self, cooldown_end_ms: TimestampMs) -> ()
+
+#[payable]
+pub fn admin_update_payouts_challenge(
+    &mut self,
+    challenger_id: AccountId,
+    notes: Option<String>,
+    resolve_challenge: Option<bool>,
+)
+
+pub fn admin_remove_resolved_payouts_challenges(&mut self)
+
+#[payable]
+pub fn admin_dangerously_set_pot_config(&mut self, update_args: UpdatePotArgs) -> PotConfig
 
 
 // SOURCE METADATA
@@ -660,6 +719,11 @@ pub fn get_donations_for_donor(
 
 pub fn get_payouts(&self, from_index: Option<u64>, limit: Option<u64>) -> Vec<Payout>
 
+pub fn get_payouts_challenges(
+    &self,
+    from_index: Option<u64>,
+    limit: Option<u64>,
+) -> Vec<PayoutsChallengeExternal>
 
 // SOURCE METADATA
 

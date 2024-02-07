@@ -51,8 +51,8 @@ pub struct ProviderId(pub String);
 
 pub const PROVIDER_ID_DELIMITER: &str = ":"; // separates contract_id and method_name in ProviderId // TODO: move to constants.rs?
 
-// Generate ProviderId ("{CONTRACT_ADDRESS}:{METHOD_NAME}") from contract_id and method_name
 impl ProviderId {
+    /// Generate ProviderId ("`{CONTRACT_ADDRESS}:{METHOD_NAME}`") from contract_id and method_name
     fn new(contract_id: String, method_name: String) -> Self {
         ProviderId(format!(
             "{}{}{}",
@@ -60,6 +60,7 @@ impl ProviderId {
         ))
     }
 
+    /// Decompose ProviderId into contract_id and method_name
     pub fn decompose(&self) -> (String, String) {
         let parts: Vec<&str> = self.0.split(PROVIDER_ID_DELIMITER).collect();
         if parts.len() != 2 {
@@ -86,33 +87,6 @@ impl ProviderId {
     }
 }
 
-// #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
-// #[serde(crate = "near_sdk::serde")]
-// pub struct SybilProvider {
-//     // NB: contract address/ID and method name are contained in the Provider's ID (see `ProviderId`) so do not need to be stored here
-//     /// Weight for this provider, e.g. 100
-//     pub default_weight: u32,
-//     // TODO: consider adding optional `gas`, `type`/`description` (e.g. "face scan", "twitter", "captcha", etc.)
-// }
-
-// #[derive(BorshSerialize, BorshDeserialize)]
-// pub enum VersionedProvider {
-//     Current(Provider),
-// }
-
-// impl From<VersionedProvider> for Provider {
-//     fn from(provider: VersionedProvider) -> Self {
-//         match provider {
-//             VersionedProvider::Current(current) => current,
-//         }
-//     }
-// }
-
-// // TODO: move this elsewhere
-// #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
-// #[serde(crate = "near_sdk::serde")]
-// pub struct SybilConfig
-
 /// Sybil provider weight
 type SybilProviderWeight = u32;
 
@@ -124,16 +98,6 @@ pub struct CustomSybilCheck {
     method_name: String,
     weight: SybilProviderWeight,
 }
-
-// impl CustomSybilCheck {
-//     pub fn to_stored(contract_id: AccountId, method_name: String, weight: SybilProviderWeight) -> Self {
-//         Self {
-//             contract_id,
-//             method_name,
-//             weight,
-//         }
-//     }
-// }
 
 /// Pot Contract (funding round)
 #[near_bindgen]

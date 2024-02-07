@@ -30,20 +30,20 @@ pub struct UpdatePotArgs {
 impl Contract {
     // CHANGE OWNER
     #[payable]
-    pub fn owner_change_owner(&mut self, new_owner: AccountId) {
+    pub fn owner_change_owner(&mut self, owner: AccountId) {
         self.assert_owner();
         let initial_storage_usage = env::storage_usage();
-        self.owner = new_owner;
+        self.owner = owner;
         log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
 
     // ADD/REMOVE ADMINS
     #[payable]
-    pub fn owner_add_admins(&mut self, new_admins: Vec<AccountId>) {
+    pub fn owner_add_admins(&mut self, admins: Vec<AccountId>) {
         self.assert_owner();
         let initial_storage_usage = env::storage_usage();
-        for new_admin in new_admins.iter() {
+        for new_admin in admins.iter() {
             self.admins.insert(new_admin);
         }
         log_update_pot_config_event(&self.get_config());
@@ -51,10 +51,10 @@ impl Contract {
     }
 
     #[payable]
-    pub fn owner_remove_admins(&mut self, admins_to_remove: Vec<AccountId>) {
+    pub fn owner_remove_admins(&mut self, admins: Vec<AccountId>) {
         self.assert_owner();
         let initial_storage_usage = env::storage_usage();
-        for admin_to_remove in admins_to_remove.iter() {
+        for admin_to_remove in admins.iter() {
             self.admins.remove(admin_to_remove);
         }
         log_update_pot_config_event(&self.get_config());
@@ -62,11 +62,11 @@ impl Contract {
     }
 
     #[payable]
-    pub fn owner_set_admins(&mut self, account_ids: Vec<AccountId>) {
+    pub fn owner_set_admins(&mut self, admins: Vec<AccountId>) {
         self.assert_owner();
         let initial_storage_usage = env::storage_usage();
         self.admins.clear();
-        for account_id in account_ids {
+        for account_id in admins {
             self.admins.insert(&account_id);
         }
         log_update_pot_config_event(&self.get_config());
