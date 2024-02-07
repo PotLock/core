@@ -39,6 +39,7 @@ pub struct PayoutInput {
     pub project_id: ProjectId,
 }
 
+/// Ephemeral-only
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct PayoutExternal {

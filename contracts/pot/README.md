@@ -59,7 +59,7 @@ pub struct Contract {
     /// * Optional because not all Pots will require registration, and those that do might set after deployment.
     registry_provider: LazyOption<ProviderId>,
     /// Minimum amount that can be donated to the matching pool
-    min_matching_pool_donation_amount: U128,
+    min_matching_pool_donation_amount: u128,
 
     // SYBIL RESISTANCE
     /// Sybil contract address & method name that will be called to verify humanness. If `None`, no checks will be made.
@@ -70,20 +70,20 @@ pub struct Contract {
     custom_min_threshold_score: LazyOption<u32>,
 
     // FEES
-    /// Basis points (1/100 of a percent) that should be paid to an account that refers a Patron (paid at the point when the matching pool donation comes in)
+    /// Basis points (1/100 of a percent) that should be paid to an account that refers a matching pool donor (paid at the point when a matching pool donation comes in)
     referral_fee_matching_pool_basis_points: u32,
-    /// Basis points (1/100 of a percent) that should be paid to an account that refers a donor (paid at the point when the donation comes in)
+    /// Basis points (1/100 of a percent) that should be paid to an account that refers a public donor (paid at the point when a public donation comes in)
     referral_fee_public_round_basis_points: u32,
     /// Chef's fee for managing the round. Gets taken out of each donation as they come in and are paid out
     chef_fee_basis_points: u32,
 
     // FUNDS & BALANCES
     /// Total matching pool donations
-    total_matching_pool_donations: U128,
+    total_matching_pool_donations: u128,
     /// Amount of matching funds available (not yet paid out)
-    matching_pool_balance: U128,
+    matching_pool_balance: u128,
     /// Total public donations
-    total_public_donations: U128,
+    total_public_donations: u128,
 
     // PAYOUTS
     /// Cooldown period starts when Chef sets payouts
@@ -92,11 +92,11 @@ pub struct Contract {
     all_paid_out: bool,
 
     // MAPPINGS
-    /// All application records, versioned for easy upgradeability
+    /// All application records
     applications_by_id: UnorderedMap<ApplicationId, VersionedApplication>,
     /// Approved application IDs
     approved_application_ids: UnorderedSet<ApplicationId>,
-    /// All donation records, versioned for easy upgradeability
+    /// All donation records
     donations_by_id: UnorderedMap<DonationId, VersionedDonation>,
     /// IDs of public round donations (made by donors who are not Patrons, during public round)
     public_round_donation_ids: UnorderedSet<DonationId>,
@@ -106,8 +106,8 @@ pub struct Contract {
     donation_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<DonationId>>,
     /// IDs of donations made by a given donor (user)
     donation_ids_by_donor_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
-    /// All payout records, versioned for easy upgradeability
-    payouts_by_id: UnorderedMap<PayoutId, VersionedPayout>,
+    // payouts
+    payouts_by_id: UnorderedMap<PayoutId, VersionedPayout>, // can iterate over this to get all payouts
     payout_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<PayoutId>>,
 
     // OTHER
@@ -143,6 +143,8 @@ pub struct PotConfig {
     pub chef_fee_basis_points: u32,
     pub matching_pool_balance: U128,
     pub total_public_donations: U128,
+    pub public_donations_count: u32,
+    pub payouts: Vec<PayoutExternal>,
     pub cooldown_end_ms: Option<TimestampMs>,
     pub all_paid_out: bool,
     pub protocol_config_provider: Option<ProviderId>,
@@ -184,8 +186,10 @@ pub type ApplicationId = ProjectId; // Applications are indexed by ProjectId
 
 pub struct Application {
     /// functions as unique identifier for application, since projects can only apply once per round
-    // NB: Don't technically need this, since we use the project_id as the key in the applications_by_id mapping, but it's possible that we'll want to change that in the future, so keeping this for now
+    // Don't technically need this, since we use the project_id as the key in the applications_by_id mapping, but it's possible that we'll want to change that in the future, so keeping this for now
     pub project_id: ProjectId,
+    /// Optional message to be included in application
+    pub message: Option<String>,
     /// Status of the project application (Pending, Accepted, Rejected, InReview)
     pub status: ApplicationStatus,
     /// Timestamp for when the application was submitted
@@ -212,7 +216,9 @@ pub struct Donation {
     /// ID of the donor               
     pub donor_id: AccountId,
     /// Amount donated         
-    pub total_amount: U128,
+    pub total_amount: u128,
+    /// Amount after all fees/expenses (incl. storage)
+    pub net_amount: u128,
     /// Optional message from the donor          
     pub message: Option<String>,
     /// Timestamp when the donation was made
@@ -222,10 +228,13 @@ pub struct Donation {
     /// Referrer ID
     pub referrer_id: Option<AccountId>,
     /// Referrer fee
-    pub referrer_fee: Option<U128>,
+    pub referrer_fee: Option<u128>,
     /// Protocol fee
-    pub protocol_fee: U128,
-    // TODO: add chef fee? chef ID? this is getting pretty hefty though for something intended to be small (could cost 0.01N just to store the Donation)
+    pub protocol_fee: u128,
+    /// Chef ID
+    pub chef_id: Option<AccountId>,
+    /// Chef fee
+    pub chef_fee: Option<u128>,
 }
 
 /// Ephemeral-only (used in views)
@@ -236,6 +245,8 @@ pub struct DonationExternal {
     pub donor_id: AccountId,
     /// Amount donated         
     pub total_amount: U128,
+    /// Amount after all fees/expenses (incl. storage)
+    pub net_amount: U128,
     /// Optional message from the donor          
     pub message: Option<String>,
     /// Timestamp when the donation was made
@@ -250,7 +261,10 @@ pub struct DonationExternal {
     pub protocol_fee: U128,
     /// Indicates whether this is matching pool donation
     pub matching_pool: bool,
-    // TODO: add chef fee?
+    /// Chef ID
+    pub chef_id: Option<AccountId>,
+    /// Chef fee
+    pub chef_fee: Option<U128>,
 }
 
 pub const DONATION_ID_DELIMETER: &str = ":";
@@ -264,6 +278,18 @@ pub const PAYOUT_ID_DELIMITER: &str = ":";
 pub type PayoutId = String; // concatenation of application_id + PAYOUT_ID_DELIMITER + incrementing integer per-project
 
 pub struct Payout {
+    /// Unique identifier for the payout
+    pub id: PayoutId,
+    /// ID of the application receiving the payout
+    pub project_id: ProjectId,
+    /// Amount to be paid out
+    pub amount: U128,
+    /// Timestamp when the payout was made. None if not yet paid out.
+    pub paid_at: Option<TimestampMs>,
+}
+
+/// Ephemeral-only
+pub struct PayoutExternal {
     /// Unique identifier for the payout
     pub id: PayoutId,
     /// ID of the application receiving the payout

@@ -189,7 +189,6 @@ pub struct Contract {
     referral_fee_public_round_basis_points: u32,
     /// Chef's fee for managing the round. Gets taken out of each donation as they come in and are paid out
     chef_fee_basis_points: u32,
-    // TODO: ADD MAX PROTOCOL FEE BASIS POINTS? or as const so it can't be updated without code deployment?
 
     // FUNDS & BALANCES
     /// Total matching pool donations
