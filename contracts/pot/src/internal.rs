@@ -78,6 +78,17 @@ impl Contract {
         );
     }
 
+    pub(crate) fn assert_cooldown_period_in_process(&self) {
+        if let Some(cooldown_end_ms) = self.cooldown_end_ms.get() {
+            assert!(
+                cooldown_end_ms >= env::block_timestamp_ms(),
+                "Cooldown period is not in process"
+            );
+        } else {
+            panic!("Cooldown period is not set");
+        }
+    }
+
     pub(crate) fn assert_cooldown_period_complete(&self) {
         if let Some(cooldown_end_ms) = self.cooldown_end_ms.get() {
             assert!(
@@ -86,6 +97,17 @@ impl Contract {
             );
         } else {
             panic!("Cooldown period is not set");
+        }
+    }
+
+    pub(crate) fn assert_all_payouts_challenges_resolved(&self) {
+        for (challenger_id, versioned_payouts_challenge) in self.payouts_challenges.iter() {
+            let payouts_challenge = PayoutsChallenge::from(versioned_payouts_challenge);
+            assert!(
+                payouts_challenge.resolved,
+                "Payouts challenge from challenger {} is not resolved",
+                challenger_id
+            );
         }
     }
 

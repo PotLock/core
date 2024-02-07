@@ -16,6 +16,7 @@ pub mod internal;
 pub mod pot;
 pub mod source;
 pub mod utils;
+pub mod validation;
 pub use crate::admin::*;
 pub use crate::constants::*;
 pub use crate::events::*;
@@ -23,10 +24,11 @@ pub use crate::internal::*;
 pub use crate::pot::*;
 pub use crate::source::*;
 pub use crate::utils::*;
+pub use crate::validation::*;
 
 /// Pot Factory Contract
 #[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Contract {
     /// Contract superuser (should be a DAO, but no restrictions made at the contract level on this matter)
     owner: AccountId,
@@ -38,8 +40,6 @@ pub struct Contract {
     protocol_fee_basis_points: u32,
     /// Config for protocol fees recipient
     protocol_fee_recipient_account: AccountId,
-    /// Default chef fee (% * 100)
-    default_chef_fee_basis_points: u32,
     /// Accounts that are allowed to deploy Pots
     whitelisted_deployers: UnorderedSet<AccountId>,
     /// Specifies whether a Pot deployer is required to be whitelisted
@@ -70,7 +70,6 @@ pub struct ContractConfigExternal {
     admins: Vec<AccountId>,
     protocol_fee_basis_points: u32,
     protocol_fee_recipient_account: AccountId,
-    default_chef_fee_basis_points: u32,
     whitelisted_deployers: Vec<AccountId>,
     require_whitelist: bool,
 }
@@ -125,6 +124,23 @@ impl ProviderId {
         }
         (parts[0].to_string(), parts[1].to_string())
     }
+
+    /// Validate (individual elements cannot be empty, cannot contain PROVIDER_ID_DELIMITER)
+    pub fn validate(&self) {
+        let (contract_id, method_name) = self.decompose();
+        assert!(!contract_id.is_empty(), "Contract ID cannot be empty");
+        assert!(!method_name.is_empty(), "Method name cannot be empty");
+        assert!(
+            !contract_id.contains(PROVIDER_ID_DELIMITER),
+            "Contract ID cannot contain delimiter ('{}')",
+            PROVIDER_ID_DELIMITER
+        );
+        assert!(
+            !method_name.contains(PROVIDER_ID_DELIMITER),
+            "Method name cannot contain delimiter ('{}')",
+            PROVIDER_ID_DELIMITER
+        );
+    }
 }
 
 /// Weighting for a given CustomSybilCheck
@@ -147,12 +163,10 @@ impl Contract {
         admins: Vec<AccountId>,
         protocol_fee_basis_points: u32,
         protocol_fee_recipient_account: AccountId,
-        default_chef_fee_basis_points: u32,
         whitelisted_deployers: Vec<AccountId>,
         require_whitelist: bool,
         source_metadata: ContractSourceMetadata,
     ) -> Self {
-        assert!(!env::state_exists(), "Already initialized");
         let mut admins_set = UnorderedSet::new(StorageKey::Admins);
         for admin in admins.iter() {
             admins_set.insert(admin);
@@ -167,7 +181,6 @@ impl Contract {
             pots_by_id: UnorderedMap::new(StorageKey::PotsById),
             protocol_fee_basis_points,
             protocol_fee_recipient_account,
-            default_chef_fee_basis_points,
             whitelisted_deployers: whitelisted_deployers_set,
             require_whitelist,
             contract_source_metadata: LazyOption::new(
@@ -183,7 +196,6 @@ impl Contract {
             admins: self.admins.to_vec(),
             protocol_fee_basis_points: self.protocol_fee_basis_points,
             protocol_fee_recipient_account: self.protocol_fee_recipient_account.clone(),
-            default_chef_fee_basis_points: self.default_chef_fee_basis_points,
             whitelisted_deployers: self.whitelisted_deployers.to_vec(),
             require_whitelist: self.require_whitelist,
         }
@@ -194,22 +206,6 @@ impl Contract {
         ProtocolConfig {
             basis_points: self.protocol_fee_basis_points,
             account_id: self.protocol_fee_recipient_account.clone(),
-        }
-    }
-}
-
-impl Default for Contract {
-    fn default() -> Self {
-        Self {
-            owner: AccountId::new_unchecked("".to_string()),
-            admins: UnorderedSet::new(StorageKey::Admins),
-            pots_by_id: UnorderedMap::new(StorageKey::PotsById),
-            protocol_fee_basis_points: 0,
-            protocol_fee_recipient_account: AccountId::new_unchecked("".to_string()),
-            default_chef_fee_basis_points: 0,
-            whitelisted_deployers: UnorderedSet::new(StorageKey::WhitelistedDeployers),
-            require_whitelist: false,
-            contract_source_metadata: LazyOption::new(StorageKey::SourceMetadata, None),
         }
     }
 }

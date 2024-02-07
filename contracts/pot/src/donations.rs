@@ -1,3 +1,5 @@
+use std::u32::MAX;
+
 use crate::*;
 
 pub type DonationId = u64;
@@ -10,6 +12,8 @@ pub struct Donation {
     pub donor_id: AccountId,
     /// Amount donated         
     pub total_amount: u128,
+    /// Amount after all fees/expenses (incl. storage)
+    pub net_amount: u128,
     /// Optional message from the donor          
     pub message: Option<String>,
     /// Timestamp when the donation was made
@@ -51,6 +55,8 @@ pub struct DonationExternal {
     pub donor_id: AccountId,
     /// Amount donated         
     pub total_amount: U128,
+    /// Amount after all fees/expenses (incl. storage)
+    pub net_amount: U128,
     /// Optional message from the donor          
     pub message: Option<String>,
     /// Timestamp when the donation was made
@@ -157,13 +163,13 @@ impl Contract {
         limit: Option<u64>,
     ) -> Vec<DonationExternal> {
         let start_index: u128 = from_index.unwrap_or_default();
-        assert!(
-            (self.donations_by_id.len() as u128) >= start_index,
-            "Out of bounds, please use a smaller from_index."
-        );
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
         assert_ne!(limit, 0, "Cannot provide limit of 0.");
         let donation_ids_by_project_set = self.donation_ids_by_project_id.get(&project_id).unwrap();
+        assert!(
+            (donation_ids_by_project_set.len() as u128) >= start_index,
+            "Out of bounds, please use a smaller from_index."
+        );
         donation_ids_by_project_set
             .iter()
             .skip(start_index as usize)
@@ -181,13 +187,13 @@ impl Contract {
         limit: Option<u64>,
     ) -> Vec<DonationExternal> {
         let start_index: u128 = from_index.unwrap_or_default();
-        assert!(
-            (self.donations_by_id.len() as u128) >= start_index,
-            "Out of bounds, please use a smaller from_index."
-        );
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
         assert_ne!(limit, 0, "Cannot provide limit of 0.");
         let donation_ids_by_donor_set = self.donation_ids_by_donor_id.get(&donor_id).unwrap();
+        assert!(
+            (donation_ids_by_donor_set.len() as u128) >= start_index,
+            "Out of bounds, please use a smaller from_index."
+        );
         donation_ids_by_donor_set
             .iter()
             .skip(start_index as usize)
@@ -230,14 +236,26 @@ impl Contract {
         referrer_id: Option<AccountId>,
         matching_pool: Option<bool>,
         bypass_protocol_fee: Option<bool>,
-    ) -> Promise {
+    ) -> PromiseOrValue<DonationExternal> {
         if let Some(project_id) = project_id.clone() {
             self.assert_approved_application(&project_id);
         };
         let is_matching_pool = matching_pool.unwrap_or(false);
-        if !is_matching_pool {
+        if is_matching_pool {
+            // matching pool validations
+            // matching pool donations can be received at any point until public round closes
+            self.assert_round_not_closed();
+            // project_id must not be provided for matching pool donations
+            if project_id.is_some() {
+                env::panic_str(
+                    "project_id argument must not be provided for matching pool donations",
+                );
+            }
+        } else {
+            // public round validations
+            // public round donations can only be received while public round is open/active
             self.assert_round_active();
-            // error if this is an end-user donation and no project_id is provided
+            // project_id must be provided for public round donations
             if project_id.is_none() {
                 env::panic_str(
                     "project_id argument must be provided for public (non-matching pool) donations",
@@ -271,7 +289,7 @@ impl Contract {
         referrer_id: Option<AccountId>,
         matching_pool: bool,
         bypass_protocol_fee: Option<bool>,
-    ) -> Promise {
+    ) -> PromiseOrValue<DonationExternal> {
         let caller_id = env::predecessor_account_id();
         if matching_pool {
             assert!(
@@ -279,24 +297,22 @@ impl Contract {
                 "Matching pool donations must be at least {} yoctoNEAR",
                 self.min_matching_pool_donation_amount
             );
-            // matching pool donations not subject to sybil checks, so go to always_allow callback
-            Self::ext(env::current_account_id())
-                .with_static_gas(XCC_GAS)
-                .sybil_always_allow_callback(
-                    deposit,
-                    project_id.clone(),
-                    message.clone(),
-                    referrer_id.clone(),
-                    matching_pool,
-                    bypass_protocol_fee,
-                )
+            // matching pool donations not subject to sybil checks, so move on to protocol fee handler
+            self.handle_protocol_fee(
+                deposit,
+                project_id.clone(),
+                message.clone(),
+                referrer_id.clone(),
+                matching_pool,
+                bypass_protocol_fee,
+            )
         } else {
             if let Some(sybil_wrapper_provider) = self.sybil_wrapper_provider.get() {
                 let (contract_id, method_name) = sybil_wrapper_provider.decompose();
                 let args = json!({ "account_id": caller_id.clone() })
                     .to_string()
                     .into_bytes();
-                Promise::new(AccountId::new_unchecked(contract_id.clone()))
+                PromiseOrValue::Promise(Promise::new(AccountId::new_unchecked(contract_id.clone()))
                     .function_call(method_name, args, 0, Gas(TGAS * 50))
                     .then(
                         Self::ext(env::current_account_id())
@@ -310,41 +326,19 @@ impl Contract {
                                 matching_pool,
                                 bypass_protocol_fee,
                             ),
-                    )
+                    ))
             } else {
-                // no sybil wrapper provider, so go to always_allow callback
-                Self::ext(env::current_account_id())
-                    .with_static_gas(XCC_GAS)
-                    .sybil_always_allow_callback(
-                        deposit,
-                        project_id.clone(),
-                        message.clone(),
-                        referrer_id.clone(),
-                        matching_pool,
-                        bypass_protocol_fee,
-                    )
+                // no sybil wrapper provider, so move on to protocol fee handler
+                self.handle_protocol_fee(
+                    deposit,
+                    project_id.clone(),
+                    message.clone(),
+                    referrer_id.clone(),
+                    matching_pool,
+                    bypass_protocol_fee,
+                )
             }
         }
-    }
-
-    #[private] // Public - but only callable by env::current_account_id()
-    pub fn sybil_always_allow_callback(
-        &mut self,
-        deposit: Balance,
-        project_id: Option<ProjectId>,
-        message: Option<String>,
-        referrer_id: Option<AccountId>,
-        matching_pool: bool,
-        bypass_protocol_fee: Option<bool>,
-    ) -> Promise {
-        self.handle_protocol_fee(
-            deposit,
-            project_id,
-            message,
-            referrer_id,
-            matching_pool,
-            bypass_protocol_fee,
-        )
     }
 
     #[private] // Public - but only callable by env::current_account_id()
@@ -358,7 +352,7 @@ impl Contract {
         matching_pool: bool,
         bypass_protocol_fee: Option<bool>,
         #[callback_result] call_result: Result<bool, PromiseError>,
-    ) -> Promise {
+    ) -> PromiseOrValue<DonationExternal> {
         if call_result.is_err() {
             log!(format!(
                 "Error verifying sybil check; returning donation {} to donor {}",
@@ -391,7 +385,8 @@ impl Contract {
         }
     }
 
-    pub(crate) fn handle_protocol_fee(
+    #[private]
+    pub fn handle_protocol_fee(
         &mut self,
         deposit: Balance,
         project_id: Option<ProjectId>,
@@ -399,22 +394,22 @@ impl Contract {
         referrer_id: Option<AccountId>,
         matching_pool: bool,
         bypass_protocol_fee: Option<bool>,
-    ) -> Promise {
+    ) -> PromiseOrValue<DonationExternal> {
         if bypass_protocol_fee.unwrap_or(false) {
             // bypass protocol fee
-            Self::ext(env::current_account_id())
-                .with_static_gas(XCC_GAS)
-                .bypass_protocol_fee(
+            PromiseOrValue::Value(self.process_donation(
                     deposit,
+                    0,
+                    None,
                     project_id.clone(),
                     message.clone(),
                     referrer_id.clone(),
                     matching_pool,
-                )
+                ))
         } else if let Some(protocol_config_provider) = self.protocol_config_provider.get() {
             let (contract_id, method_name) = protocol_config_provider.decompose();
             let args = json!({}).to_string().into_bytes();
-            Promise::new(AccountId::new_unchecked(contract_id.clone()))
+            PromiseOrValue::Promise(Promise::new(AccountId::new_unchecked(contract_id.clone()))
                 .function_call(method_name.clone(), args, 0, XCC_GAS)
                 .then(
                     Self::ext(env::current_account_id())
@@ -426,18 +421,18 @@ impl Contract {
                             referrer_id,
                             matching_pool,
                         ),
-                )
+                ))
         } else {
             // bypass protocol fee
-            Self::ext(env::current_account_id())
-                .with_static_gas(XCC_GAS)
-                .bypass_protocol_fee(
-                    deposit,
-                    project_id.clone(),
-                    message.clone(),
-                    referrer_id.clone(),
-                    matching_pool,
-                )
+            PromiseOrValue::Value(self.process_donation(
+                deposit,
+                0,
+                None,
+                project_id.clone(),
+                message.clone(),
+                referrer_id.clone(),
+                matching_pool,
+            ))
         }
     }
 
@@ -467,7 +462,7 @@ impl Contract {
             )
         } else {
             let protocol_config_provider_result = call_result.unwrap();
-            let protocol_fee_basis_points = protocol_config_provider_result.basis_points;
+            let protocol_fee_basis_points = std::cmp::min(protocol_config_provider_result.basis_points, MAX_PROTOCOL_FEE_BASIS_POINTS);
             let protocol_fee_recipient_account = protocol_config_provider_result.account_id;
             // calculate protocol fee (don't transfer yet)
             let protocol_fee = self.calculate_fee(deposit, protocol_fee_basis_points, true);
@@ -484,26 +479,7 @@ impl Contract {
     }
 
     #[private]
-    pub fn bypass_protocol_fee(
-        &mut self,
-        deposit: Balance,
-        project_id: Option<ProjectId>,
-        message: Option<String>,
-        referrer_id: Option<AccountId>,
-        matching_pool: bool,
-    ) -> DonationExternal {
-        self.process_donation(
-            deposit,
-            0,
-            None,
-            project_id,
-            message,
-            referrer_id,
-            matching_pool,
-        )
-    }
-
-    pub(crate) fn process_donation(
+    pub fn process_donation(
         &mut self,
         deposit: Balance,
         protocol_fee: u128,
@@ -555,6 +531,7 @@ impl Contract {
         let donation = Donation {
             donor_id: env::signer_account_id(),
             total_amount: deposit,
+            net_amount: 0, // this will be updated in a moment after storage cost is subtracted
             message,
             donated_at: env::block_timestamp_ms(),
             project_id: project_id.clone(),
@@ -565,6 +542,29 @@ impl Contract {
             chef_fee: chef_fee.map(|v| v.0),
         };
         self.insert_donation_record(&donation_id, &donation, matching_pool);
+
+        // assert that donation after fees > storage cost
+        let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
+        require!(
+            remainder > required_deposit,
+            format!(
+                "Must attach {} yoctoNEAR to cover storage",
+                required_deposit
+            )
+        );
+
+        // subtract storage cost
+        remainder = remainder.checked_sub(required_deposit).expect(&format!(
+            "Overflow occurred when calculating remainder ({} - {})",
+            remainder, required_deposit,
+        ));
+
+        // update donation with net amount
+        self.donations_by_id
+            .insert(&donation_id, &VersionedDonation::Current(Donation {
+                net_amount: remainder,
+                ..donation.clone()
+            }));
 
         // update totals
         if matching_pool {
@@ -591,22 +591,6 @@ impl Contract {
                         self.total_public_donations, remainder,
                     ));
         }
-
-        // assert that donation after fees > storage cost
-        let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
-        require!(
-            remainder > required_deposit,
-            format!(
-                "Must attach {} yoctoNEAR to cover storage",
-                required_deposit
-            )
-        );
-
-        // subtract storage cost
-        remainder = remainder.checked_sub(required_deposit).expect(&format!(
-            "Overflow occurred when calculating remainder ({} - {})",
-            remainder, required_deposit,
-        ));
 
         // transfer protocol fee
         if let Some(protocol_fee_recipient_account) = protocol_fee_recipient_account {
@@ -687,6 +671,7 @@ impl Contract {
             id,
             donor_id: donation.donor_id.clone(),
             total_amount: U128(donation.total_amount),
+            net_amount: U128(donation.net_amount),
             message: donation.message.clone(),
             donated_at: donation.donated_at,
             project_id: donation.project_id.clone(),
