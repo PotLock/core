@@ -65,6 +65,14 @@ pub(crate) fn assert_valid_provider_id(provider_id: &ProviderId) {
     provider_id.validate();
 }
 
+pub(crate) fn assert_valid_cooldown_period_ms(cooldown_period_ms: u64) {
+    assert!(
+        cooldown_period_ms >= MIN_COOLDOWN_PERIOD_MS,
+        "Cooldown period must be at least {} ms",
+        MIN_COOLDOWN_PERIOD_MS
+    );
+}
+
 pub(crate) fn assert_valid_pot_args(args: &PotArgs) {
     assert_valid_pot_name(&args.pot_name);
     assert_valid_pot_description(&args.pot_description);
@@ -77,6 +85,9 @@ pub(crate) fn assert_valid_pot_args(args: &PotArgs) {
     );
     assert_valid_chef_fee_basis_points(args.chef_fee_basis_points);
     assert_valid_pot_timestamps(args);
+    if let Some(cooldown_period_ms) = args.cooldown_period_ms {
+        assert_valid_cooldown_period_ms(cooldown_period_ms);
+    }
     if let Some(provider_id) = &args.registry_provider {
         assert_valid_provider_id(provider_id);
     }
