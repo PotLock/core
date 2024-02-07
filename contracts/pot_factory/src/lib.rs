@@ -1,6 +1,7 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, UnorderedMap, UnorderedSet};
 use near_sdk::env::STORAGE_PRICE_PER_BYTE;
+use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, log, near_bindgen, require, serde_json, serde_json::json, AccountId, Balance,
