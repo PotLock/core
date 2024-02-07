@@ -13,3 +13,4 @@ pub const MAX_MAX_PROJECTS: u32 = 100; // TODO: figure out actual limit based on
 pub const MAX_REFERRAL_FEE_MATCHING_POOL_BASIS_POINTS: u32 = 1000; // 10%
 pub const MAX_REFERRAL_FEE_PUBLIC_ROUND_BASIS_POINTS: u32 = 1000; // 10%
 pub const MAX_CHEF_FEE_BASIS_POINTS: u32 = 1000; // 10%
+pub const MAX_PROTOCOL_FEE_BASIS_POINTS: u32 = 1000; // 10%

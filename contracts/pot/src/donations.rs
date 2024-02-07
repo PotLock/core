@@ -1,3 +1,5 @@
+use std::u32::MAX;
+
 use crate::*;
 
 pub type DonationId = u64;
@@ -460,7 +462,7 @@ impl Contract {
             )
         } else {
             let protocol_config_provider_result = call_result.unwrap();
-            let protocol_fee_basis_points = protocol_config_provider_result.basis_points;
+            let protocol_fee_basis_points = std::cmp::min(protocol_config_provider_result.basis_points, MAX_PROTOCOL_FEE_BASIS_POINTS);
             let protocol_fee_recipient_account = protocol_config_provider_result.account_id;
             // calculate protocol fee (don't transfer yet)
             let protocol_fee = self.calculate_fee(deposit, protocol_fee_basis_points, true);
