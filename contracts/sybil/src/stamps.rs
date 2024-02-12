@@ -67,7 +67,16 @@ impl Contract {
         // verify against provider, using custom gas if specified
         let (contract_id, method_name) = provider_id.decompose();
         let gas = Gas(provider.gas.unwrap_or(XCC_GAS_DEFAULT));
-        let args = json!({ "account_id": user_id }).to_string().into_bytes();
+
+        // Create a HashMap and insert the dynamic account_id_arg_name and value
+        let mut args_map = std::collections::HashMap::new();
+        args_map.insert(provider.account_id_arg_name.clone(), user_id.to_string());
+
+        // Serialize the HashMap to JSON string and then to bytes
+        let args = near_sdk::serde_json::to_string(&args_map)
+            .expect("Failed to serialize args")
+            .into_bytes();
+
         Promise::new(AccountId::new_unchecked(contract_id.clone()))
             .function_call(method_name.clone(), args, NO_DEPOSIT, gas)
             .then(
