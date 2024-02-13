@@ -254,7 +254,7 @@ impl Contract {
     }
 
     pub fn is_registered(&self, account_id: ProjectId) -> bool {
-        self.projects_by_id.get(&account_id).is_some()
+        self.approved_project_ids.contains(&account_id)
     }
 
     pub(crate) fn format_project(&self, project_internal: ProjectInternal) -> ProjectExternal {
