@@ -236,6 +236,7 @@ impl Contract {
         referrer_id: Option<AccountId>,
         matching_pool: Option<bool>,
         bypass_protocol_fee: Option<bool>,
+        bypass_chef_fee: Option<bool>,
     ) -> PromiseOrValue<DonationExternal> {
         if let Some(project_id) = project_id.clone() {
             self.assert_approved_application(&project_id);
@@ -278,6 +279,7 @@ impl Contract {
             referrer_id,
             is_matching_pool,
             bypass_protocol_fee,
+            bypass_chef_fee,
         )
     }
 
@@ -289,6 +291,7 @@ impl Contract {
         referrer_id: Option<AccountId>,
         matching_pool: bool,
         bypass_protocol_fee: Option<bool>,
+        bypass_chef_fee: Option<bool>,
     ) -> PromiseOrValue<DonationExternal> {
         let caller_id = env::predecessor_account_id();
         if matching_pool {
@@ -305,6 +308,7 @@ impl Contract {
                 referrer_id.clone(),
                 matching_pool,
                 bypass_protocol_fee,
+                bypass_chef_fee,
             )
         } else {
             if let Some(sybil_wrapper_provider) = self.sybil_wrapper_provider.get() {
@@ -325,6 +329,7 @@ impl Contract {
                                 referrer_id.clone(),
                                 matching_pool,
                                 bypass_protocol_fee,
+                                bypass_chef_fee,
                             ),
                     ))
             } else {
@@ -336,6 +341,7 @@ impl Contract {
                     referrer_id.clone(),
                     matching_pool,
                     bypass_protocol_fee,
+                    bypass_chef_fee
                 )
             }
         }
@@ -351,6 +357,7 @@ impl Contract {
         referrer_id: Option<AccountId>,
         matching_pool: bool,
         bypass_protocol_fee: Option<bool>,
+        bypass_chef_fee: Option<bool>,
         #[callback_result] call_result: Result<bool, PromiseError>,
     ) -> PromiseOrValue<DonationExternal> {
         if call_result.is_err() {
@@ -381,6 +388,7 @@ impl Contract {
                 referrer_id,
                 matching_pool,
                 bypass_protocol_fee,
+                bypass_chef_fee,
             )
         }
     }
@@ -394,6 +402,7 @@ impl Contract {
         referrer_id: Option<AccountId>,
         matching_pool: bool,
         bypass_protocol_fee: Option<bool>,
+        bypass_chef_fee: Option<bool>,
     ) -> PromiseOrValue<DonationExternal> {
         if bypass_protocol_fee.unwrap_or(false) {
             // bypass protocol fee
@@ -405,6 +414,7 @@ impl Contract {
                     message.clone(),
                     referrer_id.clone(),
                     matching_pool,
+                    bypass_chef_fee,
                 ))
         } else if let Some(protocol_config_provider) = self.protocol_config_provider.get() {
             let (contract_id, method_name) = protocol_config_provider.decompose();
@@ -420,6 +430,7 @@ impl Contract {
                             message,
                             referrer_id,
                             matching_pool,
+                            bypass_chef_fee,
                         ),
                 ))
         } else {
@@ -432,6 +443,7 @@ impl Contract {
                 message.clone(),
                 referrer_id.clone(),
                 matching_pool,
+                bypass_chef_fee,
             ))
         }
     }
@@ -445,6 +457,7 @@ impl Contract {
         message: Option<String>,
         referrer_id: Option<AccountId>,
         matching_pool: bool,
+        bypass_chef_fee: Option<bool>,
         #[callback_result] call_result: Result<ProtocolConfigProviderResult, PromiseError>,
     ) -> DonationExternal {
         if call_result.is_err() {
@@ -459,6 +472,7 @@ impl Contract {
                 message,
                 referrer_id,
                 matching_pool,
+                bypass_chef_fee,
             )
         } else {
             let protocol_config_provider_result = call_result.unwrap();
@@ -474,6 +488,7 @@ impl Contract {
                 message,
                 referrer_id,
                 matching_pool,
+                bypass_chef_fee,
             )
         }
     }
@@ -488,6 +503,7 @@ impl Contract {
         message: Option<String>,
         referrer_id: Option<AccountId>,
         matching_pool: bool,
+        bypass_chef_fee: Option<bool>,
     ) -> DonationExternal {
         let initial_storage_usage = env::storage_usage();
 
@@ -497,13 +513,13 @@ impl Contract {
             deposit, protocol_fee,
         ));
 
-        // subtract chef fee
-        // TODO: consider adding to Donation struct
+        // subtract chef fee, unless bypassed
         let mut chef_fee: Option<U128> = None;
         let mut chef_id: Option<AccountId> = None;
-        if let Some(chef) = self.chef.get() {
-            // chef fee only applies to public round donations
-            if !matching_pool {
+        if bypass_chef_fee != Some(true) {
+            // this block will be skipped if user chose to bypass chef fee
+            if let Some(chef) = self.chef.get() {
+                // chef fee only applies to public round donations
                 let chef_fee_amount =
                     self.calculate_fee(remainder, self.chef_fee_basis_points, false);
                 chef_fee = Some(U128::from(chef_fee_amount));
