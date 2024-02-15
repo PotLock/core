@@ -65,16 +65,13 @@ pub struct PotArgs {
 impl Contract {
     /// Deploy a new Pot. A `None` response indicates an unsuccessful deployment.
     #[payable]
-    pub fn deploy_pot(&mut self, mut pot_args: PotArgs) -> Promise {
+    pub fn deploy_pot(&mut self, mut pot_args: PotArgs, pot_handle: Option<String>) -> Promise {
         // TODO: add protocol_config_provider to pot_args
         if self.require_whitelist {
             self.assert_admin_or_whitelisted_deployer();
         }
-        let pot_account_id_str = format!(
-            "{}.{}",
-            slugify(&pot_args.pot_name),
-            env::current_account_id()
-        );
+        let handle = pot_handle.unwrap_or_else(|| slugify(&pot_args.pot_name));
+        let pot_account_id_str = format!("{}.{}", handle, env::current_account_id());
         assert!(
             env::is_valid_account_id(pot_account_id_str.as_bytes()),
             "Pot Account ID {} is invalid",
