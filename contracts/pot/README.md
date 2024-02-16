@@ -180,6 +180,7 @@ pub struct ProtocolConfigProviderResult {
 ```
 
 ### Applications
+
 ```rs
 pub type ProjectId = AccountId;
 pub type ApplicationId = ProjectId; // Applications are indexed by ProjectId
@@ -209,17 +210,18 @@ pub enum ApplicationStatus {
 ```
 
 ### Donations
+
 ```rs
 pub type DonationId = u64; // auto-incrementing ID for donations
 
 pub struct Donation {
-    /// ID of the donor               
+    /// ID of the donor
     pub donor_id: AccountId,
-    /// Amount donated         
+    /// Amount donated
     pub total_amount: u128,
     /// Amount after all fees/expenses (incl. storage)
     pub net_amount: u128,
-    /// Optional message from the donor          
+    /// Optional message from the donor
     pub message: Option<String>,
     /// Timestamp when the donation was made
     pub donated_at: TimestampMs,
@@ -241,13 +243,13 @@ pub struct Donation {
 pub struct DonationExternal {
     /// ID of the donation
     pub id: DonationId,
-    /// ID of the donor               
+    /// ID of the donor
     pub donor_id: AccountId,
-    /// Amount donated         
+    /// Amount donated
     pub total_amount: U128,
     /// Amount after all fees/expenses (incl. storage)
     pub net_amount: U128,
-    /// Optional message from the donor          
+    /// Optional message from the donor
     pub message: Option<String>,
     /// Timestamp when the donation was made
     pub donated_at: TimestampMs,
@@ -523,6 +525,7 @@ pub fn donate(
     referrer_id: Option<AccountId>,
     matching_pool: Option<bool>,
     bypass_protocol_fee: Option<bool>, // Allows donor to bypass protocol fee if they wish. Defaults to "false".
+    custom_chef_fee_basis_points: Option<u32>, // Allows donor to set custom chef fee % if they wish. If provided value is greater than self.chef_fee_basis_points, the smaller value will be used.
 ) -> DonationExternal
 
 

@@ -43,6 +43,7 @@ pub struct ContractConfigExternal {
 ```
 
 ### Protocol Config
+
 ```rs
 /// Ephemeral-only (used in views) - intended as the result type for Pots querying for protocol fees configuration
 pub struct ProtocolConfig {
@@ -195,7 +196,7 @@ pub fn new(
 
 /// Deploy a new Pot. A `None` response indicates an unsuccessful deployment.
 #[payable]
-pub fn deploy_pot(&mut self, mut pot_args: PotArgs) -> Option<PotExternal>
+pub fn deploy_pot(&mut self, mut pot_args: PotArgs, pot_handle: Option<String>) -> Option<PotExternal>
 
 
 // OWNER / ADMIN
