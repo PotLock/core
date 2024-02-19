@@ -254,7 +254,15 @@ impl Contract {
     }
 
     pub fn is_registered(&self, account_id: ProjectId) -> bool {
-        self.approved_project_ids.contains(&account_id)
+        // self.approved_project_ids.contains(&account_id) // TODO: revert to this approach after figuring out why some approved projects (e.g. gloa.sputnik-dao.near) didn't make it into approved_project_ids
+        let versioned_project = self.projects_by_id.get(&account_id);
+        if let Some(versioned_project) = versioned_project {
+            let project_internal = ProjectInternal::from(versioned_project);
+            if project_internal.status == ProjectStatus::Approved {
+                return true;
+            }
+        }
+        false
     }
 
     pub(crate) fn format_project(&self, project_internal: ProjectInternal) -> ProjectExternal {
