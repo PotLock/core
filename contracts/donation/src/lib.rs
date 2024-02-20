@@ -57,6 +57,8 @@ pub struct Contract {
     donation_ids_by_ft_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
     total_donations_amount: Balance, // Add total_donations_amount to track total donations amount without iterating through all donations
     net_donations_amount: Balance,   // Add net_donations_amount to track net donations amount (after fees) without iterating through all donations
+    total_protocol_fees: Balance,    // Add total_protocol_fees to track total protocol fees without iterating through all donations
+    total_referrer_fees: Balance,    // Add total_referrer_fees to track total referral fees without iterating through all donations
 }
 
 
@@ -85,6 +87,8 @@ pub struct Config {
     pub total_donations_amount: U128,
     pub net_donations_amount: U128,
     pub total_donations_count: U64,
+    pub total_protocol_fees: U128,
+    pub total_referrer_fees: U128,
 }
 
 #[derive(BorshSerialize, BorshStorageKey)]
@@ -121,6 +125,8 @@ impl Contract {
             donation_ids_by_ft_id: LookupMap::new(StorageKey::DonationIdsByFtId),
             total_donations_amount: 0,
             net_donations_amount: 0,
+            total_protocol_fees: 0,
+            total_referrer_fees: 0,
             contract_source_metadata: LazyOption::new(
                 StorageKey::SourceMetadata,
                 Some(&VersionedContractSourceMetadata::Current(source_metadata)),
@@ -137,6 +143,8 @@ impl Contract {
             total_donations_amount: self.total_donations_amount.into(),
             net_donations_amount: self.net_donations_amount.into(),
             total_donations_count: self.donations_by_id.len().into(),
+            total_protocol_fees: self.total_protocol_fees.into(),
+            total_referrer_fees: self.total_referrer_fees.into(),
         }
     }
 
@@ -151,8 +159,10 @@ impl Contract {
                 .expect(format!("Donation {} not found", donation_id).as_str()));
             self.total_donations_amount += donation.total_amount.0;
             let mut net_amount = donation.total_amount.0 - donation.protocol_fee.0;
+            self.total_protocol_fees += donation.protocol_fee.0;
             if let Some(referral_fee) = donation.referrer_fee {
                 net_amount -= referral_fee.0;
+                self.total_referrer_fees += referral_fee.0;
             }
             self.net_donations_amount += net_amount;
         }
@@ -174,6 +184,8 @@ impl Contract {
             donation_ids_by_ft_id: old_state.donation_ids_by_ft_id,
             total_donations_amount: 0,
             net_donations_amount: 0,
+            total_protocol_fees: 0,
+            total_referrer_fees: 0,
             contract_source_metadata: old_state.contract_source_metadata,
         }
     }
@@ -192,6 +204,8 @@ impl Default for Contract {
             donation_ids_by_ft_id: LookupMap::new(StorageKey::DonationIdsByFtId),
             total_donations_amount: 0,
             net_donations_amount: 0,
+            total_protocol_fees: 0,
+            total_referrer_fees: 0,
             contract_source_metadata: LazyOption::new(
                 StorageKey::SourceMetadata,
                 Some(&VersionedContractSourceMetadata::Current(

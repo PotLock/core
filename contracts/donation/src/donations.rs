@@ -206,8 +206,11 @@ impl Contract {
         let mut net_donation_amount = donation.total_amount.0 - donation.protocol_fee.0;
         if let Some(referrer_fee) = donation.referrer_fee {
             net_donation_amount -= referrer_fee.0;
+            self.total_referrer_fees += referrer_fee.0;
         }
         self.net_donations_amount += net_donation_amount;
+        // add to total protocol fees
+        self.total_protocol_fees += donation.protocol_fee.0;
     }
 
     // GETTERS
