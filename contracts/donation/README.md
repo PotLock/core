@@ -26,6 +26,10 @@ pub struct Contract {
     donation_ids_by_recipient_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
     donation_ids_by_donor_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
     donation_ids_by_ft_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
+    total_donations_amount: Balance, // Added total_donations_amount to track total donations amount without iterating through all donations
+    net_donations_amount: Balance,   // Added net_donations_amount to track net donations amount (after fees) without iterating through all donations
+    total_protocol_fees: Balance,    // Added total_protocol_fees to track total protocol fees without iterating through all donations
+    total_referrer_fees: Balance,    // Added total_referrer_fees to track total referral fees without iterating through all donations
 }
 
 /// NOT stored in contract storage; only used for get_config response
@@ -34,6 +38,11 @@ pub struct Config {
     pub protocol_fee_basis_points: u32,
     pub referral_fee_basis_points: u32,
     pub protocol_fee_recipient_account: AccountId,
+    pub total_donations_amount: U128,
+    pub net_donations_amount: U128,
+    pub total_donations_count: U64,
+    pub total_protocol_fees: U128,
+    pub total_referrer_fees: U128,
 }
 ```
 
@@ -45,17 +54,17 @@ _NB: Projects are automatically approved by default._
 pub struct Donation {
     /// Unique identifier for the donation
     pub id: DonationId,
-    /// ID of the donor               
+    /// ID of the donor
     pub donor_id: AccountId,
-    /// Amount donated         
+    /// Amount donated
     pub total_amount: U128,
     /// FT id (e.g. "near")
     pub ft_id: AccountId,
-    /// Optional message from the donor          
+    /// Optional message from the donor
     pub message: Option<String>,
     /// Timestamp when the donation was made
     pub donated_at_ms: TimestampMs,
-    /// ID of the account receiving the donation  
+    /// ID of the account receiving the donation
     pub recipient_id: AccountId,
     /// Protocol fee
     pub protocol_fee: U128,
@@ -181,25 +190,25 @@ Indicates that a `Donation` object has been created.
 
 ```json
 {
-    "standard": "potlock",
-    "version": "1.0.0",
-    "event": "donation",
-    "data": [
-        {
-            "donation": {
-                "donated_at_ms": 1698948121940,
-                "donor_id":"lachlan.near",
-                "ft_id":"near",
-                "id":9,
-                "message": "Go go go!",
-                "protocol_fee": "7000000000000000000000",
-                "recipient_id": "magicbuild.near",
-                "referrer_fee": "2000000000000000000000",
-                "referrer_id": "plugrel.near",
-                "total_amount": "100000000000000000000000"
-            },
-        }
-    ]
+  "standard": "potlock",
+  "version": "1.0.0",
+  "event": "donation",
+  "data": [
+    {
+      "donation": {
+        "donated_at_ms": 1698948121940,
+        "donor_id": "lachlan.near",
+        "ft_id": "near",
+        "id": 9,
+        "message": "Go go go!",
+        "protocol_fee": "7000000000000000000000",
+        "recipient_id": "magicbuild.near",
+        "referrer_fee": "2000000000000000000000",
+        "referrer_id": "plugrel.near",
+        "total_amount": "100000000000000000000000"
+      }
+    }
+  ]
 }
 ```
 
@@ -211,17 +220,17 @@ Indicates that `ContractSourceMetadata` object has been set/updated.
 
 ```json
 {
-    "standard": "potlock",
-    "version": "1.0.0",
-    "event": "set_source_metadata",
-    "data": [
-        {
-            "source_metadata": {
-                "commit_hash":"ec02294253b22c2d4c50a75331df23ada9eb04db",
-                "link":"https://github.com/PotLock/core",
-                "version":"0.1.0",
-            }
-        }
-    ]
+  "standard": "potlock",
+  "version": "1.0.0",
+  "event": "set_source_metadata",
+  "data": [
+    {
+      "source_metadata": {
+        "commit_hash": "ec02294253b22c2d4c50a75331df23ada9eb04db",
+        "link": "https://github.com/PotLock/core",
+        "version": "0.1.0"
+      }
+    }
+  ]
 }
 ```
