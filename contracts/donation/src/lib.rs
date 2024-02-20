@@ -148,47 +148,47 @@ impl Contract {
         }
     }
 
-        // LEAVING FOR REFERENCE - this is function used to migrate data in upgrade from v1.0.0 to v2.0.0
-    #[private]
-    pub fn migrate_chunk_temp(&mut self, donation_ids: Vec<DonationId>) {
-        for donation_id in donation_ids {
-            log!("Migrating donation {}", donation_id);
-            let donation = Donation::from(self
-                .donations_by_id
-                .get(&donation_id)
-                .expect(format!("Donation {} not found", donation_id).as_str()));
-            self.total_donations_amount += donation.total_amount.0;
-            let mut net_amount = donation.total_amount.0 - donation.protocol_fee.0;
-            self.total_protocol_fees += donation.protocol_fee.0;
-            if let Some(referral_fee) = donation.referrer_fee {
-                net_amount -= referral_fee.0;
-                self.total_referrer_fees += referral_fee.0;
-            }
-            self.net_donations_amount += net_amount;
-        }
-    }
+    // LEAVING FOR REFERENCE - this is function used to migrate data in upgrade from v1.0.0 to v2.0.0
+    // #[private]
+    // pub fn migrate_chunk_temp(&mut self, donation_ids: Vec<DonationId>) {
+    //     for donation_id in donation_ids {
+    //         log!("Migrating donation {}", donation_id);
+    //         let donation = Donation::from(self
+    //             .donations_by_id
+    //             .get(&donation_id)
+    //             .expect(format!("Donation {} not found", donation_id).as_str()));
+    //         self.total_donations_amount += donation.total_amount.0;
+    //         let mut net_amount = donation.total_amount.0 - donation.protocol_fee.0;
+    //         self.total_protocol_fees += donation.protocol_fee.0;
+    //         if let Some(referral_fee) = donation.referrer_fee {
+    //             net_amount -= referral_fee.0;
+    //             self.total_referrer_fees += referral_fee.0;
+    //         }
+    //         self.net_donations_amount += net_amount;
+    //     }
+    // }
 
     // LEAVING FOR REFERENCE - this is the initFunction used in upgrade from v1.0.0 to v2.0.0
-    #[private]
-    #[init(ignore_state)]
-    pub fn migrate() -> Self {
-        let old_state: ContractV1 = env::state_read().expect("state read failed");
-        Self {
-            owner: old_state.owner,
-            protocol_fee_basis_points: old_state.protocol_fee_basis_points,
-            referral_fee_basis_points: old_state.referral_fee_basis_points,
-            protocol_fee_recipient_account: old_state.protocol_fee_recipient_account,
-            donations_by_id: old_state.donations_by_id,
-            donation_ids_by_recipient_id: old_state.donation_ids_by_recipient_id,
-            donation_ids_by_donor_id: old_state.donation_ids_by_donor_id,
-            donation_ids_by_ft_id: old_state.donation_ids_by_ft_id,
-            total_donations_amount: 0,
-            net_donations_amount: 0,
-            total_protocol_fees: 0,
-            total_referrer_fees: 0,
-            contract_source_metadata: old_state.contract_source_metadata,
-        }
-    }
+    // #[private]
+    // #[init(ignore_state)]
+    // pub fn migrate() -> Self {
+    //     let old_state: ContractV1 = env::state_read().expect("state read failed");
+    //     Self {
+    //         owner: old_state.owner,
+    //         protocol_fee_basis_points: old_state.protocol_fee_basis_points,
+    //         referral_fee_basis_points: old_state.referral_fee_basis_points,
+    //         protocol_fee_recipient_account: old_state.protocol_fee_recipient_account,
+    //         donations_by_id: old_state.donations_by_id,
+    //         donation_ids_by_recipient_id: old_state.donation_ids_by_recipient_id,
+    //         donation_ids_by_donor_id: old_state.donation_ids_by_donor_id,
+    //         donation_ids_by_ft_id: old_state.donation_ids_by_ft_id,
+    //         total_donations_amount: 0,
+    //         net_donations_amount: 0,
+    //         total_protocol_fees: 0,
+    //         total_referrer_fees: 0,
+    //         contract_source_metadata: old_state.contract_source_metadata,
+    //     }
+    // }
 }
 
 impl Default for Contract {

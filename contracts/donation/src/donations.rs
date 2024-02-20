@@ -49,8 +49,6 @@ impl Contract {
         mut referrer_id: Option<AccountId>,
         bypass_protocol_fee: Option<bool>,
     ) -> Donation {
-        // TODO: REMOVE THIS AFTER MIGRATING ALL CHUNKS TO V2
-        panic!("donate method is not currently available due to update & migration in process - please try again shortly.");
         // user has to pay for storage
         let initial_storage_usage = env::storage_usage();
 
