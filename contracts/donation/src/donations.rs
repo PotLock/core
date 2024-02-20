@@ -49,6 +49,8 @@ impl Contract {
         mut referrer_id: Option<AccountId>,
         bypass_protocol_fee: Option<bool>,
     ) -> Donation {
+        // TODO: REMOVE THIS AFTER MIGRATING ALL CHUNKS TO V2
+        panic!("donate method is not currently available due to update & migration in process - please try again shortly.");
         // user has to pay for storage
         let initial_storage_usage = env::storage_usage();
 
@@ -198,6 +200,14 @@ impl Contract {
         donation_ids_by_ft_set.insert(&donation.id);
         self.donation_ids_by_ft_id
             .insert(&donation.ft_id, &donation_ids_by_ft_set);
+        // add to total donations amount
+        self.total_donations_amount += donation.total_amount.0;
+        // add to net donations amount
+        let mut net_donation_amount = donation.total_amount.0 - donation.protocol_fee.0;
+        if let Some(referrer_fee) = donation.referrer_fee {
+            net_donation_amount -= referrer_fee.0;
+        }
+        self.net_donations_amount += net_donation_amount;
     }
 
     // GETTERS
