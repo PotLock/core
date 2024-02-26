@@ -10,6 +10,7 @@ use near_sdk::{
 pub mod admin;
 pub mod constants;
 pub mod events;
+pub mod groups;
 pub mod human;
 pub mod internal;
 pub mod owner;
@@ -21,6 +22,7 @@ pub mod validation;
 pub use crate::admin::*;
 pub use crate::constants::*;
 pub use crate::events::*;
+pub use crate::groups::*;
 pub use crate::human::*;
 pub use crate::internal::*;
 pub use crate::owner::*;
@@ -34,7 +36,31 @@ pub use crate::validation::*;
 pub const EVENT_JSON_PREFIX: &str = "EVENT_JSON:";
 pub type TimestampMs = u64;
 
-/// Registry Contract
+/// OLD (V1) Registry Contract
+#[near_bindgen]
+#[derive(BorshDeserialize, BorshSerialize)]
+pub struct ContractV1 {
+    contract_source_metadata: LazyOption<VersionedContractSourceMetadata>,
+    owner: AccountId,
+    admins: UnorderedSet<AccountId>,
+    providers_by_id: UnorderedMap<ProviderId, VersionedProvider>,
+    pending_provider_ids: UnorderedSet<ProviderId>,
+    active_provider_ids: UnorderedSet<ProviderId>,
+    deactivated_provider_ids: UnorderedSet<ProviderId>,
+    default_provider_ids: UnorderedSet<ProviderId>,
+    default_human_threshold: u32,
+    // MAPPINGS
+    // Stores all Stamp records, versioned for easy upgradeability
+    stamps_by_id: UnorderedMap<StampId, VersionedStamp>,
+    // Enables fetching of all stamps for a user
+    provider_ids_for_user: LookupMap<AccountId, UnorderedSet<ProviderId>>,
+    // Enables fetching of all users with given stamp (provider ID)
+    user_ids_for_provider: LookupMap<ProviderId, UnorderedSet<AccountId>>,
+    // Enables fetching of providers that a user has submitted (e.g. if user has submitted one malicious provider, they are likely to submit more and you'll want to be able to fetch these or filter them out of results)
+    provider_ids_for_submitter: LookupMap<AccountId, UnorderedSet<ProviderId>>,
+}
+
+/// CURRENT Registry Contract
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Contract {
@@ -56,6 +82,8 @@ pub struct Contract {
     user_ids_for_provider: LookupMap<ProviderId, UnorderedSet<AccountId>>,
     // Enables fetching of providers that a user has submitted (e.g. if user has submitted one malicious provider, they are likely to submit more and you'll want to be able to fetch these or filter them out of results)
     provider_ids_for_submitter: LookupMap<AccountId, UnorderedSet<ProviderId>>,
+    groups: UnorderedMap<String, Group>, // Maps group name to Group struct
+
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -101,6 +129,7 @@ pub enum StorageKey {
     UserIdsForProviderInner { provider_id: ProviderId },
     SubmitterIdsForProvider,
     SubmitterIdsForProviderInner { provider_id: ProviderId },
+    Groups,
 }
 
 #[near_bindgen]
@@ -137,6 +166,7 @@ impl Contract {
             provider_ids_for_user: LookupMap::new(StorageKey::ProviderIdsForUser),
             user_ids_for_provider: LookupMap::new(StorageKey::UserIdsForProvider),
             provider_ids_for_submitter: LookupMap::new(StorageKey::SubmitterIdsForProvider),
+            groups: UnorderedMap::new(StorageKey::Groups),
         }
     }
 
@@ -178,6 +208,7 @@ impl Default for Contract {
             provider_ids_for_user: LookupMap::new(StorageKey::ProviderIdsForUser),
             user_ids_for_provider: LookupMap::new(StorageKey::UserIdsForProvider),
             provider_ids_for_submitter: LookupMap::new(StorageKey::SubmitterIdsForProvider),
+            groups: UnorderedMap::new(StorageKey::Groups),
         }
     }
 }

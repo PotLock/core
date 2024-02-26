@@ -1,6 +1,8 @@
+use std::default;
+
 use crate::*;
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 pub struct ProviderId(pub String);
 
@@ -214,6 +216,7 @@ impl Contract {
         tags: Option<Vec<String>>,
         icon_url: Option<String>,
         external_url: Option<String>,
+        default_weight: Option<u32>, // owner/admin-only
     ) -> Promise {
         // generate provider ID
         let provider_id = ProviderId::new(contract_id.clone(), method_name.clone());
@@ -254,7 +257,7 @@ impl Contract {
         let submitter_id = env::signer_account_id();
 
         // create provider (but don't store yet)
-        let provider = Provider {
+        let mut provider = Provider {
             account_id_arg_name: account_id_arg_name.unwrap_or("account_id".to_string()),
             name,
             description,
@@ -269,6 +272,14 @@ impl Contract {
             submitted_at_ms: env::block_timestamp_ms(),
             stamp_count: 0,
         };
+
+        if self.is_owner_or_admin() {
+            if let Some(default_weight) = default_weight {
+                provider.default_weight = default_weight;
+            }
+
+            provider.status = ProviderStatus::Active;
+        }
 
         // TODO: consider setting status to active by default if caller is owner/admin
 

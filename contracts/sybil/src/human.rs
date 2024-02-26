@@ -23,17 +23,79 @@ impl Contract {
     }
 
     pub(crate) fn get_score_for_account_id(&self, account_id: AccountId) -> u32 {
-        // get user stamps and add up default weights
         let mut total_score = 0;
-        let user_providers = self.provider_ids_for_user.get(&account_id);
-        if let Some(user_providers) = user_providers {
+        let mut scored_providers: Vec<ProviderId> = Vec::new(); // Track which providers have been scored
+
+        // handle grouped providers
+        for group in self.groups.values() {
+            let mut group_scores: Vec<u32> = Vec::new();
+
+            // Get scores for providers in this group
+            for provider_id in group.providers.iter() {
+                if let Some(user_providers) = self.provider_ids_for_user.get(&account_id) {
+                    if user_providers.contains(provider_id) {
+                        // user has stamp
+                        if let Some(versioned_provider) = self.providers_by_id.get(provider_id) {
+                            let provider = Provider::from(versioned_provider);
+                            group_scores.push(provider.default_weight);
+                            scored_providers.push(provider_id.clone()); // Mark this provider as scored
+                        }
+                    }
+                }
+            }
+
+            // Apply the group rule to aggregate the scores
+            let group_score = match group.rule {
+                Rule::Highest => group_scores.into_iter().max().unwrap_or(0),
+                Rule::Lowest => group_scores.into_iter().min().unwrap_or(0),
+                Rule::Sum(max_value_option) => {
+                    let sum: u32 = group_scores.iter().sum(); // Calculate the sum of all scores in the group
+                    match max_value_option {
+                        Some(max_value) => std::cmp::min(sum, max_value), // If a max value is specified, cap the sum at this value
+                        None => sum, // If no max value is specified, use the calculated sum as is
+                    }
+                }
+                Rule::DiminishingReturns(factor) => {
+                    let mut sum = 0;
+                    let highest_score = *group_scores.iter().max().unwrap_or(&0); // Find the highest score in the group
+
+                    for (i, score) in group_scores.iter().enumerate() {
+                        // Apply diminishing returns factor
+                        let adjusted_score = score * (100 - (i as u32 * factor)) / 100;
+                        sum += adjusted_score;
+                    }
+
+                    // Ensure the sum doesn't fall below the highest single stamp's score
+                    std::cmp::max(sum, highest_score)
+                }
+                Rule::IncreasingReturns(factor) => {
+                    let mut sum = 0;
+                    for (i, score) in group_scores.iter().enumerate() {
+                        // Apply increasing returns factor
+                        let adjusted_score = score * (100 + (i as u32 * factor)) / 100;
+                        sum += adjusted_score;
+                    }
+                    sum
+                }
+            };
+
+            total_score += group_score;
+        }
+
+        // Handle ungrouped providers
+        if let Some(user_providers) = self.provider_ids_for_user.get(&account_id) {
             for provider_id in user_providers.iter() {
-                if let Some(versioned_provider) = self.providers_by_id.get(&provider_id) {
-                    let provider = Provider::from(versioned_provider);
-                    total_score += provider.default_weight;
+                // Skip providers that have already been scored as part of a group
+                if scored_providers.contains(&provider_id) {
+                    continue;
+                }
+
+                if let Some(provider) = self.providers_by_id.get(&provider_id) {
+                    total_score += Provider::from(provider).default_weight;
                 }
             }
         }
+
         total_score
     }
 
