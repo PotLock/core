@@ -30,15 +30,32 @@ impl Contract {
         for group in self.groups.values() {
             let mut group_scores: Vec<u32> = Vec::new();
 
-            // Get scores for providers in this group
+            // Get scores for providers in this group, ignoring expired stamps
             for provider_id in group.providers.iter() {
                 if let Some(user_providers) = self.provider_ids_for_user.get(&account_id) {
                     if user_providers.contains(provider_id) {
-                        // user has stamp
+                        // user has stamp from this provider
                         if let Some(versioned_provider) = self.providers_by_id.get(provider_id) {
                             let provider = Provider::from(versioned_provider);
-                            group_scores.push(provider.default_weight);
-                            scored_providers.push(provider_id.clone()); // Mark this provider as scored
+                            // Check stamp validity
+                            // let stamp_id = StampId::new(account_id.clone(), provider_id.clone());
+                            // if let Some(stamp) = self.stamps_by_id.get(&stamp_id) {
+                            //     if stamp.is_expired() {
+                            //         continue;
+                            //     }
+                            // }
+                            if provider.stamp_validity_ms.map_or(true, |validity_period| {
+                                // let stamp_creation_time = provider.creation_time_ms.unwrap_or(0);
+                                let stamp_id =
+                                    StampId::new(account_id.clone(), provider_id.clone());
+                                let stamp = Stamp::from(
+                                    self.stamps_by_id.get(&stamp_id).expect("stamp not found"),
+                                );
+                                env::block_timestamp_ms() <= stamp.validated_at_ms + validity_period
+                            }) {
+                                group_scores.push(provider.default_weight);
+                                scored_providers.push(provider_id.clone()); // Mark this provider as scored
+                            }
                         }
                     }
                 }

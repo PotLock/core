@@ -66,7 +66,7 @@ pub struct ProviderV1 {
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
-pub struct Provider {
+pub struct ProviderV2 {
     // NB: contract address/ID and method name are contained in the Provider's ID (see `ProviderId`) so do not need to be stored here
     /// Name of account ID arg, e.g. `"account_id"` or `"accountId"` or `"account"`
     pub account_id_arg_name: String,
@@ -96,9 +96,44 @@ pub struct Provider {
     pub stamp_count: u64,
 }
 
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub struct Provider {
+    // NB: contract address/ID and method name are contained in the Provider's ID (see `ProviderId`) so do not need to be stored here
+    /// Name of account ID arg, e.g. `"account_id"` or `"accountId"` or `"account"`
+    pub account_id_arg_name: String,
+    /// Name of the provider, e.g. "I Am Human"
+    pub name: String,
+    /// Description of the provider
+    pub description: Option<String>,
+    /// Status of the provider
+    pub status: ProviderStatus,
+    /// Admin notes, e.g. reason for flagging or marking inactive
+    pub admin_notes: Option<String>,
+    /// Default weight for this provider, e.g. 100
+    pub default_weight: u32,
+    /// Custom gas amount required
+    pub gas: Option<u64>,
+    /// Optional tags
+    pub tags: Option<Vec<String>>,
+    /// Optional icon URL
+    pub icon_url: Option<String>,
+    /// Optional external URL
+    pub external_url: Option<String>,
+    /// User who submitted this provider
+    pub submitted_by: AccountId,
+    /// Timestamp of when this provider was submitted
+    pub submitted_at_ms: TimestampMs,
+    /// Total number of times this provider has been used successfully
+    pub stamp_count: u64,
+    /// Milliseconds that stamps from this provider are valid for before they expire
+    pub stamp_validity_ms: Option<u64>,
+}
+
 #[derive(BorshSerialize, BorshDeserialize)]
 pub enum VersionedProvider {
     V1(ProviderV1),
+    V2(ProviderV2),
     Current(Provider),
 }
 
@@ -119,6 +154,23 @@ impl From<VersionedProvider> for Provider {
                 submitted_by: v1.submitted_by,
                 submitted_at_ms: v1.submitted_at_ms,
                 stamp_count: v1.stamp_count,
+                stamp_validity_ms: None,
+            },
+            VersionedProvider::V2(v2) => Provider {
+                account_id_arg_name: v2.account_id_arg_name,
+                name: v2.name,
+                description: v2.description,
+                status: v2.status,
+                admin_notes: v2.admin_notes,
+                default_weight: v2.default_weight,
+                gas: v2.gas,
+                tags: v2.tags,
+                icon_url: v2.icon_url,
+                external_url: v2.external_url,
+                submitted_by: v2.submitted_by,
+                submitted_at_ms: v2.submitted_at_ms,
+                stamp_count: v2.stamp_count,
+                stamp_validity_ms: None,
             },
             VersionedProvider::Current(current) => current,
         }
@@ -216,6 +268,7 @@ impl Contract {
         tags: Option<Vec<String>>,
         icon_url: Option<String>,
         external_url: Option<String>,
+        stamp_validity_ms: Option<u64>,
         default_weight: Option<u32>, // owner/admin-only
     ) -> Promise {
         // generate provider ID
@@ -268,6 +321,7 @@ impl Contract {
             tags,
             icon_url,
             external_url,
+            stamp_validity_ms,
             submitted_by: submitter_id.clone(),
             submitted_at_ms: env::block_timestamp_ms(),
             stamp_count: 0,
@@ -376,6 +430,7 @@ impl Contract {
         tags: Option<Vec<String>>,
         icon_url: Option<String>,
         external_url: Option<String>,
+        stamp_validity_ms: Option<u64>,
         default_weight: Option<u32>,    // owner/admin-only
         status: Option<ProviderStatus>, // owner/admin-only
         admin_notes: Option<String>,    // owner/admin-only
@@ -432,6 +487,9 @@ impl Contract {
             assert_valid_provider_external_url(&external_url);
             provider.external_url = Some(external_url);
         }
+        if let Some(stamp_validity_ms) = stamp_validity_ms {
+            provider.stamp_validity_ms = Some(stamp_validity_ms);
+        }
 
         // owner/admin-only
         if self.is_owner_or_admin() {
@@ -441,18 +499,6 @@ impl Contract {
             if let Some(status) = status {
                 if status != provider.status {
                     let old_status = provider.status.clone();
-                    // insert into new status set
-                    match status {
-                        ProviderStatus::Pending => {
-                            self.pending_provider_ids.insert(&provider_id);
-                        }
-                        ProviderStatus::Active => {
-                            self.active_provider_ids.insert(&provider_id);
-                        }
-                        ProviderStatus::Deactivated => {
-                            self.deactivated_provider_ids.insert(&provider_id);
-                        }
-                    }
                     // remove from old status set
                     match old_status {
                         ProviderStatus::Pending => {

@@ -8,7 +8,7 @@ const STAMP_ID_DELIMITER: &str = "#"; // separates user_id and provider_id in St
 
 impl StampId {
     // Generate StampId ("{USER_ID}#{PROVIDER_ID}") from user_id and provider_id
-    fn new(user_id: AccountId, provider_id: ProviderId) -> Self {
+    pub fn new(user_id: AccountId, provider_id: ProviderId) -> Self {
         StampId(format!(
             "{}{}{}",
             user_id, STAMP_ID_DELIMITER, provider_id.0
@@ -20,7 +20,7 @@ impl StampId {
 #[serde(crate = "near_sdk::serde")]
 pub struct Stamp {
     // stored at user_id#provider_id
-    validated_at_ms: TimestampMs,
+    pub validated_at_ms: TimestampMs,
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
