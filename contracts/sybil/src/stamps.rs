@@ -37,7 +37,7 @@ impl From<VersionedStamp> for Stamp {
 }
 
 /// Ephermal stamp data returned to user (not stored in contract)
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
 pub struct StampExternal {
     user_id: AccountId,

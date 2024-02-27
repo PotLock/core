@@ -1,10 +1,11 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap, UnorderedSet};
-use near_sdk::json_types::{U128, U64};
+use near_sdk::json_types::Base64VecU8;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
-    env, log, near_bindgen, require, serde_json::json, AccountId, Balance, BorshStorageKey, Gas,
-    PanicOnDefault, Promise, PromiseError, PromiseResult,
+    env, log, near_bindgen, require,
+    serde_json::{json, Value as JsonValue},
+    AccountId, Balance, BorshStorageKey, Gas, PanicOnDefault, Promise, PromiseError,
 };
 
 pub mod admin;
@@ -83,7 +84,6 @@ pub struct Contract {
     // Enables fetching of providers that a user has submitted (e.g. if user has submitted one malicious provider, they are likely to submit more and you'll want to be able to fetch these or filter them out of results)
     provider_ids_for_submitter: LookupMap<AccountId, UnorderedSet<ProviderId>>,
     groups: UnorderedMap<String, Group>, // Maps group name to Group struct
-
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]

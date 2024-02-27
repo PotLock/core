@@ -1,6 +1,5 @@
-use std::default;
-
 use crate::*;
+// use serde_json::{json, Value as JsonValue};
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
@@ -128,6 +127,8 @@ pub struct Provider {
     pub stamp_count: u64,
     /// Milliseconds that stamps from this provider are valid for before they expire
     pub stamp_validity_ms: Option<u64>,
+    /// Custom args as Base64VecU8
+    pub custom_args: Option<Base64VecU8>,
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -155,6 +156,7 @@ impl From<VersionedProvider> for Provider {
                 submitted_at_ms: v1.submitted_at_ms,
                 stamp_count: v1.stamp_count,
                 stamp_validity_ms: None,
+                custom_args: None,
             },
             VersionedProvider::V2(v2) => Provider {
                 account_id_arg_name: v2.account_id_arg_name,
@@ -171,6 +173,7 @@ impl From<VersionedProvider> for Provider {
                 submitted_at_ms: v2.submitted_at_ms,
                 stamp_count: v2.stamp_count,
                 stamp_validity_ms: None,
+                custom_args: None,
             },
             VersionedProvider::Current(current) => current,
         }
@@ -178,7 +181,7 @@ impl From<VersionedProvider> for Provider {
 }
 
 // external/ephemeral Provider that contains contract_id and method_name
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
 pub struct ProviderExternal {
     /// Provider ID
@@ -213,6 +216,10 @@ pub struct ProviderExternal {
     pub submitted_at_ms: TimestampMs,
     /// Total number of times this provider has been used successfully
     pub stamp_count: u64,
+    /// Milliseconds that stamps from this provider are valid for before they expire
+    pub stamp_validity_ms: Option<u64>,
+    /// Custom args as readable JSON
+    pub custom_args: Option<JsonValue>, // This will hold the readable JSON
 }
 
 impl ProviderExternal {
@@ -250,6 +257,15 @@ impl ProviderExternal {
             submitted_by: provider.submitted_by,
             submitted_at_ms: provider.submitted_at_ms,
             stamp_count: provider.stamp_count,
+            stamp_validity_ms: provider.stamp_validity_ms,
+            custom_args: provider.custom_args.as_ref().map(|base64_data| {
+                // Decode Base64VecU8 to Vec<u8>
+                let bytes = &base64_data.0; // Access the Vec<u8> directly
+
+                // Parse the byte array as JSON
+                near_sdk::serde_json::from_slice(bytes)
+                    .unwrap_or_else(|_| json!({ "error": "Invalid JSON" }))
+            }),
         }
     }
 }
@@ -269,6 +285,7 @@ impl Contract {
         icon_url: Option<String>,
         external_url: Option<String>,
         stamp_validity_ms: Option<u64>,
+        custom_args: Option<Base64VecU8>,
         default_weight: Option<u32>, // owner/admin-only
     ) -> Promise {
         // generate provider ID
@@ -325,6 +342,7 @@ impl Contract {
             submitted_by: submitter_id.clone(),
             submitted_at_ms: env::block_timestamp_ms(),
             stamp_count: 0,
+            custom_args,
         };
 
         if self.is_owner_or_admin() {
@@ -341,9 +359,28 @@ impl Contract {
         let gas = Gas(gas.unwrap_or(XCC_GAS_DEFAULT));
         // Create a HashMap and insert the dynamic account_id_arg_name and value
         let mut args_map = std::collections::HashMap::new();
+
+        if let Some(custom_args_base64) = provider.clone().custom_args {
+            // Decode custom_args from Base64 to Vec<u8>, then to String, and finally parse as JSON Value
+            let custom_args_bytes = custom_args_base64.0;
+            let custom_args_str =
+                String::from_utf8(custom_args_bytes).expect("Invalid UTF-8 sequence");
+            let custom_args_json: JsonValue =
+                near_sdk::serde_json::from_str(&custom_args_str).expect("Invalid JSON format");
+
+            // Ensure custom_args_json is an object before attempting to spread its contents
+            if let JsonValue::Object(contents) = custom_args_json {
+                for (key, value) in contents {
+                    // Spread custom_args into args_map, converting JSON Values back to Strings or other appropriate formats
+                    args_map.insert(key, value);
+                }
+            }
+        }
+
+        // Wrap the account_id string in a serde_json::Value::String before inserting
         args_map.insert(
             provider.account_id_arg_name.clone(),
-            env::current_account_id().to_string(),
+            near_sdk::serde_json::Value::String(env::current_account_id().to_string()),
         );
 
         // Serialize the HashMap to JSON string and then to bytes
@@ -407,14 +444,14 @@ impl Contract {
                     // Response type is incorrect. Refund deposit.
                     log!("Received invalid response type for provider verification. Returning deposit.");
                     Promise::new(submitter_id).transfer(attached_deposit);
-                    return None;
+                    None
                 }
             }
             Err(_) => {
                 // Error occurred in cross-contract call. Refund deposit.
                 log!("Error occurred while verifying provider; refunding deposit");
                 Promise::new(submitter_id).transfer(attached_deposit);
-                return None;
+                None
             }
         }
     }
@@ -431,6 +468,7 @@ impl Contract {
         icon_url: Option<String>,
         external_url: Option<String>,
         stamp_validity_ms: Option<u64>,
+        custom_args: Option<Base64VecU8>,
         default_weight: Option<u32>,    // owner/admin-only
         status: Option<ProviderStatus>, // owner/admin-only
         admin_notes: Option<String>,    // owner/admin-only
@@ -489,6 +527,9 @@ impl Contract {
         }
         if let Some(stamp_validity_ms) = stamp_validity_ms {
             provider.stamp_validity_ms = Some(stamp_validity_ms);
+        }
+        if let Some(custom_args) = custom_args {
+            provider.custom_args = Some(custom_args);
         }
 
         // owner/admin-only
