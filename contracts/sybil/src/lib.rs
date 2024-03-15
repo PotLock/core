@@ -17,6 +17,7 @@ pub mod providers;
 pub mod source;
 pub mod stamps;
 pub mod utils;
+pub mod validation;
 pub use crate::admin::*;
 pub use crate::constants::*;
 pub use crate::events::*;
@@ -27,6 +28,7 @@ pub use crate::providers::*;
 pub use crate::source::*;
 pub use crate::stamps::*;
 pub use crate::utils::*;
+pub use crate::validation::*;
 
 /// log prefix constant
 pub const EVENT_JSON_PREFIX: &str = "EVENT_JSON:";
@@ -40,7 +42,9 @@ pub struct Contract {
     owner: AccountId,
     admins: UnorderedSet<AccountId>,
     providers_by_id: UnorderedMap<ProviderId, VersionedProvider>,
-    // TODO: add active providers count, or sets of active provider IDs for easier targeted fetching
+    pending_provider_ids: UnorderedSet<ProviderId>,
+    active_provider_ids: UnorderedSet<ProviderId>,
+    deactivated_provider_ids: UnorderedSet<ProviderId>,
     default_provider_ids: UnorderedSet<ProviderId>,
     default_human_threshold: u32,
     // MAPPINGS
@@ -76,6 +80,9 @@ pub struct Config {
     pub admins: Vec<AccountId>,
     pub default_provider_ids: Vec<ProviderId>,
     pub default_human_threshold: u32,
+    pub pending_provider_count: u64, // may want to change these to U64 (string) to avoid JSON overflow, but this is highly unlikely. Easy to change later since this is ephemeral.
+    pub active_provider_count: u64,
+    pub deactivated_provider_count: u64,
 }
 
 #[derive(BorshSerialize, BorshStorageKey)]
@@ -83,6 +90,9 @@ pub enum StorageKey {
     SourceMetadata,
     Admins,
     ProvidersById,
+    PendingProviderIds,
+    ActiveProviderIds,
+    DeactivatedProviderIds,
     DefaultProviderIds,
     StampsById,
     ProviderIdsForUser,
@@ -118,6 +128,9 @@ impl Contract {
                 StorageKey::Admins,
             ),
             providers_by_id: UnorderedMap::new(StorageKey::ProvidersById),
+            pending_provider_ids: UnorderedSet::new(StorageKey::PendingProviderIds),
+            active_provider_ids: UnorderedSet::new(StorageKey::ActiveProviderIds),
+            deactivated_provider_ids: UnorderedSet::new(StorageKey::DeactivatedProviderIds),
             default_provider_ids: UnorderedSet::new(StorageKey::DefaultProviderIds),
             default_human_threshold: 0,
             stamps_by_id: UnorderedMap::new(StorageKey::StampsById),
@@ -133,6 +146,9 @@ impl Contract {
             admins: self.admins.to_vec(),
             default_provider_ids: self.default_provider_ids.to_vec(),
             default_human_threshold: self.default_human_threshold,
+            pending_provider_count: self.pending_provider_ids.len(),
+            active_provider_count: self.active_provider_ids.len(),
+            deactivated_provider_count: self.deactivated_provider_ids.len(),
         }
     }
 }
@@ -153,6 +169,9 @@ impl Default for Contract {
             owner: AccountId::new_unchecked("".to_string()),
             admins: account_vec_to_set(vec![], StorageKey::Admins),
             providers_by_id: UnorderedMap::new(StorageKey::ProvidersById),
+            pending_provider_ids: UnorderedSet::new(StorageKey::PendingProviderIds),
+            active_provider_ids: UnorderedSet::new(StorageKey::ActiveProviderIds),
+            deactivated_provider_ids: UnorderedSet::new(StorageKey::DeactivatedProviderIds),
             default_provider_ids: UnorderedSet::new(StorageKey::DefaultProviderIds),
             default_human_threshold: 0,
             stamps_by_id: UnorderedMap::new(StorageKey::StampsById),

@@ -4,7 +4,7 @@ use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, log, near_bindgen, require, serde_json::json, AccountId, Balance, BorshStorageKey, Gas,
-    PanicOnDefault, Promise, PromiseError,
+    PanicOnDefault, Promise, PromiseError, PromiseOrValue,
 };
 use std::collections::HashMap;
 
@@ -20,6 +20,7 @@ pub mod internal;
 pub mod payouts;
 pub mod source;
 pub mod utils;
+pub mod validation;
 pub use crate::admin::*;
 pub use crate::applications::*;
 pub use crate::config::*;
@@ -30,6 +31,7 @@ pub use crate::internal::*;
 pub use crate::payouts::*;
 pub use crate::source::*;
 pub use crate::utils::*;
+pub use crate::validation::*;
 
 // TODO: move Provider stuff elsewhere?
 #[derive(
@@ -49,8 +51,8 @@ pub struct ProviderId(pub String);
 
 pub const PROVIDER_ID_DELIMITER: &str = ":"; // separates contract_id and method_name in ProviderId // TODO: move to constants.rs?
 
-// Generate ProviderId ("{CONTRACT_ADDRESS}:{METHOD_NAME}") from contract_id and method_name
 impl ProviderId {
+    /// Generate ProviderId ("`{CONTRACT_ADDRESS}:{METHOD_NAME}`") from contract_id and method_name
     fn new(contract_id: String, method_name: String) -> Self {
         ProviderId(format!(
             "{}{}{}",
@@ -58,6 +60,7 @@ impl ProviderId {
         ))
     }
 
+    /// Decompose ProviderId into contract_id and method_name
     pub fn decompose(&self) -> (String, String) {
         let parts: Vec<&str> = self.0.split(PROVIDER_ID_DELIMITER).collect();
         if parts.len() != 2 {
@@ -65,34 +68,24 @@ impl ProviderId {
         }
         (parts[0].to_string(), parts[1].to_string())
     }
+
+    /// Validate (individual elements cannot be empty, cannot contain PROVIDER_ID_DELIMITER)
+    pub fn validate(&self) {
+        let (contract_id, method_name) = self.decompose();
+        assert!(!contract_id.is_empty(), "Contract ID cannot be empty");
+        assert!(!method_name.is_empty(), "Method name cannot be empty");
+        assert!(
+            !contract_id.contains(PROVIDER_ID_DELIMITER),
+            "Contract ID cannot contain delimiter ('{}')",
+            PROVIDER_ID_DELIMITER
+        );
+        assert!(
+            !method_name.contains(PROVIDER_ID_DELIMITER),
+            "Method name cannot contain delimiter ('{}')",
+            PROVIDER_ID_DELIMITER
+        );
+    }
 }
-
-// #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
-// #[serde(crate = "near_sdk::serde")]
-// pub struct SybilProvider {
-//     // NB: contract address/ID and method name are contained in the Provider's ID (see `ProviderId`) so do not need to be stored here
-//     /// Weight for this provider, e.g. 100
-//     pub default_weight: u32,
-//     // TODO: consider adding optional `gas`, `type`/`description` (e.g. "face scan", "twitter", "captcha", etc.)
-// }
-
-// #[derive(BorshSerialize, BorshDeserialize)]
-// pub enum VersionedProvider {
-//     Current(Provider),
-// }
-
-// impl From<VersionedProvider> for Provider {
-//     fn from(provider: VersionedProvider) -> Self {
-//         match provider {
-//             VersionedProvider::Current(current) => current,
-//         }
-//     }
-// }
-
-// // TODO: move this elsewhere
-// #[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize, Clone)]
-// #[serde(crate = "near_sdk::serde")]
-// pub struct SybilConfig
 
 /// Sybil provider weight
 type SybilProviderWeight = u32;
@@ -106,19 +99,9 @@ pub struct CustomSybilCheck {
     weight: SybilProviderWeight,
 }
 
-// impl CustomSybilCheck {
-//     pub fn to_stored(contract_id: AccountId, method_name: String, weight: SybilProviderWeight) -> Self {
-//         Self {
-//             contract_id,
-//             method_name,
-//             weight,
-//         }
-//     }
-// }
-
 /// Pot Contract (funding round)
 #[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Contract {
     // PERMISSIONED ACCOUNTS
     /// Owner of the contract
@@ -153,7 +136,7 @@ pub struct Contract {
     /// * Optional because not all Pots will require registration, and those that do might set after deployment.
     registry_provider: LazyOption<ProviderId>,
     /// Minimum amount that can be donated to the matching pool
-    min_matching_pool_donation_amount: U128,
+    min_matching_pool_donation_amount: u128,
 
     // SYBIL RESISTANCE
     /// Sybil contract address & method name that will be called to verify humanness. If `None`, no checks will be made.
@@ -170,17 +153,18 @@ pub struct Contract {
     referral_fee_public_round_basis_points: u32,
     /// Chef's fee for managing the round. Gets taken out of each donation as they come in and are paid out
     chef_fee_basis_points: u32,
-    // TODO: ADD MAX PROTOCOL FEE BASIS POINTS? or as const so it can't be updated without code deployment?
 
     // FUNDS & BALANCES
     /// Total matching pool donations
-    total_matching_pool_donations: U128,
+    total_matching_pool_donations: u128,
     /// Amount of matching funds available (not yet paid out)
-    matching_pool_balance: U128,
+    matching_pool_balance: u128,
     /// Total public donations
-    total_public_donations: U128,
+    total_public_donations: u128,
 
     // PAYOUTS
+    /// Length of cooldown period (in ms) after which payouts can be set by Chef
+    cooldown_period_ms: u64,
     /// Cooldown period starts when Chef sets payouts
     cooldown_end_ms: LazyOption<TimestampMs>,
     /// Indicates whether all projects been paid out (this would be considered the "end-of-lifecycle" for the Pot)
@@ -204,6 +188,8 @@ pub struct Contract {
     // payouts
     payouts_by_id: UnorderedMap<PayoutId, VersionedPayout>, // can iterate over this to get all payouts
     payout_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<PayoutId>>,
+    /// Challenges to payouts (if any) made during cooldown period
+    payouts_challenges: UnorderedMap<AccountId, VersionedPayoutsChallenge>,
 
     // OTHER
     /// contract ID + method name of protocol config provider that should be queried for protocol fee basis points and protocol fee recipient account.
@@ -237,6 +223,7 @@ pub enum StorageKey {
     PayoutsById,
     PayoutIdsByProjectId,
     PayoutIdsByProjectIdInner { project_id: ProjectId },
+    PayoutsChallenges,
 }
 
 #[near_bindgen]
@@ -258,6 +245,7 @@ impl Contract {
         public_round_end_ms: TimestampMs,
         registry_provider: Option<ProviderId>,
         min_matching_pool_donation_amount: Option<U128>,
+        cooldown_period_ms: Option<u64>,
 
         // sybil resistance
         sybil_wrapper_provider: Option<ProviderId>,
@@ -273,7 +261,9 @@ impl Contract {
         protocol_config_provider: Option<ProviderId>,
         source_metadata: ContractSourceMetadata,
     ) -> Self {
-        assert!(!env::state_exists(), "Already initialized");
+        if let Some(cooldown_period_ms) = cooldown_period_ms {
+            assert_valid_cooldown_period_ms(cooldown_period_ms);
+        }
         Self {
             // permissioned accounts
             owner: owner.unwrap_or(env::signer_account_id()),
@@ -301,7 +291,9 @@ impl Contract {
                 StorageKey::RegistryProvider,
                 registry_provider.as_ref(),
             ),
-            min_matching_pool_donation_amount: min_matching_pool_donation_amount.unwrap_or(U128(1)), // default to 1 YoctoNEAR
+            min_matching_pool_donation_amount: min_matching_pool_donation_amount
+                .unwrap_or(U128(1))
+                .into(), // default to 1 YoctoNEAR
 
             // sybil resistance
             sybil_wrapper_provider: LazyOption::new(
@@ -323,11 +315,12 @@ impl Contract {
             chef_fee_basis_points,
 
             // funds and balances
-            total_matching_pool_donations: U128(0),
-            matching_pool_balance: U128(0),
-            total_public_donations: U128(0),
+            total_matching_pool_donations: 0,
+            matching_pool_balance: 0,
+            total_public_donations: 0,
 
             // payouts
+            cooldown_period_ms: cooldown_period_ms.unwrap_or(DEFAULT_COOLDOWN_PERIOD_MS),
             cooldown_end_ms: LazyOption::new(StorageKey::CooldownEndMs, None),
             all_paid_out: false,
 
@@ -341,6 +334,7 @@ impl Contract {
             donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
             payout_ids_by_project_id: LookupMap::new(StorageKey::PayoutIdsByProjectId),
             payouts_by_id: UnorderedMap::new(StorageKey::PayoutsById),
+            payouts_challenges: UnorderedMap::new(StorageKey::PayoutsChallenges),
 
             // other
             protocol_config_provider: LazyOption::new(
@@ -358,49 +352,5 @@ impl Contract {
         let block_timestamp_ms = env::block_timestamp_ms();
         block_timestamp_ms >= self.public_round_start_ms
             && block_timestamp_ms < self.public_round_end_ms
-    }
-}
-
-// TODO: not sure why this is necessary
-impl Default for Contract {
-    fn default() -> Self {
-        Self {
-            chef: LazyOption::new(StorageKey::Chef, None),
-            owner: env::signer_account_id(),
-            admins: UnorderedSet::new(StorageKey::Admins),
-            pot_name: "".to_string(),
-            pot_description: "".to_string(),
-            max_projects: 0,
-            base_currency: AccountId::new_unchecked("near".to_string()),
-            application_start_ms: 0,
-            application_end_ms: 0,
-            public_round_start_ms: 0,
-            public_round_end_ms: 0,
-            deployed_by: env::signer_account_id(),
-            registry_provider: LazyOption::new(StorageKey::RegistryProvider, None),
-            min_matching_pool_donation_amount: U128(1),
-            sybil_wrapper_provider: LazyOption::new(StorageKey::SybilContractId, None),
-            custom_sybil_checks: LazyOption::new(StorageKey::CustomSybilChecks, None),
-            custom_min_threshold_score: LazyOption::new(StorageKey::CustomMinThresholdScore, None),
-            referral_fee_matching_pool_basis_points: 0,
-            referral_fee_public_round_basis_points: 0,
-            chef_fee_basis_points: 0,
-            total_matching_pool_donations: U128(0),
-            matching_pool_balance: U128(0),
-            total_public_donations: U128(0),
-            cooldown_end_ms: LazyOption::new(StorageKey::CooldownEndMs, None),
-            all_paid_out: false,
-            applications_by_id: UnorderedMap::new(StorageKey::ApplicationsById),
-            approved_application_ids: UnorderedSet::new(StorageKey::ApprovedApplicationIds),
-            donations_by_id: UnorderedMap::new(StorageKey::DonationsById),
-            public_round_donation_ids: UnorderedSet::new(StorageKey::PublicRoundDonationIds),
-            matching_pool_donation_ids: UnorderedSet::new(StorageKey::MatchingPoolDonationIds),
-            donation_ids_by_project_id: LookupMap::new(StorageKey::DonationIdsByProjectId),
-            donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
-            payout_ids_by_project_id: LookupMap::new(StorageKey::PayoutIdsByProjectId),
-            payouts_by_id: UnorderedMap::new(StorageKey::PayoutsById),
-            protocol_config_provider: LazyOption::new(StorageKey::ProtocolConfigProvider, None),
-            contract_source_metadata: LazyOption::new(StorageKey::SourceMetadata, None),
-        }
     }
 }

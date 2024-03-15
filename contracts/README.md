@@ -31,11 +31,7 @@ Provides a means to donate NEAR or FTs (soon) to any account.
 
 ### [Sybil Provider Simulator](sybil_provider_simulator)
 
-Not technically a part of the PotLock stack, this contract simulates a 3rd-party Sybil Resistance Provider with two functions, `assert_true` and `assert_false`, that take an `account_id` parameter and return a boolean.
-
-Two identical instances currently deployed at the following addresses (testnet):
-- **dev-1701726065518-26778083533291**
-- **dev-1701726214138-35930370530881**
+Not technically a part of the PotLock stack, this contract simulates a 3rd-party Sybil Resistance Provider.
 
 
 ## Tests

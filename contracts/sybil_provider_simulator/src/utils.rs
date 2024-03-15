@@ -1,16 +1,5 @@
 use crate::*;
 
-pub(crate) fn account_vec_to_set(
-    account_vec: Vec<AccountId>,
-    storage_key: StorageKey,
-) -> UnorderedSet<AccountId> {
-    let mut set = UnorderedSet::new(storage_key);
-    for element in account_vec.iter() {
-        set.insert(element);
-    }
-    set
-}
-
 pub fn calculate_required_storage_deposit(initial_storage_usage: u64) -> Balance {
     let storage_used = env::storage_usage() - initial_storage_usage;
     log!("Storage used: {} bytes", storage_used);
@@ -37,11 +26,10 @@ pub fn refund_deposit(initial_storage_usage: u64) {
     } else {
         // storage was freed up; caller should be refunded for what they freed up, in addition to the deposit they sent
         let storage_freed = initial_storage_usage - env::storage_usage();
-        log!("Storage freed: {} bytes", storage_freed);
         let cost_freed = env::storage_byte_cost() * Balance::from(storage_freed);
         refund += cost_freed;
     }
-    if refund > 0 {
+    if refund > 1 {
         Promise::new(env::predecessor_account_id()).transfer(refund);
     }
 }

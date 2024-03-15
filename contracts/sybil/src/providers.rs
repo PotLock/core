@@ -24,18 +24,56 @@ impl ProviderId {
     }
 }
 
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub enum ProviderStatus {
+    Pending,
+    Active,
+    Deactivated,
+}
+
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
-pub struct Provider {
+pub struct ProviderV1 {
     // NB: contract address/ID and method name are contained in the Provider's ID (see `ProviderId`) so do not need to be stored here
     /// Name of the provider, e.g. "I Am Human"
     pub name: String,
     /// Description of the provider
     pub description: Option<String>,
-    /// Whether this provider is active (updated by admin)
-    pub is_active: bool,
-    /// Whether this provider is flagged (updated by admin)
-    pub is_flagged: bool,
+    /// Status of the provider
+    pub status: ProviderStatus,
+    /// Admin notes, e.g. reason for flagging or marking inactive
+    pub admin_notes: Option<String>,
+    /// Default weight for this provider, e.g. 100
+    pub default_weight: u32,
+    /// Custom gas amount required
+    pub gas: Option<u64>,
+    /// Optional tags
+    pub tags: Option<Vec<String>>,
+    /// Optional icon URL
+    pub icon_url: Option<String>,
+    /// Optional external URL
+    pub external_url: Option<String>,
+    /// User who submitted this provider
+    pub submitted_by: AccountId,
+    /// Timestamp of when this provider was submitted
+    pub submitted_at_ms: TimestampMs,
+    /// Total number of times this provider has been used successfully
+    pub stamp_count: u64,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub struct Provider {
+    // NB: contract address/ID and method name are contained in the Provider's ID (see `ProviderId`) so do not need to be stored here
+    /// Name of account ID arg, e.g. `"account_id"` or `"accountId"` or `"account"`
+    pub account_id_arg_name: String,
+    /// Name of the provider, e.g. "I Am Human"
+    pub name: String,
+    /// Description of the provider
+    pub description: Option<String>,
+    /// Status of the provider
+    pub status: ProviderStatus,
     /// Admin notes, e.g. reason for flagging or marking inactive
     pub admin_notes: Option<String>,
     /// Default weight for this provider, e.g. 100
@@ -58,12 +96,28 @@ pub struct Provider {
 
 #[derive(BorshSerialize, BorshDeserialize)]
 pub enum VersionedProvider {
+    V1(ProviderV1),
     Current(Provider),
 }
 
 impl From<VersionedProvider> for Provider {
     fn from(provider: VersionedProvider) -> Self {
         match provider {
+            VersionedProvider::V1(v1) => Provider {
+                account_id_arg_name: "account_id".to_string(),
+                name: v1.name,
+                description: v1.description,
+                status: v1.status,
+                admin_notes: v1.admin_notes,
+                default_weight: v1.default_weight,
+                gas: v1.gas,
+                tags: v1.tags,
+                icon_url: v1.icon_url,
+                external_url: v1.external_url,
+                submitted_by: v1.submitted_by,
+                submitted_at_ms: v1.submitted_at_ms,
+                stamp_count: v1.stamp_count,
+            },
             VersionedProvider::Current(current) => current,
         }
     }
@@ -79,14 +133,14 @@ pub struct ProviderExternal {
     pub contract_id: String,
     /// Method name of the external contract that is the source of this provider
     pub method_name: String,
+    /// Account ID arg name
+    pub account_id_arg_name: String,
     /// Name of the provider, e.g. "I Am Human"
     pub name: String,
     /// Description of the provider
     pub description: Option<String>,
-    /// Whether this provider is active (updated by admin)
-    pub is_active: bool,
-    /// Whether this provider is flagged (updated by admin)
-    pub is_flagged: bool,
+    /// Status of the provider
+    pub status: ProviderStatus,
     /// Admin notes, e.g. reason for flagging or marking inactive
     pub admin_notes: Option<String>,
     /// Default weight for this provider, e.g. 100
@@ -129,11 +183,11 @@ impl ProviderExternal {
             provider_id: ProviderId(provider_id.to_string()),
             contract_id: parts[0].to_string(),
             method_name: parts[1].to_string(),
+            account_id_arg_name: provider.account_id_arg_name,
             name: provider.name,
             default_weight: provider.default_weight,
             description: provider.description,
-            is_active: provider.is_active,
-            is_flagged: provider.is_flagged,
+            status: provider.status,
             admin_notes: provider.admin_notes,
             gas: provider.gas,
             tags: provider.tags,
@@ -153,72 +207,167 @@ impl Contract {
         &mut self,
         contract_id: String,
         method_name: String,
+        account_id_arg_name: Option<String>, // defaults to "account_id" if None
         name: String,
         description: Option<String>,
         gas: Option<u64>,
         tags: Option<Vec<String>>,
         icon_url: Option<String>,
         external_url: Option<String>,
-    ) -> ProviderExternal {
-        // Get initial storage usage so user can pay for what they use
-        let initial_storage_usage = env::storage_usage();
-
+    ) -> Promise {
         // generate provider ID
-        let provider_id = ProviderId::new(contract_id, method_name);
+        let provider_id = ProviderId::new(contract_id.clone(), method_name.clone());
 
         // check that provider doesn't already exist
         if let Some(_) = self.providers_by_id.get(&provider_id) {
             env::panic_str(&format!("Provider {:#?} already exists", provider_id));
         }
 
-        // create provider
-        let mut provider = Provider {
+        // validate name
+        assert_valid_provider_name(&name);
+
+        // validate description
+        if let Some(description) = &description {
+            assert_valid_provider_description(description);
+        }
+
+        // validate gas
+        if let Some(gas) = &gas {
+            assert_valid_provider_gas(gas);
+        }
+
+        // validate tags
+        if let Some(tags) = &tags {
+            assert_valid_provider_tags(tags);
+        }
+
+        // validate icon_url
+        if let Some(icon_url) = &icon_url {
+            assert_valid_provider_icon_url(icon_url);
+        }
+
+        // validate external_url
+        if let Some(external_url) = &external_url {
+            assert_valid_provider_external_url(external_url);
+        }
+
+        let submitter_id = env::signer_account_id();
+
+        // create provider (but don't store yet)
+        let provider = Provider {
+            account_id_arg_name: account_id_arg_name.unwrap_or("account_id".to_string()),
             name,
             description,
-            is_active: false,
-            is_flagged: false,
+            status: ProviderStatus::Pending,
             admin_notes: None,
-            default_weight: 100,
+            default_weight: PROVIDER_DEFAULT_WEIGHT,
             gas,
             tags,
             icon_url,
             external_url,
-            submitted_by: env::signer_account_id(),
+            submitted_by: submitter_id.clone(),
             submitted_at_ms: env::block_timestamp_ms(),
             stamp_count: 0,
         };
 
-        // set provider to active if caller is owner/admin
-        if self.is_owner_or_admin() {
-            provider.is_active = true;
-        }
+        // TODO: consider setting status to active by default if caller is owner/admin
 
-        // create & store provider
-        self.providers_by_id.insert(
-            &provider_id,
-            &VersionedProvider::from(VersionedProvider::Current(provider.clone())),
+        // validate contract ID, method name and account ID arg name
+        let gas = Gas(gas.unwrap_or(XCC_GAS_DEFAULT));
+        // Create a HashMap and insert the dynamic account_id_arg_name and value
+        let mut args_map = std::collections::HashMap::new();
+        args_map.insert(
+            provider.account_id_arg_name.clone(),
+            env::current_account_id().to_string(),
         );
 
-        // TODO: consider adding event logging
+        // Serialize the HashMap to JSON string and then to bytes
+        let args = near_sdk::serde_json::to_string(&args_map)
+            .expect("Failed to serialize args")
+            .into_bytes();
 
-        // refund any unused deposit
-        refund_deposit(initial_storage_usage);
+        Promise::new(AccountId::new_unchecked(contract_id.clone()))
+            .function_call(method_name.clone(), args, NO_DEPOSIT, gas)
+            .then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(gas)
+                    .verify_provider_callback(
+                        submitter_id,
+                        provider_id,
+                        provider,
+                        env::attached_deposit(),
+                    ),
+            )
+    }
 
-        // return provider
-        ProviderExternal::from_provider_id(&provider_id.0, provider)
+    #[private]
+    pub fn verify_provider_callback(
+        &mut self,
+        submitter_id: AccountId,
+        provider_id: ProviderId,
+        provider: Provider,
+        attached_deposit: Balance,
+        #[callback_result] call_result: Result<near_sdk::serde_json::Value, PromiseError>,
+    ) -> Option<ProviderExternal> {
+        match call_result {
+            Ok(val) => {
+                if val.as_bool().is_some() {
+                    // provider returns a bool; proceed with normal processing
+                    // Get initial storage usage so submitter can pay for what they use
+                    let initial_storage_usage = env::storage_usage();
+
+                    // create & store provider
+                    self.handle_store_provider(provider_id.clone(), provider.clone());
+
+                    // log event
+                    log_add_provider_event(&provider_id, &provider);
+
+                    // calculate storage cost
+                    let required_deposit =
+                        calculate_required_storage_deposit(initial_storage_usage);
+                    // refund any unused deposit
+                    if attached_deposit > required_deposit {
+                        Promise::new(submitter_id.clone())
+                            .transfer(attached_deposit - required_deposit);
+                    } else if attached_deposit < required_deposit {
+                        env::panic_str(&format!(
+                            "Must attach {} yoctoNEAR to cover storage",
+                            required_deposit
+                        ));
+                    }
+
+                    // return provider
+                    Some(ProviderExternal::from_provider_id(&provider_id.0, provider))
+                } else {
+                    // Response type is incorrect. Refund deposit.
+                    log!("Received invalid response type for provider verification. Returning deposit.");
+                    Promise::new(submitter_id).transfer(attached_deposit);
+                    return None;
+                }
+            }
+            Err(_) => {
+                // Error occurred in cross-contract call. Refund deposit.
+                log!("Error occurred while verifying provider; refunding deposit");
+                Promise::new(submitter_id).transfer(attached_deposit);
+                return None;
+            }
+        }
     }
 
     #[payable]
     pub fn update_provider(
         &mut self,
         provider_id: ProviderId,
+        account_id_arg_name: Option<String>,
         name: Option<String>,
         description: Option<String>,
         gas: Option<u64>,
         tags: Option<Vec<String>>,
         icon_url: Option<String>,
         external_url: Option<String>,
-        default_weight: Option<u32>, // owner/admin-only
+        default_weight: Option<u32>,    // owner/admin-only
+        status: Option<ProviderStatus>, // owner/admin-only
+        admin_notes: Option<String>,    // owner/admin-only
     ) -> ProviderExternal {
         // Ensure caller is Provider submitter or Owner/Admin
         assert!(
@@ -243,22 +392,33 @@ impl Contract {
             .into();
 
         // update provider
+        if let Some(account_id_arg_name) = account_id_arg_name {
+            provider.account_id_arg_name = account_id_arg_name;
+            // TODO: validate account_id_arg_name against provider contract
+        }
+
         if let Some(name) = name {
+            assert_valid_provider_name(&name);
             provider.name = name;
         }
         if let Some(description) = description {
+            assert_valid_provider_description(&description);
             provider.description = Some(description);
         }
         if let Some(gas) = gas {
+            assert_valid_provider_gas(&gas);
             provider.gas = Some(gas);
         }
         if let Some(tags) = tags {
+            assert_valid_provider_tags(&tags);
             provider.tags = Some(tags);
         }
         if let Some(icon_url) = icon_url {
+            assert_valid_provider_icon_url(&icon_url);
             provider.icon_url = Some(icon_url);
         }
         if let Some(external_url) = external_url {
+            assert_valid_provider_external_url(&external_url);
             provider.external_url = Some(external_url);
         }
 
@@ -267,18 +427,69 @@ impl Contract {
             if let Some(default_weight) = default_weight {
                 provider.default_weight = default_weight;
             }
+            if let Some(status) = status {
+                if status != provider.status {
+                    let old_status = provider.status.clone();
+                    // insert into new status set
+                    match status {
+                        ProviderStatus::Pending => {
+                            self.pending_provider_ids.insert(&provider_id);
+                        }
+                        ProviderStatus::Active => {
+                            self.active_provider_ids.insert(&provider_id);
+                        }
+                        ProviderStatus::Deactivated => {
+                            self.deactivated_provider_ids.insert(&provider_id);
+                        }
+                    }
+                    // remove from old status set
+                    match old_status {
+                        ProviderStatus::Pending => {
+                            self.pending_provider_ids.remove(&provider_id);
+                        }
+                        ProviderStatus::Active => {
+                            self.active_provider_ids.remove(&provider_id);
+                        }
+                        ProviderStatus::Deactivated => {
+                            self.deactivated_provider_ids.remove(&provider_id);
+                        }
+                    }
+                    provider.status = status;
+                }
+            }
+            if let Some(admin_notes) = admin_notes {
+                provider.admin_notes = Some(admin_notes);
+            }
         }
 
         // update & store provider
-        self.providers_by_id.insert(
-            &provider_id,
-            &VersionedProvider::from(VersionedProvider::Current(provider.clone())),
-        );
+        self.handle_store_provider(provider_id.clone(), provider.clone());
 
         // Refund any unused deposit
         refund_deposit(initial_storage_usage);
 
+        // log event
+        log_update_provider_event(&provider_id, &provider);
+
         ProviderExternal::from_provider_id(&provider_id.0, provider)
+    }
+
+    pub(crate) fn handle_store_provider(&mut self, provider_id: ProviderId, provider: Provider) {
+        self.providers_by_id.insert(
+            &provider_id,
+            &VersionedProvider::from(VersionedProvider::Current(provider.clone())),
+        );
+        match provider.status {
+            ProviderStatus::Pending => {
+                self.pending_provider_ids.insert(&provider_id);
+            }
+            ProviderStatus::Active => {
+                self.active_provider_ids.insert(&provider_id);
+            }
+            ProviderStatus::Deactivated => {
+                self.deactivated_provider_ids.insert(&provider_id);
+            }
+        }
     }
 
     // * VIEW METHODS *
@@ -302,24 +513,81 @@ impl Contract {
 
     pub fn get_providers(
         &self,
+        status: Option<ProviderStatus>,
         from_index: Option<u64>,
         limit: Option<u64>,
     ) -> Vec<ProviderExternal> {
         let start_index: u64 = from_index.unwrap_or_default();
-        assert!(
-            (self.providers_by_id.len() as u64) >= start_index,
-            "Out of bounds, please use a smaller from_index."
-        );
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
         assert_ne!(limit, 0, "Cannot provide limit of 0.");
-        self.providers_by_id
-            .iter()
-            .skip(start_index as usize)
-            .take(limit.try_into().unwrap())
-            .map(|(provider_id, provider)| {
-                ProviderExternal::from_provider_id(&provider_id.0, Provider::from(provider))
-            })
-            .collect()
+        if let Some(status) = status {
+            match status {
+                ProviderStatus::Pending => {
+                    assert!(
+                        (self.pending_provider_ids.len() as u64) >= start_index,
+                        "Out of bounds, please use a smaller from_index."
+                    );
+                    self.pending_provider_ids
+                        .iter()
+                        .skip(start_index as usize)
+                        .take(limit)
+                        .map(|provider_id| {
+                            ProviderExternal::from_provider_id(
+                                &provider_id.0,
+                                Provider::from(self.providers_by_id.get(&provider_id).unwrap()),
+                            )
+                        })
+                        .collect()
+                }
+                ProviderStatus::Active => {
+                    assert!(
+                        (self.active_provider_ids.len() as u64) >= start_index,
+                        "Out of bounds, please use a smaller from_index."
+                    );
+                    self.active_provider_ids
+                        .iter()
+                        .skip(start_index as usize)
+                        .take(limit)
+                        .map(|provider_id| {
+                            ProviderExternal::from_provider_id(
+                                &provider_id.0,
+                                Provider::from(self.providers_by_id.get(&provider_id).unwrap()),
+                            )
+                        })
+                        .collect()
+                }
+                ProviderStatus::Deactivated => {
+                    assert!(
+                        (self.deactivated_provider_ids.len() as u64) >= start_index,
+                        "Out of bounds, please use a smaller from_index."
+                    );
+                    self.deactivated_provider_ids
+                        .iter()
+                        .skip(start_index as usize)
+                        .take(limit)
+                        .map(|provider_id| {
+                            ProviderExternal::from_provider_id(
+                                &provider_id.0,
+                                Provider::from(self.providers_by_id.get(&provider_id).unwrap()),
+                            )
+                        })
+                        .collect()
+                }
+            }
+        } else {
+            assert!(
+                (self.providers_by_id.len() as u64) >= start_index,
+                "Out of bounds, please use a smaller from_index."
+            );
+            self.providers_by_id
+                .iter()
+                .skip(start_index as usize)
+                .take(limit.try_into().unwrap())
+                .map(|(provider_id, provider)| {
+                    ProviderExternal::from_provider_id(&provider_id.0, Provider::from(provider))
+                })
+                .collect()
+        }
     }
 
     pub fn get_default_providers(&self) -> Vec<ProviderExternal> {

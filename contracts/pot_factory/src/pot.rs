@@ -38,41 +38,41 @@ pub struct PotExternal {
 #[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct PotArgs {
-    owner: Option<AccountId>,
-    admins: Option<Vec<AccountId>>,
-    chef: Option<AccountId>,
-    pot_name: String,
-    pot_description: String,
-    max_projects: u32,
-    application_start_ms: TimestampMs,
-    application_end_ms: TimestampMs,
-    public_round_start_ms: TimestampMs,
-    public_round_end_ms: TimestampMs,
-    registry_provider: Option<ProviderId>,
-    sybil_wrapper_provider: Option<ProviderId>,
-    custom_sybil_checks: Option<Vec<CustomSybilCheck>>,
-    custom_min_threshold_score: Option<u32>,
-    referral_fee_matching_pool_basis_points: u32,
-    referral_fee_public_round_basis_points: u32,
-    chef_fee_basis_points: u32,
-    protocol_config_provider: Option<ProviderId>,
-    source_metadata: ContractSourceMetadata,
+    pub owner: Option<AccountId>,
+    pub admins: Option<Vec<AccountId>>,
+    pub chef: Option<AccountId>,
+    pub pot_name: String,
+    pub pot_description: String,
+    pub max_projects: u32,
+    pub application_start_ms: TimestampMs,
+    pub application_end_ms: TimestampMs,
+    pub public_round_start_ms: TimestampMs,
+    pub public_round_end_ms: TimestampMs,
+    pub min_matching_pool_donation_amount: Option<U128>,
+    pub cooldown_period_ms: Option<u64>,
+    pub registry_provider: Option<ProviderId>,
+    pub sybil_wrapper_provider: Option<ProviderId>,
+    pub custom_sybil_checks: Option<Vec<CustomSybilCheck>>,
+    pub custom_min_threshold_score: Option<u32>,
+    pub referral_fee_matching_pool_basis_points: u32,
+    pub referral_fee_public_round_basis_points: u32,
+    pub chef_fee_basis_points: u32,
+    pub protocol_config_provider: Option<ProviderId>,
+    pub source_metadata: ContractSourceMetadata,
 }
 
 #[near_bindgen]
 impl Contract {
     /// Deploy a new Pot. A `None` response indicates an unsuccessful deployment.
     #[payable]
-    pub fn deploy_pot(&mut self, mut pot_args: PotArgs) -> Promise {
+    pub fn deploy_pot(&mut self, mut pot_args: PotArgs, pot_handle: Option<String>) -> Promise {
         // TODO: add protocol_config_provider to pot_args
         if self.require_whitelist {
             self.assert_admin_or_whitelisted_deployer();
         }
-        let pot_account_id_str = format!(
-            "{}.{}",
-            slugify(&pot_args.pot_name),
-            env::current_account_id()
-        );
+
+        let handle = pot_handle.unwrap_or_else(|| slugify(&pot_args.pot_name));
+        let pot_account_id_str = format!("{}.{}", handle, env::current_account_id());
         assert!(
             env::is_valid_account_id(pot_account_id_str.as_bytes()),
             "Pot Account ID {} is invalid",
@@ -87,6 +87,11 @@ impl Contract {
             pot_account_id
         );
 
+        // validate pot args
+        assert_valid_pot_args(&pot_args);
+
+        // TODO: validate registry & sybil wrapper providers (if present) by calling them
+
         // add protocol config provider to pot args
         pot_args.protocol_config_provider = Some(ProviderId::new(
             env::current_account_id().to_string(),
@@ -95,7 +100,7 @@ impl Contract {
 
         let min_deployment_deposit = self.calculate_min_deployment_deposit(&pot_args);
 
-        // insert dummy record in advance to check required deposit
+        // insert record in advance to validate required deposit & avoid race conditions
         let pot = Pot {
             deployed_by: env::signer_account_id(),
             deployed_at_ms: env::block_timestamp_ms(),
@@ -120,15 +125,16 @@ impl Contract {
             total_required_deposit
         );
 
-        // delete temporarily created pot
-        self.pots_by_id.remove(&pot_account_id);
+        // if more is attached than needed, return the difference
+        if deposit > total_required_deposit {
+            Promise::new(env::signer_account_id()).transfer(deposit - total_required_deposit);
+        }
 
         // deploy pot
         Promise::new(pot_account_id.clone())
             .create_account()
             .transfer(min_deployment_deposit)
             .deploy_contract(POT_WASM_CODE.to_vec())
-            .add_full_access_key(env::signer_account_pk()) // TODO: REMOVE THIS AFTER TESTING - have to figure out the best way to allow pot contract updates
             .function_call(
                 "new".to_string(),
                 serde_json::to_vec(&pot_args).unwrap(),
@@ -138,7 +144,11 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(XCC_GAS)
-                    .deploy_pot_callback(pot_account_id.clone(), min_deployment_deposit, deposit),
+                    .deploy_pot_callback(
+                        pot_account_id.clone(),
+                        pot.clone(),
+                        total_required_deposit,
+                    ),
             )
     }
 
@@ -146,8 +156,8 @@ impl Contract {
     pub fn deploy_pot_callback(
         &mut self,
         pot_id: AccountId,
-        min_deployment_deposit: Balance,
-        deposit: Balance,
+        pot: Pot,
+        total_required_deposit: Balance,
         #[callback_result] call_result: Result<(), PromiseError>,
     ) -> Option<PotExternal> {
         if call_result.is_err() {
@@ -155,34 +165,23 @@ impl Contract {
                 "There was an error deploying the Pot contract. Returning deposit to signer."
             );
             env::log_str(&error_message);
-            // return deposit to signer
-            Promise::new(env::signer_account_id()).transfer(deposit);
+            // delete pot that was created in initial call
+            self.pots_by_id.remove(&pot_id);
+            // return total_required_deposit to signer (difference between attached deposit and required deposit was already refunded in initial call)
+            Promise::new(env::signer_account_id()).transfer(total_required_deposit);
             // don't panic or refund transfer won't occur! instead, return `None`
-            return None;
+            None
+        } else {
+            let pot_external = PotExternal {
+                id: pot_id,
+                deployed_by: pot.deployed_by,
+                deployed_at_ms: pot.deployed_at_ms,
+            };
+
+            log_deploy_pot_event(&pot_external);
+
+            Some(pot_external)
         }
-
-        let pot = Pot {
-            deployed_by: env::signer_account_id(),
-            deployed_at_ms: env::block_timestamp_ms(),
-        };
-
-        let initial_storage_usage = env::storage_usage();
-
-        self.pots_by_id
-            .insert(&pot_id, &VersionedPot::Current(pot.clone()));
-
-        let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
-        // env::storage_byte_cost() * Balance::from(storage_used);
-        let total_cost = required_deposit + min_deployment_deposit;
-        if deposit > total_cost {
-            Promise::new(env::signer_account_id()).transfer(deposit - total_cost);
-        }
-
-        Some(PotExternal {
-            id: pot_id,
-            deployed_by: pot.deployed_by,
-            deployed_at_ms: pot.deployed_at_ms,
-        })
     }
 
     pub fn get_pots(&self) -> Vec<PotExternal> {

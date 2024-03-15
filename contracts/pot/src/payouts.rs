@@ -13,7 +13,7 @@ pub struct Payout {
     /// ID of the application receiving the payout
     pub project_id: ProjectId,
     /// Amount to be paid out
-    pub amount: U128,
+    pub amount: u128,
     /// Timestamp when the payout was made. None if not yet paid out.
     pub paid_at: Option<TimestampMs>,
 }
@@ -37,6 +37,85 @@ impl From<VersionedPayout> for Payout {
 pub struct PayoutInput {
     pub amount: U128,
     pub project_id: ProjectId,
+}
+
+/// Ephemeral-only
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct PayoutExternal {
+    /// Unique identifier for the payout
+    pub id: PayoutId,
+    /// ID of the application receiving the payout
+    pub project_id: ProjectId,
+    /// Amount to be paid out
+    pub amount: U128,
+    /// Timestamp when the payout was made. None if not yet paid out.
+    pub paid_at: Option<TimestampMs>,
+}
+
+impl Payout {
+    pub fn to_external(&self) -> PayoutExternal {
+        PayoutExternal {
+            id: self.id.clone(),
+            project_id: self.project_id.clone(),
+            amount: U128(self.amount),
+            paid_at: self.paid_at,
+        }
+    }
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct PayoutsChallenge {
+    /// Timestamp when the payout challenge was made
+    pub created_at: TimestampMs,
+    /// Reason for the challenge
+    pub reason: String,
+    /// Notes from admin/owner
+    pub admin_notes: Option<String>,
+    /// Whether the challenge has been resolved
+    pub resolved: bool,
+}
+
+#[derive(BorshSerialize, BorshDeserialize)]
+pub enum VersionedPayoutsChallenge {
+    Current(PayoutsChallenge),
+}
+
+impl From<VersionedPayoutsChallenge> for PayoutsChallenge {
+    fn from(payouts_challenge: VersionedPayoutsChallenge) -> Self {
+        match payouts_challenge {
+            VersionedPayoutsChallenge::Current(current) => current,
+        }
+    }
+}
+
+/// Ephemeral-only
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct PayoutsChallengeExternal {
+    /// Account that made the challenge
+    pub challenger_id: AccountId,
+    /// Timestamp when the payout challenge was made
+    pub created_at: TimestampMs,
+    /// Reason for the challenge
+    pub reason: String,
+    /// Notes from admin/owner
+    pub admin_notes: Option<String>,
+    /// Whether the challenge has been resolved
+    pub resolved: bool,
+}
+
+impl PayoutsChallenge {
+    pub fn to_external(&self, challenger_id: AccountId) -> PayoutsChallengeExternal {
+        PayoutsChallengeExternal {
+            challenger_id,
+            created_at: self.created_at,
+            reason: self.reason.clone(),
+            admin_notes: self.admin_notes.clone(),
+            resolved: self.resolved,
+        }
+    }
 }
 
 #[near_bindgen]
@@ -80,8 +159,8 @@ impl Contract {
             running_total += payout.amount.0;
             // set cooldown_end to now + 1 week (?)
             self.cooldown_end_ms
-                .set(&(env::block_timestamp_ms() + ONE_WEEK_MS)); // TODO: remove hardcoding to one week, allow owner/admin to configure
-                                                                  // add payout to payouts
+                .set(&(env::block_timestamp_ms() + &self.cooldown_period_ms));
+            // add payout to payouts
             let mut payout_ids_for_application = self
                 .payout_ids_by_project_id
                 .get(&payout.project_id)
@@ -96,7 +175,7 @@ impl Contract {
             );
             let payout = Payout {
                 id: payout_id.clone(),
-                amount: U128::from(payout.amount.0),
+                amount: payout.amount.0,
                 project_id: payout.project_id.clone(),
                 paid_at: None,
             };
@@ -108,15 +187,15 @@ impl Contract {
         }
         // error if running total is not equal to matching_pool_balance (NB: this logic will change once milestones are supported)
         assert!(
-            running_total == self.matching_pool_balance.0,
+            running_total == self.matching_pool_balance,
             "Total payouts must equal matching pool balance"
         );
     }
 
-    pub fn get_payouts(&self, from_index: Option<u64>, limit: Option<u64>) -> Vec<Payout> {
+    pub fn get_payouts(&self, from_index: Option<u64>, limit: Option<u64>) -> Vec<PayoutExternal> {
         let start_index: u64 = from_index.unwrap_or_default();
         assert!(
-            (self.applications_by_id.len() as u64) >= start_index,
+            (self.payouts_by_id.len() as u64) >= start_index,
             "Out of bounds, please use a smaller from_index."
         );
         let limit = limit.unwrap_or(usize::MAX as u64);
@@ -125,7 +204,7 @@ impl Contract {
             .iter()
             .skip(start_index as usize)
             .take(limit as usize)
-            .map(|(_payout_id, payout)| Payout::from(payout))
+            .map(|(_payout_id, payout)| Payout::from(payout).to_external())
             .collect()
     }
 
@@ -141,6 +220,8 @@ impl Contract {
         );
         // verify that the cooldown period has passed
         self.assert_cooldown_period_complete();
+        // verify that any challenges have been resolved
+        self.assert_all_payouts_challenges_resolved();
         // pay out each project
         // for each approved project...
         // loop through self.approved_application_ids set
@@ -165,7 +246,7 @@ impl Contract {
                         if payout.paid_at.is_none() {
                             // ...transfer funds...
                             Promise::new(application.project_id.clone())
-                                .transfer(payout.amount.0)
+                                .transfer(payout.amount)
                                 .then(
                                     Self::ext(env::current_account_id())
                                         .with_static_gas(XCC_GAS)
@@ -207,5 +288,66 @@ impl Contract {
         }
     }
 
-    // challenge_payouts (callable by anyone on ReFi Council)
+    #[payable]
+    pub fn challenge_payouts(&mut self, reason: String) {
+        // anyone can challenge
+        // verify that cooldown is in process
+        self.assert_cooldown_period_in_process();
+        // create challenge & store, charging user for storage
+        let initial_storage_usage = env::storage_usage();
+        let challenge = PayoutsChallenge {
+            created_at: env::block_timestamp_ms(),
+            reason,
+            admin_notes: None,
+            resolved: false,
+        };
+        // store challenge (overwriting any existing challenge for this user - only one challenge per user allowed)
+        self.payouts_challenges.insert(
+            &env::predecessor_account_id(),
+            &VersionedPayoutsChallenge::Current(challenge),
+        );
+        refund_deposit(initial_storage_usage);
+    }
+
+    pub fn remove_payouts_challenge(&mut self) {
+        // verify that cooldown is in process
+        self.assert_cooldown_period_in_process();
+        // if a payout challenge exists for this caller, remove it (if unresolved) & refund for freed storage
+        if let Some(versioned_challenge) =
+            self.payouts_challenges.get(&env::predecessor_account_id())
+        {
+            let challenge = PayoutsChallenge::from(versioned_challenge);
+            if !challenge.resolved {
+                let initial_storage_usage = env::storage_usage();
+                self.payouts_challenges
+                    .remove(&env::predecessor_account_id());
+                refund_deposit(initial_storage_usage);
+            } else {
+                panic!("Payout challenge already resolved; cannot be removed");
+            }
+        }
+    }
+
+    pub fn get_payouts_challenges(
+        &self,
+        from_index: Option<u64>,
+        limit: Option<u64>,
+    ) -> Vec<PayoutsChallengeExternal> {
+        let start_index: u64 = from_index.unwrap_or_default();
+        assert!(
+            (self.payouts_challenges.len() as u64) >= start_index,
+            "Out of bounds, please use a smaller from_index."
+        );
+        let limit = limit.unwrap_or(usize::MAX as u64);
+        assert_ne!(limit, 0, "Cannot provide limit of 0.");
+        self.payouts_challenges
+            .iter()
+            .skip(start_index as usize)
+            .take(limit as usize)
+            .map(|(challenger_id, versioned_challenge)| {
+                let challenge = PayoutsChallenge::from(versioned_challenge);
+                challenge.to_external(challenger_id)
+            })
+            .collect()
+    }
 }

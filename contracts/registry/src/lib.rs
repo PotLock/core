@@ -1,5 +1,5 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{LazyOption, LookupMap, UnorderedSet};
+use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap, UnorderedSet};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, log, near_bindgen, require, serde_json::json, AccountId, Balance, BorshStorageKey,
@@ -26,10 +26,10 @@ pub use crate::utils::*;
 type ProjectId = AccountId;
 type TimestampMs = u64;
 
-/// Registry Contract
+/// OLD (v1) Registry Contract (v1.0.0)
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
-pub struct Contract {
+pub struct ContractV1 {
     /// Contract superuser
     owner: AccountId,
     /// Contract admins (can be added/removed by owner)
@@ -37,8 +37,36 @@ pub struct Contract {
     /// Records of all Projects deployed by this Registry, indexed at their account ID, versioned for easy upgradeability
     project_ids: UnorderedSet<ProjectId>, // NB: this is unnecessary, but retained for now as it is implemented in v0
     projects_by_id: LookupMap<ProjectId, VersionedProjectInternal>,
+}
+
+/// CURRENT Registry Contract (v2.0.0)
+#[near_bindgen]
+#[derive(BorshDeserialize, BorshSerialize)]
+pub struct Contract {
+    /// Contract superuser
+    owner: AccountId,
+    /// Contract admins (can be added/removed by owner)
+    admins: UnorderedSet<AccountId>,
+    /// Old set (deprecated but empty set must be retained in state or serialization will break)
+    _deprecated_project_ids: UnorderedSet<ProjectId>,
+    /// Old map (deprecated but empty map must be retained in state or serialization will break)
+    _deprecated_projects_by_id: LookupMap<ProjectId, VersionedProjectInternal>,
+    /// Records of all Projects deployed by this Registry, indexed at their account ID, versioned for easy upgradeability
+    projects_by_id: UnorderedMap<ProjectId, VersionedProjectInternal>,
+    /// Projects pending approval
+    pending_project_ids: UnorderedSet<ProjectId>,
+    /// Projects approved
+    approved_project_ids: UnorderedSet<ProjectId>,
+    /// Projects rejected
+    rejected_project_ids: UnorderedSet<ProjectId>,
+    /// Projects graylisted
+    graylisted_project_ids: UnorderedSet<ProjectId>,
+    /// Projects blacklisted
+    blacklisted_project_ids: UnorderedSet<ProjectId>,
     /// Contract "source" metadata, as specified in NEP 0330 (https://github.com/near/NEPs/blob/master/neps/nep-0330.md), with addition of `commit_hash`
     contract_source_metadata: LazyOption<VersionedContractSourceMetadata>,
+    /// Default status when project registers
+    default_project_status: ProjectStatus,
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -58,9 +86,29 @@ impl From<VersionedContract> for Contract {
 #[derive(BorshSerialize, BorshStorageKey)]
 pub enum StorageKey {
     Admins,
-    ProjectIds,
-    ProjectsById,
+    ProjectIds,   // deprecated but must not delete or change
+    ProjectsById, // deprecated but must not delete or change
+    ProjectsById2,
+    PendingProjectIds,
+    ApprovedProjectIds,
+    RejectedProjectIds,
+    GraylistedProjectIds,
+    BlacklistedProjectIds,
     SourceMetadata,
+}
+
+/// Contract configuration
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[serde(crate = "near_sdk::serde")]
+pub struct ContractConfig {
+    pub owner: AccountId,
+    pub admins: Vec<AccountId>,
+    pub default_project_status: ProjectStatus,
+    pub pending_project_count: u64,
+    pub approved_project_count: u64,
+    pub rejected_project_count: u64,
+    pub graylisted_project_count: u64,
+    pub blacklisted_project_count: u64,
 }
 
 #[near_bindgen]
@@ -71,18 +119,106 @@ impl Contract {
         admins: Vec<AccountId>,
         source_metadata: ContractSourceMetadata,
     ) -> Self {
-        assert!(!env::state_exists(), "Already initialized");
         Self {
             owner,
             admins: account_vec_to_set(admins, StorageKey::Admins),
-            project_ids: UnorderedSet::new(StorageKey::ProjectIds),
-            projects_by_id: LookupMap::new(StorageKey::ProjectsById),
+            _deprecated_project_ids: UnorderedSet::new(StorageKey::ProjectIds),
+            _deprecated_projects_by_id: LookupMap::new(StorageKey::ProjectsById),
+            projects_by_id: UnorderedMap::new(StorageKey::ProjectsById2),
+            pending_project_ids: UnorderedSet::new(StorageKey::PendingProjectIds),
+            approved_project_ids: UnorderedSet::new(StorageKey::ApprovedProjectIds),
+            rejected_project_ids: UnorderedSet::new(StorageKey::RejectedProjectIds),
+            graylisted_project_ids: UnorderedSet::new(StorageKey::GraylistedProjectIds),
+            blacklisted_project_ids: UnorderedSet::new(StorageKey::BlacklistedProjectIds),
             contract_source_metadata: LazyOption::new(
                 StorageKey::SourceMetadata,
                 Some(&VersionedContractSourceMetadata::Current(source_metadata)),
             ),
+            default_project_status: ProjectStatus::Approved,
         }
     }
+
+    pub fn get_config(&self) -> ContractConfig {
+        ContractConfig {
+            owner: self.owner.clone(),
+            admins: self.admins.to_vec(),
+            default_project_status: self.default_project_status.clone(),
+            pending_project_count: self.pending_project_ids.len(),
+            approved_project_count: self.approved_project_ids.len(),
+            rejected_project_count: self.rejected_project_ids.len(),
+            graylisted_project_count: self.graylisted_project_ids.len(),
+            blacklisted_project_count: self.blacklisted_project_ids.len(),
+        }
+    }
+
+    // LEAVING FOR REFERENCE - this is function used to migrate data in upgrade from v1.0.0 to v2.0.0
+    // #[private]
+    // pub fn migrate_chunk_temp(&mut self, project_ids: Vec<ProjectId>) {
+    //     for project_id in project_ids {
+    //         let project = self._deprecated_projects_by_id.get(&project_id);
+    //         if let Some(project) = project {
+    //             let project_internal = ProjectInternal::from(project);
+    //             // add to projects_by_id
+    //             self.projects_by_id.insert(
+    //                 &project_id,
+    //                 &VersionedProjectInternal::Current(project_internal.clone()),
+    //             );
+    //             log!("Migrated project {}", project_id);
+    //             match project_internal.status {
+    //                 ProjectStatus::Pending => {
+    //                     self.pending_project_ids.insert(&project_id);
+    //                 }
+    //                 ProjectStatus::Approved => {
+    //                     self.approved_project_ids.insert(&project_id);
+    //                 }
+    //                 ProjectStatus::Rejected => {
+    //                     self.rejected_project_ids.insert(&project_id);
+    //                 }
+    //                 ProjectStatus::Graylisted => {
+    //                     self.graylisted_project_ids.insert(&project_id);
+    //                 }
+    //                 ProjectStatus::Blacklisted => {
+    //                     self.blacklisted_project_ids.insert(&project_id);
+    //                 }
+    //             }
+    //             self._deprecated_project_ids.remove(&project_id);
+    //             self._deprecated_projects_by_id.remove(&project_id);
+    //         } else {
+    //             log!(format!(
+    //                 "project ID {} not found in deprectaed projects by ID",
+    //                 project_id
+    //             ));
+    //         }
+    //     }
+    // }
+
+    // LEAVING FOR REFERENCE - this is the initFunction used in upgrade from v1.0.0 to v2.0.0
+    // #[private]
+    // #[init(ignore_state)]
+    // pub fn migrate() -> Self {
+    //     let old_state: ContractV1 = env::state_read().expect("state read failed");
+    //     // populate new maps/sets
+    //     let projects_by_id = UnorderedMap::new(StorageKey::ProjectsById2);
+    //     let pending_project_ids = UnorderedSet::new(StorageKey::PendingProjectIds);
+    //     let approved_project_ids = UnorderedSet::new(StorageKey::ApprovedProjectIds);
+    //     let rejected_project_ids = UnorderedSet::new(StorageKey::RejectedProjectIds);
+    //     let graylisted_project_ids = UnorderedSet::new(StorageKey::GraylistedProjectIds);
+    //     let blacklisted_project_ids = UnorderedSet::new(StorageKey::BlacklistedProjectIds);
+    //     Self {
+    //         owner: old_state.owner,
+    //         admins: old_state.admins,
+    //         _deprecated_project_ids: old_state.project_ids,
+    //         _deprecated_projects_by_id: old_state.projects_by_id,
+    //         projects_by_id,
+    //         pending_project_ids,
+    //         approved_project_ids,
+    //         rejected_project_ids,
+    //         graylisted_project_ids,
+    //         blacklisted_project_ids,
+    //         contract_source_metadata: LazyOption::new(StorageKey::SourceMetadata, None),
+    //         default_project_status: ProjectStatus::Approved,
+    //     }
+    // }
 }
 
 impl Default for Contract {
@@ -90,9 +226,16 @@ impl Default for Contract {
         Self {
             owner: AccountId::new_unchecked("".to_string()),
             admins: UnorderedSet::new(StorageKey::Admins),
-            project_ids: UnorderedSet::new(StorageKey::ProjectIds),
-            projects_by_id: LookupMap::new(StorageKey::ProjectsById),
+            _deprecated_project_ids: UnorderedSet::new(StorageKey::ProjectIds),
+            _deprecated_projects_by_id: LookupMap::new(StorageKey::ProjectsById),
+            projects_by_id: UnorderedMap::new(StorageKey::ProjectsById2),
+            pending_project_ids: UnorderedSet::new(StorageKey::PendingProjectIds),
+            approved_project_ids: UnorderedSet::new(StorageKey::ApprovedProjectIds),
+            rejected_project_ids: UnorderedSet::new(StorageKey::RejectedProjectIds),
+            graylisted_project_ids: UnorderedSet::new(StorageKey::GraylistedProjectIds),
+            blacklisted_project_ids: UnorderedSet::new(StorageKey::BlacklistedProjectIds),
             contract_source_metadata: LazyOption::new(StorageKey::SourceMetadata, None),
+            default_project_status: ProjectStatus::Approved,
         }
     }
 }

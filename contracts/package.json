@@ -13,6 +13,8 @@
     "build:registry": "cd registry && ./scripts/build.sh && cd ..",
     "build:sybil": "cd sybil && ./scripts/build.sh && cd ..",
     "build:sybilprovider": "cd sybil_provider_simulator && ./scripts/build.sh && cd ..",
+    "dev:deploy:sybilprovider": "cd sybil_provider_simulator && ./scripts/deploy.sh && cd .. && yarn patch:config sybil_provider_simulator",
+    "dev:deploy:sybilprovider:refresh": "cd sybil_provider_simulator && rm -rf neardev && ./scripts/deploy.sh && cd .. && yarn patch:config sybil_provider_simulator",
     "dev:deploy:donation": "cd donation && ./scripts/deploy.sh && cd .. && yarn patch:config donation",
     "dev:deploy:donation:refresh": "cd donation && rm -rf neardev && ./scripts/deploy.sh && cd .. && yarn patch:config donation",
     "test:donation": "yarn test test/donation/contract.test.ts",

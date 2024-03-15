@@ -58,7 +58,7 @@ impl From<&VersionedApplication> for Application {
 #[near_bindgen]
 impl Contract {
     #[payable]
-    pub fn apply(&mut self, message: Option<String>) -> Promise {
+    pub fn apply(&mut self, message: Option<String>) -> PromiseOrValue<Application> {
         let project_id = env::predecessor_account_id(); // TODO: consider renaming to "applicant_id" to make it less opinionated (e.g. maybe developers are applying, and they are not exactly a "project")
                                                         // chef, admin & owner cannot apply
         assert!(
@@ -71,28 +71,18 @@ impl Contract {
             let (contract_id, method_name) = registry_provider.decompose();
             // call registry provider
             let args = json!({ "account_id": project_id }).to_string().into_bytes();
-            Promise::new(AccountId::new_unchecked(contract_id.clone()))
-                .function_call(method_name.clone(), args, 0, XCC_GAS)
-                .then(
-                    Self::ext(env::current_account_id())
-                        .with_static_gas(XCC_GAS)
-                        .assert_can_apply_callback(project_id.clone(), message, deposit),
-                )
+            PromiseOrValue::Promise(
+                Promise::new(AccountId::new_unchecked(contract_id.clone()))
+                    .function_call(method_name.clone(), args, 0, XCC_GAS)
+                    .then(
+                        Self::ext(env::current_account_id())
+                            .with_static_gas(XCC_GAS)
+                            .assert_can_apply_callback(project_id.clone(), message, deposit),
+                    ),
+            )
         } else {
-            Self::ext(env::current_account_id())
-                .with_static_gas(XCC_GAS)
-                .apply_always_allow_callback(project_id.clone(), message, deposit)
+            PromiseOrValue::Value(self.handle_apply(project_id, message, deposit))
         }
-    }
-
-    #[private] // Only callable by env::current_account_id()
-    pub fn apply_always_allow_callback(
-        &mut self,
-        project_id: ProjectId,
-        message: Option<String>,
-        deposit: Balance,
-    ) -> Application {
-        self.handle_apply(project_id, message, deposit)
     }
 
     #[private] // Only callable by env::current_account_id()
@@ -113,7 +103,8 @@ impl Contract {
         self.handle_apply(project_id, message, deposit)
     }
 
-    pub(crate) fn handle_apply(
+    #[private]
+    pub fn handle_apply(
         &mut self,
         project_id: ProjectId,
         message: Option<String>,
@@ -197,10 +188,10 @@ impl Contract {
             self.applications_by_id
                 .iter()
                 .skip(start_index as usize)
-                .take(limit.try_into().unwrap())
                 .filter(|(_account_id, application)| {
                     Application::from(application).status == status
                 })
+                .take(limit.try_into().unwrap())
                 .map(|(_account_id, application)| Application::from(application))
                 .collect()
         } else {
@@ -261,8 +252,6 @@ impl Contract {
                 .get(&project_id)
                 .expect("Application does not exist"),
         );
-        // check that max_projects hasn't been reached
-        self.assert_max_projects_not_reached();
         // update application
         let previous_status = application.status.clone();
         application.status = status;
@@ -275,6 +264,8 @@ impl Contract {
         );
         // insert into approved applications mapping if approved
         if application.status == ApplicationStatus::Approved {
+            // check that max_projects hasn't been reached
+            self.assert_max_projects_not_reached();
             self.approved_application_ids.insert(&project_id);
         } else {
             // setting application status as something other than Approved; if it was previously approved, remove from approved mapping

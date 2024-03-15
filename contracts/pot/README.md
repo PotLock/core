@@ -59,7 +59,7 @@ pub struct Contract {
     /// * Optional because not all Pots will require registration, and those that do might set after deployment.
     registry_provider: LazyOption<ProviderId>,
     /// Minimum amount that can be donated to the matching pool
-    min_matching_pool_donation_amount: U128,
+    min_matching_pool_donation_amount: u128,
 
     // SYBIL RESISTANCE
     /// Sybil contract address & method name that will be called to verify humanness. If `None`, no checks will be made.
@@ -70,20 +70,20 @@ pub struct Contract {
     custom_min_threshold_score: LazyOption<u32>,
 
     // FEES
-    /// Basis points (1/100 of a percent) that should be paid to an account that refers a Patron (paid at the point when the matching pool donation comes in)
+    /// Basis points (1/100 of a percent) that should be paid to an account that refers a matching pool donor (paid at the point when a matching pool donation comes in)
     referral_fee_matching_pool_basis_points: u32,
-    /// Basis points (1/100 of a percent) that should be paid to an account that refers a donor (paid at the point when the donation comes in)
+    /// Basis points (1/100 of a percent) that should be paid to an account that refers a public donor (paid at the point when a public donation comes in)
     referral_fee_public_round_basis_points: u32,
     /// Chef's fee for managing the round. Gets taken out of each donation as they come in and are paid out
     chef_fee_basis_points: u32,
 
     // FUNDS & BALANCES
     /// Total matching pool donations
-    total_matching_pool_donations: U128,
+    total_matching_pool_donations: u128,
     /// Amount of matching funds available (not yet paid out)
-    matching_pool_balance: U128,
+    matching_pool_balance: u128,
     /// Total public donations
-    total_public_donations: U128,
+    total_public_donations: u128,
 
     // PAYOUTS
     /// Cooldown period starts when Chef sets payouts
@@ -92,11 +92,11 @@ pub struct Contract {
     all_paid_out: bool,
 
     // MAPPINGS
-    /// All application records, versioned for easy upgradeability
+    /// All application records
     applications_by_id: UnorderedMap<ApplicationId, VersionedApplication>,
     /// Approved application IDs
     approved_application_ids: UnorderedSet<ApplicationId>,
-    /// All donation records, versioned for easy upgradeability
+    /// All donation records
     donations_by_id: UnorderedMap<DonationId, VersionedDonation>,
     /// IDs of public round donations (made by donors who are not Patrons, during public round)
     public_round_donation_ids: UnorderedSet<DonationId>,
@@ -106,8 +106,8 @@ pub struct Contract {
     donation_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<DonationId>>,
     /// IDs of donations made by a given donor (user)
     donation_ids_by_donor_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
-    /// All payout records, versioned for easy upgradeability
-    payouts_by_id: UnorderedMap<PayoutId, VersionedPayout>,
+    // payouts
+    payouts_by_id: UnorderedMap<PayoutId, VersionedPayout>, // can iterate over this to get all payouts
     payout_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<PayoutId>>,
 
     // OTHER
@@ -143,6 +143,8 @@ pub struct PotConfig {
     pub chef_fee_basis_points: u32,
     pub matching_pool_balance: U128,
     pub total_public_donations: U128,
+    pub public_donations_count: u32,
+    pub payouts: Vec<PayoutExternal>,
     pub cooldown_end_ms: Option<TimestampMs>,
     pub all_paid_out: bool,
     pub protocol_config_provider: Option<ProviderId>,
@@ -178,14 +180,17 @@ pub struct ProtocolConfigProviderResult {
 ```
 
 ### Applications
+
 ```rs
 pub type ProjectId = AccountId;
 pub type ApplicationId = ProjectId; // Applications are indexed by ProjectId
 
 pub struct Application {
     /// functions as unique identifier for application, since projects can only apply once per round
-    // NB: Don't technically need this, since we use the project_id as the key in the applications_by_id mapping, but it's possible that we'll want to change that in the future, so keeping this for now
+    // Don't technically need this, since we use the project_id as the key in the applications_by_id mapping, but it's possible that we'll want to change that in the future, so keeping this for now
     pub project_id: ProjectId,
+    /// Optional message to be included in application
+    pub message: Option<String>,
     /// Status of the project application (Pending, Accepted, Rejected, InReview)
     pub status: ApplicationStatus,
     /// Timestamp for when the application was submitted
@@ -205,15 +210,18 @@ pub enum ApplicationStatus {
 ```
 
 ### Donations
+
 ```rs
 pub type DonationId = u64; // auto-incrementing ID for donations
 
 pub struct Donation {
-    /// ID of the donor               
+    /// ID of the donor
     pub donor_id: AccountId,
-    /// Amount donated         
-    pub total_amount: U128,
-    /// Optional message from the donor          
+    /// Amount donated
+    pub total_amount: u128,
+    /// Amount after all fees/expenses (incl. storage)
+    pub net_amount: u128,
+    /// Optional message from the donor
     pub message: Option<String>,
     /// Timestamp when the donation was made
     pub donated_at: TimestampMs,
@@ -222,21 +230,26 @@ pub struct Donation {
     /// Referrer ID
     pub referrer_id: Option<AccountId>,
     /// Referrer fee
-    pub referrer_fee: Option<U128>,
+    pub referrer_fee: Option<u128>,
     /// Protocol fee
-    pub protocol_fee: U128,
-    // TODO: add chef fee? chef ID? this is getting pretty hefty though for something intended to be small (could cost 0.01N just to store the Donation)
+    pub protocol_fee: u128,
+    /// Chef ID
+    pub chef_id: Option<AccountId>,
+    /// Chef fee
+    pub chef_fee: Option<u128>,
 }
 
 /// Ephemeral-only (used in views)
 pub struct DonationExternal {
     /// ID of the donation
     pub id: DonationId,
-    /// ID of the donor               
+    /// ID of the donor
     pub donor_id: AccountId,
-    /// Amount donated         
+    /// Amount donated
     pub total_amount: U128,
-    /// Optional message from the donor          
+    /// Amount after all fees/expenses (incl. storage)
+    pub net_amount: U128,
+    /// Optional message from the donor
     pub message: Option<String>,
     /// Timestamp when the donation was made
     pub donated_at: TimestampMs,
@@ -250,7 +263,10 @@ pub struct DonationExternal {
     pub protocol_fee: U128,
     /// Indicates whether this is matching pool donation
     pub matching_pool: bool,
-    // TODO: add chef fee?
+    /// Chef ID
+    pub chef_id: Option<AccountId>,
+    /// Chef fee
+    pub chef_fee: Option<U128>,
 }
 
 pub const DONATION_ID_DELIMETER: &str = ":";
@@ -274,10 +290,59 @@ pub struct Payout {
     pub paid_at: Option<TimestampMs>,
 }
 
+/// Ephemeral-only
+pub struct PayoutExternal {
+    /// Unique identifier for the payout
+    pub id: PayoutId,
+    /// ID of the application receiving the payout
+    pub project_id: ProjectId,
+    /// Amount to be paid out
+    pub amount: U128,
+    /// Timestamp when the payout was made. None if not yet paid out.
+    pub paid_at: Option<TimestampMs>,
+}
+
 /// Ephemeral-only; used for setting payouts
 pub struct PayoutInput {
     pub amount: U128,
     pub project_id: ProjectId,
+}
+
+pub struct PayoutsChallenge {
+    /// Timestamp when the payout challenge was made
+    pub created_at: TimestampMs,
+    /// Reason for the challenge
+    pub reason: String,
+    /// Notes from admin/owner
+    pub admin_notes: Option<String>,
+    /// Whether the challenge has been resolved
+    pub resolved: bool,
+}
+
+/// Ephemeral-only
+pub struct PayoutsChallengeExternal {
+    /// Account that made the challenge
+    pub challenger_id: AccountId,
+    /// Timestamp when the payout challenge was made
+    pub created_at: TimestampMs,
+    /// Reason for the challenge
+    pub reason: String,
+    /// Notes from admin/owner
+    pub admin_notes: Option<String>,
+    /// Whether the challenge has been resolved
+    pub resolved: bool,
+}
+
+impl PayoutsChallenge {
+    pub fn to_external(&self, challenger_id: AccountId) -> PayoutsChallengeExternal {
+        PayoutsChallengeExternal {
+            challenger_id,
+            created_at: self.created_at,
+            reason: self.reason.clone(),
+            admin_notes: self.admin_notes.clone(),
+            resolved: self.resolved,
+        }
+    }
 }
 
 ```
@@ -307,6 +372,23 @@ impl ProviderId {
             panic!("Invalid provider ID format. Expected 'contract_id:method_name'.");
         }
         (parts[0].to_string(), parts[1].to_string())
+    }
+
+    /// Validate (individual elements cannot be empty, cannot contain PROVIDER_ID_DELIMITER)
+    pub fn validate(&self) {
+        let (contract_id, method_name) = self.decompose();
+        assert!(!contract_id.is_empty(), "Contract ID cannot be empty");
+        assert!(!method_name.is_empty(), "Method name cannot be empty");
+        assert!(
+            !contract_id.contains(PROVIDER_ID_DELIMITER),
+            "Contract ID cannot contain delimiter ('{}')",
+            PROVIDER_ID_DELIMITER
+        );
+        assert!(
+            !method_name.contains(PROVIDER_ID_DELIMITER),
+            "Method name cannot contain delimiter ('{}')",
+            PROVIDER_ID_DELIMITER
+        );
     }
 }
 ```
@@ -367,6 +449,7 @@ pub fn new(
     public_round_end_ms: TimestampMs,
     registry_provider: Option<ProviderId>,
     min_matching_pool_donation_amount: Option<U128>,
+    cooldown_period_ms: Option<u64>,
 
     // sybil resistance
     sybil_wrapper_provider: Option<ProviderId>,
@@ -388,7 +471,7 @@ pub fn new(
 
 /// The calling account should be the project/account that is applying
 #[payable]
-pub fn apply(&mut self) -> Application
+pub fn apply(&mut self, message: Option<String>) -> Application
 
 /// Only allowed for projects/applications that are in Pending status
 pub fn unapply(&mut self) -> ()
@@ -441,6 +524,8 @@ pub fn donate(
     message: Option<String>,
     referrer_id: Option<AccountId>,
     matching_pool: Option<bool>,
+    bypass_protocol_fee: Option<bool>, // Allows donor to bypass protocol fee if they wish. Defaults to "false".
+    custom_chef_fee_basis_points: Option<u32>, // Allows donor to set custom chef fee % if they wish. If provided value is greater than self.chef_fee_basis_points, the smaller value will be used.
 ) -> DonationExternal
 
 
@@ -452,11 +537,13 @@ pub fn chef_set_payouts(&mut self, payouts: Vec<PayoutInput>) -> ()
 #[payable]
 pub fn admin_process_payouts(&mut self) -> ()
 
-
-// CONFIG
-
 #[payable]
-pub fn admin_dangerously_set_pot_config(&mut self, update_args: UpdatePotArgs) -> PotConfig
+pub fn challenge_payouts(&mut self, reason: String)
+
+pub fn remove_payouts_challenge(&mut self)
+
+
+// CONFIG / ADMIN
 
 #[payable]
 pub fn owner_change_owner(&mut self, owner: AccountId) -> ()
@@ -468,7 +555,7 @@ pub fn owner_add_admins(&mut self, admins: Vec<AccountId>) -> ()
 pub fn owner_remove_admins(&mut self, admins: Vec<AccountId>) -> ()
 
 #[payable]
-pub fn owner_set_admins(&mut self, account_ids: Vec<AccountId>) -> ()
+pub fn owner_set_admins(&mut self, admins: Vec<AccountId>) -> ()
 
 #[payable]
 pub fn owner_clear_admins(&mut self) -> ()
@@ -495,24 +582,13 @@ pub fn admin_set_max_projects(&mut self, max_projects: u32) -> ()
 pub fn admin_set_base_currency(&mut self, base_currency: AccountId) -> ()
 
 #[payable]
-pub fn admin_set_application_start_ms(&mut self, application_start_ms: u64) -> ()
-
-#[payable]
-pub fn admin_set_application_end_ms(&mut self, application_end_ms: u64) -> ()
-
-#[payable]
-pub fn admin_set_public_round_start_ms(&mut self, public_round_start_ms: u64) -> ()
-
-#[payable]
-pub fn admin_set_public_round_end_ms(&mut self, public_round_end_ms: u64) -> ()
-
-/// Sets `public_round_start_ms` to env::block_timestamp_ms()
-#[payable]
-pub fn admin_set_public_round_open(&mut self, public_round_end_ms: TimestampMs) -> ()
-
-/// Sets `public_round_end_ms` to env::block_timestamp_ms()
-#[payable]
-pub fn admin_set_public_round_closed(&mut self) -> ()
+pub fn admin_set_round_timestamps(
+    &mut self,
+    application_start_ms: Option<TimestampMs>,
+    application_end_ms: Option<TimestampMs>,
+    public_round_start_ms: Option<TimestampMs>,
+    public_round_end_ms: Option<TimestampMs>,
+)
 
 #[payable]
 pub fn admin_set_registry_provider(&mut self, contract_id: AccountId, method_name: String) -> ()
@@ -558,7 +634,20 @@ pub fn admin_set_referral_fee_public_round_basis_points(
 ) -> ()
 
 #[payable]
-pub fn admin_set_cooldown_period_complete(&mut self) -> ()
+pub fn admin_set_cooldown_end_ms(&mut self, cooldown_end_ms: TimestampMs) -> ()
+
+#[payable]
+pub fn admin_update_payouts_challenge(
+    &mut self,
+    challenger_id: AccountId,
+    notes: Option<String>,
+    resolve_challenge: Option<bool>,
+)
+
+pub fn admin_remove_resolved_payouts_challenges(&mut self)
+
+#[payable]
+pub fn admin_dangerously_set_pot_config(&mut self, update_args: UpdatePotArgs) -> PotConfig
 
 
 // SOURCE METADATA
@@ -633,6 +722,11 @@ pub fn get_donations_for_donor(
 
 pub fn get_payouts(&self, from_index: Option<u64>, limit: Option<u64>) -> Vec<Payout>
 
+pub fn get_payouts_challenges(
+    &self,
+    from_index: Option<u64>,
+    limit: Option<u64>,
+) -> Vec<PayoutsChallengeExternal>
 
 // SOURCE METADATA
 
