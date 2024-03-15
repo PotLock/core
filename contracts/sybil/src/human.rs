@@ -44,7 +44,7 @@ impl Contract {
                             //         continue;
                             //     }
                             // }
-                            if provider.stamp_validity_ms.map_or(true, |validity_period| {
+                            if provider.stamp_validity_ms.map_or(true, |validity_period| { // TODO: also check that the stamp has not been deactivated
                                 // let stamp_creation_time = provider.creation_time_ms.unwrap_or(0);
                                 let stamp_id =
                                     StampId::new(account_id.clone(), provider_id.clone());
