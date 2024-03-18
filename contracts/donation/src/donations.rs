@@ -1,9 +1,11 @@
 use crate::*;
 
 // Donation is the data structure that is stored within the contract
+
+// DEPRECATED (V1)
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
-pub struct Donation {
+pub struct DonationV1 {
     /// Unique identifier for the donation
     pub id: DonationId,
     /// ID of the donor               
@@ -26,17 +28,82 @@ pub struct Donation {
     pub referrer_fee: Option<U128>,
 }
 
+// Donation is the data structure that is stored within the contract
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct Donation {
+    /// Unique identifier for the donation
+    pub id: DonationId,
+    /// ID of the donor               
+    pub donor_id: AccountId,
+    /// Amount donated         
+    pub total_amount: u128, // changed from string to int for lower storage + consistency
+    /// FT id (e.g. "near")
+    pub ft_id: AccountId,
+    /// Optional message from the donor          
+    pub message: Option<String>,
+    /// Timestamp when the donation was made
+    pub donated_at_ms: TimestampMs,
+    /// ID of the account receiving the donation  
+    pub recipient_id: AccountId,
+    /// Protocol fee
+    pub protocol_fee: u128, // changed from string to int for lower storage + consistency
+    /// Referrer ID
+    pub referrer_id: Option<AccountId>,
+    /// Referrer fee
+    pub referrer_fee: Option<u128>, // changed from string to int for lower storage + consistency
+}
+
 #[derive(BorshSerialize, BorshDeserialize)]
 pub enum VersionedDonation {
+    V1(DonationV1),
     Current(Donation),
 }
 
 impl From<VersionedDonation> for Donation {
     fn from(donation: VersionedDonation) -> Self {
         match donation {
+            VersionedDonation::V1(v1) => Donation {
+                id: v1.id,
+                donor_id: v1.donor_id,
+                total_amount: v1.total_amount.0,
+                ft_id: v1.ft_id,
+                message: v1.message,
+                donated_at_ms: v1.donated_at_ms,
+                recipient_id: v1.recipient_id,
+                protocol_fee: v1.protocol_fee.0,
+                referrer_id: v1.referrer_id,
+                referrer_fee: v1.referrer_fee.map(|v| v.0),
+            },
             VersionedDonation::Current(current) => current,
         }
     }
+}
+
+/// Ephemeral-only (used in views)
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct DonationExternal {
+    /// Unique identifier for the donation
+    pub id: DonationId,
+    /// ID of the donor               
+    pub donor_id: AccountId,
+    /// Amount donated         
+    pub total_amount: U128,
+    /// FT id (e.g. "near")
+    pub ft_id: AccountId,
+    /// Optional message from the donor          
+    pub message: Option<String>,
+    /// Timestamp when the donation was made
+    pub donated_at_ms: TimestampMs,
+    /// ID of the account receiving the donation  
+    pub recipient_id: AccountId,
+    /// Protocol fee
+    pub protocol_fee: U128,
+    /// Referrer ID
+    pub referrer_id: Option<AccountId>,
+    /// Referrer fee
+    pub referrer_fee: Option<U128>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -45,6 +112,7 @@ pub struct FtReceiverMsg {
     pub recipient_id: AccountId,
     pub referrer_id: Option<AccountId>,
     pub message: Option<String>,
+    pub bypass_protocol_fee: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
@@ -73,8 +141,11 @@ impl Contract {
         ));
 
         // calculate amounts
-        let (protocol_fee, referrer_fee, remainder) =
-            self.calculate_fees_and_remainder(amount.0, msg_json.referrer_id.clone());
+        let (protocol_fee, referrer_fee, remainder) = self.calculate_fees_and_remainder(
+            amount.0,
+            msg_json.referrer_id.clone(),
+            msg_json.bypass_protocol_fee,
+        );
 
         // create and insert donation record
         let initial_storage_usage = env::storage_usage();
@@ -100,7 +171,7 @@ impl Contract {
         ));
         self.handle_transfer_donation(
             msg_json.recipient_id.clone(),
-            U128(remainder),
+            remainder,
             remainder,
             donation.clone(),
         );
@@ -110,6 +181,34 @@ impl Contract {
         // return # unused tokens as per NEP-144 standard
         PromiseOrValue::Value(U128(0))
     }
+
+    // INCOMPLETE
+    // pub fn calculate_storage_cost_for_donation(
+    //     &self,
+    //     sender_id: AccountId,
+    //     amount: U128,
+    //     ft_id: AccountId,
+    //     message: Option<String>,
+    //     recipient_id: AccountId,
+    //     referrer_id: Option<AccountId>,
+    //     bypass_protocol_fee: Option<bool>,
+    // ) -> U128 {
+    //     let initial_storage_usage = env::storage_usage();
+    //     let donation = Donation {
+    //         id: 0,
+    //         donor_id: sender_id,
+    //         total_amount: amount,
+    //         ft_id,
+    //         message,
+    //         donated_at_ms: env::block_timestamp_ms(),
+    //         recipient_id,
+    //         protocol_fee: U128(0),
+    //         referrer_id,
+    //         referrer_fee: None,
+    //     };
+    //     let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
+    //     U128(required_deposit)
+    // }
 
     // INCOMING MAIN
     // #[payable]
@@ -218,11 +317,15 @@ impl Contract {
         recipient_id: AccountId,
         message: Option<String>,
         referrer_id: Option<AccountId>,
+        bypass_protocol_fee: Option<bool>,
     ) -> Donation {
         // calculate amounts
         let amount = env::attached_deposit();
-        let (protocol_fee, referrer_fee, mut remainder) =
-            self.calculate_fees_and_remainder(amount.clone(), referrer_id.clone());
+        let (protocol_fee, referrer_fee, mut remainder) = self.calculate_fees_and_remainder(
+            amount.clone(),
+            referrer_id.clone(),
+            bypass_protocol_fee,
+        );
 
         // create and insert donation record
         let initial_storage_usage = env::storage_usage();
@@ -254,12 +357,7 @@ impl Contract {
             "Transferring donation {} to {}",
             remainder, recipient_id
         ));
-        self.handle_transfer_donation(
-            recipient_id.clone(),
-            U128(remainder),
-            remainder,
-            donation.clone(),
-        );
+        self.handle_transfer_donation(recipient_id.clone(), remainder, remainder, donation.clone());
 
         // NB: fees will be transferred in transfer_funds_callback after successful transfer of donation
 
@@ -271,10 +369,16 @@ impl Contract {
         &self,
         amount: u128,
         referrer_id: Option<AccountId>,
+        bypass_protocol_fee: Option<bool>,
     ) -> (u128, Option<U128>, u128) {
         // calculate protocol fee
         let mut remainder = amount;
-        let protocol_fee = self.calculate_protocol_fee(amount);
+        let protocol_fee = if bypass_protocol_fee.unwrap_or(false) {
+            0
+        } else {
+            self.calculate_protocol_fee(amount)
+        };
+
         remainder -= protocol_fee;
 
         // calculate referrer fee, if applicable
@@ -303,14 +407,14 @@ impl Contract {
         let donation = Donation {
             id: self.next_donation_id,
             donor_id,
-            total_amount,
+            total_amount: total_amount.0,
             ft_id,
             message,
             donated_at_ms,
             recipient_id,
-            protocol_fee,
+            protocol_fee: protocol_fee.0,
             referrer_id,
-            referrer_fee,
+            referrer_fee: referrer_fee.map(|v| v.0),
         };
 
         // increment next_donation_id
@@ -352,13 +456,13 @@ impl Contract {
     pub(crate) fn handle_transfer(
         &self,
         recipient_id: AccountId,
-        amount: U128,
+        amount: u128,
         remainder: Balance,
         donation: Donation,
         transfer_type: TransferType,
     ) {
         if donation.ft_id == AccountId::new_unchecked("near".to_string()) {
-            Promise::new(recipient_id).transfer(amount.0).then(
+            Promise::new(recipient_id).transfer(amount).then(
                 Self::ext(env::current_account_id())
                     .with_static_gas(Gas(XCC_GAS_DEFAULT))
                     .transfer_funds_callback(remainder, donation.clone(), transfer_type),
@@ -385,7 +489,7 @@ impl Contract {
     pub(crate) fn handle_transfer_donation(
         &self,
         recipient_id: AccountId,
-        amount: U128,
+        amount: u128,
         remainder: Balance,
         donation: Donation,
     ) {
@@ -401,7 +505,7 @@ impl Contract {
     pub(crate) fn handle_transfer_protocol_fee(
         &self,
         recipient_id: AccountId,
-        amount: U128,
+        amount: u128,
         remainder: Balance,
         donation: Donation,
     ) {
@@ -417,7 +521,7 @@ impl Contract {
     pub(crate) fn handle_transfer_referrer_fee(
         &self,
         recipient_id: AccountId,
-        amount: U128,
+        amount: u128,
         remainder: Balance,
         donation: Donation,
     ) {
@@ -465,7 +569,7 @@ impl Contract {
                                 Gas(XCC_GAS_DEFAULT),
                             );
                     } else {
-                        Promise::new(donation.donor_id.clone()).transfer(donation.total_amount.0);
+                        Promise::new(donation.donor_id.clone()).transfer(donation.total_amount);
                     }
                     // delete donation record, and refund freed storage cost to donor's storage balance
                     let initial_storage_usage = env::storage_usage();
@@ -502,10 +606,10 @@ impl Contract {
                                 Gas(XCC_GAS_DEFAULT),
                             );
                     } else {
-                        Promise::new(donation.donor_id.clone()).transfer(donation.protocol_fee.0);
+                        Promise::new(donation.donor_id.clone()).transfer(donation.protocol_fee);
                     }
                     // update fee on Donation record to indicate error transferring funds
-                    donation.protocol_fee = U128(0);
+                    donation.protocol_fee = 0;
                     self.donations_by_id
                         .insert(&donation.id.clone(), &VersionedDonation::Current(donation));
                 }
@@ -529,10 +633,10 @@ impl Contract {
                             );
                     } else {
                         Promise::new(donation.donor_id.clone())
-                            .transfer(donation.referrer_fee.unwrap().0);
+                            .transfer(donation.referrer_fee.unwrap());
                     }
                     // update fee on Donation record to indicate error transferring funds
-                    donation.referrer_fee = Some(U128(0));
+                    donation.referrer_fee = Some(0);
                     self.donations_by_id
                         .insert(&donation.id.clone(), &VersionedDonation::Current(donation));
                 }
@@ -640,16 +744,16 @@ impl Contract {
         self.donation_ids_by_ft_id
             .insert(&donation.ft_id, &donation_ids_by_ft_set);
         // add to total donations amount
-        self.total_donations_amount += donation.total_amount.0;
+        self.total_donations_amount += donation.total_amount;
         // add to net donations amount
-        let mut net_donation_amount = donation.total_amount.0 - donation.protocol_fee.0;
+        let mut net_donation_amount = donation.total_amount - donation.protocol_fee;
         if let Some(referrer_fee) = donation.referrer_fee {
-            net_donation_amount -= referrer_fee.0;
-            self.total_referrer_fees += referrer_fee.0;
+            net_donation_amount -= referrer_fee;
+            self.total_referrer_fees += referrer_fee;
         }
         self.net_donations_amount += net_donation_amount;
         // add to total protocol fees
-        self.total_protocol_fees += donation.protocol_fee.0;
+        self.total_protocol_fees += donation.protocol_fee;
     }
 
     pub(crate) fn remove_donation_record_internal(&mut self, donation: &Donation) {
@@ -682,7 +786,11 @@ impl Contract {
     // GETTERS
     // get_donations
     // get_matching_pool_balance
-    pub fn get_donations(&self, from_index: Option<u128>, limit: Option<u64>) -> Vec<Donation> {
+    pub fn get_donations(
+        &self,
+        from_index: Option<u128>,
+        limit: Option<u64>,
+    ) -> Vec<DonationExternal> {
         let start_index: u128 = from_index.unwrap_or_default();
         assert!(
             (self.donations_by_id.len() as u128) >= start_index,
@@ -694,14 +802,14 @@ impl Contract {
             .iter()
             .skip(start_index as usize)
             .take(limit)
-            .map(|(_, v)| Donation::from(v))
+            .map(|(_, v)| self.format_donation(&Donation::from(v)))
             .collect()
     }
 
-    pub fn get_donation_by_id(&self, donation_id: DonationId) -> Option<Donation> {
+    pub fn get_donation_by_id(&self, donation_id: DonationId) -> Option<DonationExternal> {
         self.donations_by_id
             .get(&donation_id)
-            .map(|v| Donation::from(v))
+            .map(|v| self.format_donation(&Donation::from(v)))
     }
 
     pub fn get_donations_for_recipient(
@@ -709,7 +817,7 @@ impl Contract {
         recipient_id: AccountId,
         from_index: Option<u128>,
         limit: Option<u64>,
-    ) -> Vec<Donation> {
+    ) -> Vec<DonationExternal> {
         let start_index: u128 = from_index.unwrap_or_default();
         // TODO: ADD BELOW BACK IN
         // assert!(
@@ -725,7 +833,11 @@ impl Contract {
                 .iter()
                 .skip(start_index as usize)
                 .take(limit)
-                .map(|donation_id| Donation::from(self.donations_by_id.get(&donation_id).unwrap()))
+                .map(|donation_id| {
+                    self.format_donation(&Donation::from(
+                        self.donations_by_id.get(&donation_id).unwrap(),
+                    ))
+                })
                 .collect()
         } else {
             vec![]
@@ -737,7 +849,7 @@ impl Contract {
         donor_id: AccountId,
         from_index: Option<u128>,
         limit: Option<u64>,
-    ) -> Vec<Donation> {
+    ) -> Vec<DonationExternal> {
         let start_index: u128 = from_index.unwrap_or_default();
         // TODO: ADD BELOW BACK IN
         // assert!(
@@ -753,7 +865,11 @@ impl Contract {
                 .iter()
                 .skip(start_index as usize)
                 .take(limit)
-                .map(|donation_id| Donation::from(self.donations_by_id.get(&donation_id).unwrap()))
+                .map(|donation_id| {
+                    self.format_donation(&Donation::from(
+                        self.donations_by_id.get(&donation_id).unwrap(),
+                    ))
+                })
                 .collect()
         } else {
             vec![]
@@ -765,7 +881,7 @@ impl Contract {
         ft_id: AccountId,
         from_index: Option<u128>,
         limit: Option<u64>,
-    ) -> Vec<Donation> {
+    ) -> Vec<DonationExternal> {
         let start_index: u128 = from_index.unwrap_or_default();
         // TODO: ADD BELOW BACK IN
         // assert!(
@@ -781,10 +897,29 @@ impl Contract {
                 .iter()
                 .skip(start_index as usize)
                 .take(limit)
-                .map(|donation_id| Donation::from(self.donations_by_id.get(&donation_id).unwrap()))
+                .map(|donation_id| {
+                    self.format_donation(&Donation::from(
+                        self.donations_by_id.get(&donation_id).unwrap(),
+                    ))
+                })
                 .collect()
         } else {
             vec![]
+        }
+    }
+
+    pub(crate) fn format_donation(&self, donation: &Donation) -> DonationExternal {
+        DonationExternal {
+            id: donation.id,
+            donor_id: donation.donor_id.clone(),
+            total_amount: U128(donation.total_amount),
+            ft_id: donation.ft_id.clone(),
+            message: donation.message.clone(),
+            donated_at_ms: donation.donated_at_ms,
+            recipient_id: donation.recipient_id.clone(),
+            protocol_fee: U128(donation.protocol_fee),
+            referrer_id: donation.referrer_id.clone(),
+            referrer_fee: donation.referrer_fee.map(|v| U128(v)),
         }
     }
 }
