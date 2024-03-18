@@ -318,7 +318,7 @@ impl Contract {
         message: Option<String>,
         referrer_id: Option<AccountId>,
         bypass_protocol_fee: Option<bool>,
-    ) -> Donation {
+    ) -> PromiseOrValue<DonationExternal> {
         // calculate amounts
         let amount = env::attached_deposit();
         let (protocol_fee, referrer_fee, mut remainder) = self.calculate_fees_and_remainder(
@@ -357,12 +357,12 @@ impl Contract {
             "Transferring donation {} to {}",
             remainder, recipient_id
         ));
-        self.handle_transfer_donation(recipient_id.clone(), remainder, remainder, donation.clone());
+        self.handle_transfer_donation(recipient_id.clone(), remainder, remainder, donation.clone())
 
         // NB: fees will be transferred in transfer_funds_callback after successful transfer of donation
 
         // return donation
-        donation
+        // self.format_donation(&donation)
     }
 
     pub(crate) fn calculate_fees_and_remainder(
@@ -460,29 +460,33 @@ impl Contract {
         remainder: Balance,
         donation: Donation,
         transfer_type: TransferType,
-    ) {
+    ) -> PromiseOrValue<DonationExternal> {
         if donation.ft_id == AccountId::new_unchecked("near".to_string()) {
-            Promise::new(recipient_id).transfer(amount).then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(Gas(XCC_GAS_DEFAULT))
-                    .transfer_funds_callback(remainder, donation.clone(), transfer_type),
-            );
+            PromiseOrValue::Promise(
+                Promise::new(recipient_id).transfer(amount).then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(Gas(XCC_GAS_DEFAULT))
+                        .transfer_funds_callback(remainder, donation.clone(), transfer_type),
+                ),
+            )
         } else {
             let ft_transfer_args = json!({ "receiver_id": recipient_id, "amount": amount })
                 .to_string()
                 .into_bytes();
-            Promise::new(donation.ft_id.clone())
-                .function_call(
-                    "ft_transfer".to_string(),
-                    ft_transfer_args,
-                    ONE_YOCTO,
-                    Gas(XCC_GAS_DEFAULT),
-                )
-                .then(
-                    Self::ext(env::current_account_id())
-                        .with_static_gas(Gas(XCC_GAS_DEFAULT))
-                        .transfer_funds_callback(remainder, donation.clone(), transfer_type),
-                );
+            PromiseOrValue::Promise(
+                Promise::new(donation.ft_id.clone())
+                    .function_call(
+                        "ft_transfer".to_string(),
+                        ft_transfer_args,
+                        ONE_YOCTO,
+                        Gas(XCC_GAS_DEFAULT),
+                    )
+                    .then(
+                        Self::ext(env::current_account_id())
+                            .with_static_gas(Gas(XCC_GAS_DEFAULT))
+                            .transfer_funds_callback(remainder, donation.clone(), transfer_type),
+                    ),
+            )
         }
     }
 
@@ -492,14 +496,14 @@ impl Contract {
         amount: u128,
         remainder: Balance,
         donation: Donation,
-    ) {
+    ) -> PromiseOrValue<DonationExternal> {
         self.handle_transfer(
             recipient_id,
             amount,
             remainder,
             donation,
             TransferType::DonationTransfer,
-        );
+        )
     }
 
     pub(crate) fn handle_transfer_protocol_fee(
@@ -508,14 +512,14 @@ impl Contract {
         amount: u128,
         remainder: Balance,
         donation: Donation,
-    ) {
+    ) -> PromiseOrValue<DonationExternal> {
         self.handle_transfer(
             recipient_id,
             amount,
             remainder,
             donation,
             TransferType::ProtocolFeeTransfer,
-        );
+        )
     }
 
     pub(crate) fn handle_transfer_referrer_fee(
@@ -524,14 +528,14 @@ impl Contract {
         amount: u128,
         remainder: Balance,
         donation: Donation,
-    ) {
+    ) -> PromiseOrValue<DonationExternal> {
         self.handle_transfer(
             recipient_id,
             amount,
             remainder,
             donation,
             TransferType::ReferrerFeeTransfer,
-        );
+        )
     }
 
     /// Verifies whether donation & fees have been paid out for a given donation
@@ -542,7 +546,7 @@ impl Contract {
         mut donation: Donation,
         transfer_type: TransferType,
         #[callback_result] call_result: Result<(), PromiseError>,
-    ) {
+    ) -> Option<DonationExternal> {
         let is_ft_transfer = donation.ft_id != AccountId::new_unchecked("near".to_string());
         if call_result.is_err() {
             // ERROR CASE HANDLING
@@ -586,6 +590,7 @@ impl Contract {
                         "Refunded {} yoctoNEAR to {}'s storage balance for freed storage",
                         cost_freed, donation.donor_id
                     ));
+                    None
                 }
                 TransferType::ProtocolFeeTransfer => {
                     log!(format!(
@@ -610,8 +615,11 @@ impl Contract {
                     }
                     // update fee on Donation record to indicate error transferring funds
                     donation.protocol_fee = 0;
-                    self.donations_by_id
-                        .insert(&donation.id.clone(), &VersionedDonation::Current(donation));
+                    self.donations_by_id.insert(
+                        &donation.id.clone(),
+                        &VersionedDonation::Current(donation.clone()),
+                    );
+                    Some(self.format_donation(&donation))
                 }
                 TransferType::ReferrerFeeTransfer => {
                     log!(format!(
@@ -637,8 +645,11 @@ impl Contract {
                     }
                     // update fee on Donation record to indicate error transferring funds
                     donation.referrer_fee = Some(0);
-                    self.donations_by_id
-                        .insert(&donation.id.clone(), &VersionedDonation::Current(donation));
+                    self.donations_by_id.insert(
+                        &donation.id.clone(),
+                        &VersionedDonation::Current(donation.clone()),
+                    );
+                    Some(self.format_donation(&donation))
                 }
             }
         } else {
@@ -680,7 +691,12 @@ impl Contract {
                 }
 
                 // log event indicating successful donation/transfer!
-                log_donation_event(&donation);
+                log_donation_event(&self.format_donation(&donation));
+
+                // return donation
+                Some(self.format_donation(&donation))
+            } else {
+                None
             }
         }
     }

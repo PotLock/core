@@ -1,7 +1,7 @@
 use crate::*;
 
 /// donation
-pub(crate) fn log_donation_event(donation: &Donation) {
+pub(crate) fn log_donation_event(donation: &DonationExternal) {
     env::log_str(
         format!(
             "{}{}",
