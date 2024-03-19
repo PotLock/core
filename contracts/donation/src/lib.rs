@@ -230,29 +230,29 @@ impl Contract {
     // }
 
     // LEAVING FOR REFERENCE - this is the initFunction used in upgrade from v2.0.0 to v3.0.0
-    #[private]
-    #[init(ignore_state)]
-    pub fn migrate() -> Self {
-        let old_state: ContractV2 = env::state_read().expect("state read failed");
-        let num_donations = old_state.donations_by_id.len();
-        Self {
-            owner: old_state.owner,
-            protocol_fee_basis_points: old_state.protocol_fee_basis_points,
-            referral_fee_basis_points: old_state.referral_fee_basis_points,
-            protocol_fee_recipient_account: old_state.protocol_fee_recipient_account,
-            donations_by_id: old_state.donations_by_id,
-            donation_ids_by_recipient_id: old_state.donation_ids_by_recipient_id,
-            donation_ids_by_donor_id: old_state.donation_ids_by_donor_id,
-            donation_ids_by_ft_id: old_state.donation_ids_by_ft_id,
-            total_donations_amount: old_state.total_donations_amount,
-            net_donations_amount: old_state.net_donations_amount,
-            total_protocol_fees: old_state.total_protocol_fees,
-            total_referrer_fees: old_state.total_referrer_fees,
-            contract_source_metadata: old_state.contract_source_metadata,
-            next_donation_id: num_donations as u64 + 1,
-            storage_deposits: UnorderedMap::new(StorageKey::StorageDeposits),
-        }
-    }
+    // #[private]
+    // #[init(ignore_state)]
+    // pub fn migrate() -> Self {
+    //     let old_state: ContractV2 = env::state_read().expect("state read failed");
+    //     let num_donations = old_state.donations_by_id.len();
+    //     Self {
+    //         owner: old_state.owner,
+    //         protocol_fee_basis_points: old_state.protocol_fee_basis_points,
+    //         referral_fee_basis_points: old_state.referral_fee_basis_points,
+    //         protocol_fee_recipient_account: old_state.protocol_fee_recipient_account,
+    //         donations_by_id: old_state.donations_by_id,
+    //         donation_ids_by_recipient_id: old_state.donation_ids_by_recipient_id,
+    //         donation_ids_by_donor_id: old_state.donation_ids_by_donor_id,
+    //         donation_ids_by_ft_id: old_state.donation_ids_by_ft_id,
+    //         total_donations_amount: old_state.total_donations_amount,
+    //         net_donations_amount: old_state.net_donations_amount,
+    //         total_protocol_fees: old_state.total_protocol_fees,
+    //         total_referrer_fees: old_state.total_referrer_fees,
+    //         contract_source_metadata: old_state.contract_source_metadata,
+    //         next_donation_id: num_donations as u64 + 1,
+    //         storage_deposits: UnorderedMap::new(StorageKey::StorageDeposits),
+    //     }
+    // }
 }
 
 impl Default for Contract {
