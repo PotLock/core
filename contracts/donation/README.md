@@ -75,6 +75,12 @@ pub struct Donation {
 }
 ```
 
+### Storage
+
+The storage-related methods (`storage_deposit`, `storage_withdraw` and `storage_balance_of`) are utilized for fungible token (FT) donations, where the user must prepay storage on this Donation contract - to cover the storage of the Donation data - before calling `ft_transfer_call` on the FT contract.
+
+This is a simplified version of the [Storage Management standard](https://nomicon.io/Standards/StorageManagement).
+
 ### Contract Source Metadata
 
 _NB: Below implemented as per NEP 0330 (https://github.com/near/NEPs/blob/master/neps/nep-0330.md), with addition of `commit_hash`_
@@ -120,6 +126,13 @@ pub fn donate(
 ) -> Donation
 
 
+// STORAGE
+
+pub fn storage_deposit(&mut self) -> U128
+
+pub fn storage_withdraw(&mut self, amount: Option<U128>) -> U128
+
+
 // OWNER
 
 #[payable]
@@ -144,6 +157,7 @@ pub fn self_set_source_metadata(&mut self, source_metadata: ContractSourceMetada
 // CONFIG
 
 pub fn get_config(&self) -> Config
+
 
 // DONATIONS
 pub fn get_donations(&self, from_index: Option<u128>, limit: Option<u64>) -> Vec<Donation>
@@ -171,9 +185,16 @@ pub fn get_donations_for_ft(
     limit: Option<u64>,
 ) -> Vec<Donation>
 
+
+// STORAGE
+
+pub fn storage_balance_of(&self, account_id: &AccountId) -> U128
+
+
 // OWNER
 
 pub fn get_owner(&self) -> AccountId
+
 
 // SOURCE METADATA
 

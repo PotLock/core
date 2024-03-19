@@ -3,8 +3,8 @@ use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap, UnorderedSet};
 use near_sdk::json_types::{U128, U64};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
-    env, log, near_bindgen, require, serde_json::json, AccountId, Balance, BorshStorageKey,
-    PanicOnDefault, Promise,
+    env, log, near_bindgen, require, serde_json::json, AccountId, Balance, BorshStorageKey, Gas,
+    PanicOnDefault, Promise, PromiseError, PromiseOrValue,
 };
 
 pub mod constants;
@@ -13,6 +13,7 @@ pub mod events;
 pub mod internal;
 pub mod owner;
 pub mod source;
+pub mod storage;
 pub mod utils;
 pub use crate::constants::*;
 pub use crate::donations::*;
@@ -20,12 +21,13 @@ pub use crate::events::*;
 pub use crate::internal::*;
 pub use crate::owner::*;
 pub use crate::source::*;
+pub use crate::storage::*;
 pub use crate::utils::*;
 
 type DonationId = u64;
 type TimestampMs = u64;
 
-/// DEPRECATED (V1) Registry Contract
+/// DEPRECATED (V1) Donation Contract
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ContractV1 {
@@ -41,7 +43,27 @@ pub struct ContractV1 {
     donation_ids_by_ft_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
 }
 
-/// CURRENT Registry Contract
+/// DEPRECATED (V2) Donation Contract
+#[near_bindgen]
+#[derive(BorshDeserialize, BorshSerialize)]
+pub struct ContractV2 {
+    /// Contract "source" metadata, as specified in NEP 0330 (https://github.com/near/NEPs/blob/master/neps/nep-0330.md), with addition of `commit_hash`
+    contract_source_metadata: LazyOption<VersionedContractSourceMetadata>,
+    owner: AccountId,
+    protocol_fee_basis_points: u32,
+    referral_fee_basis_points: u32,
+    protocol_fee_recipient_account: AccountId,
+    donations_by_id: UnorderedMap<DonationId, VersionedDonation>,
+    donation_ids_by_recipient_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
+    donation_ids_by_donor_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
+    donation_ids_by_ft_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
+    total_donations_amount: Balance, // Add total_donations_amount to track total donations amount without iterating through all donations
+    net_donations_amount: Balance, // Add net_donations_amount to track net donations amount (after fees) without iterating through all donations
+    total_protocol_fees: Balance, // Add total_protocol_fees to track total protocol fees without iterating through all donations
+    total_referrer_fees: Balance, // Add total_referrer_fees to track total referral fees without iterating through all donations
+}
+
+/// CURRENT Donation Contract
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Contract {
@@ -55,26 +77,40 @@ pub struct Contract {
     donation_ids_by_recipient_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
     donation_ids_by_donor_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
     donation_ids_by_ft_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
-    total_donations_amount: Balance, // Add total_donations_amount to track total donations amount without iterating through all donations
-    net_donations_amount: Balance,   // Add net_donations_amount to track net donations amount (after fees) without iterating through all donations
-    total_protocol_fees: Balance,    // Add total_protocol_fees to track total protocol fees without iterating through all donations
-    total_referrer_fees: Balance,    // Add total_referrer_fees to track total referral fees without iterating through all donations
+    total_donations_amount: Balance,
+    net_donations_amount: Balance,
+    total_protocol_fees: Balance,
+    total_referrer_fees: Balance,
+    next_donation_id: DonationId, // Add next_donation_id to track next donation id and handle failed donations without accidental overwrites
+    storage_deposits: UnorderedMap<AccountId, Balance>, // Add storage_deposits to track storage deposits for FTs
 }
+// #[derive(BorshSerialize, BorshDeserialize)]
+// pub enum VersionedContract {
+//     Current(Contract),
+//     V1(ContractV1),
+// }
 
-
-#[derive(BorshSerialize, BorshDeserialize)]
-pub enum VersionedContract {
-    Current(Contract),
-}
-
-/// Convert VersionedContract to Contract
-impl From<VersionedContract> for Contract {
-    fn from(contract: VersionedContract) -> Self {
-        match contract {
-            VersionedContract::Current(current) => current,
-        }
-    }
-}
+// /// Convert VersionedContract to Contract
+// impl From<VersionedContract> for Contract {
+//     fn from(contract: VersionedContract) -> Self {
+//         match contract {
+//             VersionedContract::Current(current) => current,
+//             VersionedContract::V1(v1) => Contract {
+//                 contract_source_metadata: v1.contract_source_metadata,
+//                 owner: v1.owner,
+//                 protocol_fee_basis_points: v1.protocol_fee_basis_points,
+//                 referral_fee_basis_points: v1.referral_fee_basis_points,
+//                 protocol_fee_recipient_account: v1.protocol_fee_recipient_account,
+//                 donations_by_id: v1.donations_by_id,
+//                 donation_ids_by_recipient_id: v1.donation_ids_by_recipient_id,
+//                 donation_ids_by_donor_id: v1.donation_ids_by_donor_id,
+//                 donation_ids_by_ft_id: v1.donation_ids_by_ft_id,
+//                 next_donation_id: 0,
+//                 storage_deposits: v1.storage_deposits,
+//             },
+//         }
+//     }
+// }
 
 /// NOT stored in contract storage; only used for get_config response
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
@@ -101,6 +137,7 @@ pub enum StorageKey {
     DonationIdsByFtId,
     DonationIdsByFtIdInner { ft_id: AccountId },
     SourceMetadata,
+    StorageDeposits,
 }
 
 #[near_bindgen]
@@ -131,6 +168,8 @@ impl Contract {
                 StorageKey::SourceMetadata,
                 Some(&VersionedContractSourceMetadata::Current(source_metadata)),
             ),
+            next_donation_id: 1,
+            storage_deposits: UnorderedMap::new(StorageKey::StorageDeposits),
         }
     }
 
@@ -189,6 +228,31 @@ impl Contract {
     //         contract_source_metadata: old_state.contract_source_metadata,
     //     }
     // }
+
+    // LEAVING FOR REFERENCE - this is the initFunction used in upgrade from v2.0.0 to v3.0.0
+    // #[private]
+    // #[init(ignore_state)]
+    // pub fn migrate() -> Self {
+    //     let old_state: ContractV2 = env::state_read().expect("state read failed");
+    //     let num_donations = old_state.donations_by_id.len();
+    //     Self {
+    //         owner: old_state.owner,
+    //         protocol_fee_basis_points: old_state.protocol_fee_basis_points,
+    //         referral_fee_basis_points: old_state.referral_fee_basis_points,
+    //         protocol_fee_recipient_account: old_state.protocol_fee_recipient_account,
+    //         donations_by_id: old_state.donations_by_id,
+    //         donation_ids_by_recipient_id: old_state.donation_ids_by_recipient_id,
+    //         donation_ids_by_donor_id: old_state.donation_ids_by_donor_id,
+    //         donation_ids_by_ft_id: old_state.donation_ids_by_ft_id,
+    //         total_donations_amount: old_state.total_donations_amount,
+    //         net_donations_amount: old_state.net_donations_amount,
+    //         total_protocol_fees: old_state.total_protocol_fees,
+    //         total_referrer_fees: old_state.total_referrer_fees,
+    //         contract_source_metadata: old_state.contract_source_metadata,
+    //         next_donation_id: num_donations as u64 + 1,
+    //         storage_deposits: UnorderedMap::new(StorageKey::StorageDeposits),
+    //     }
+    // }
 }
 
 impl Default for Contract {
@@ -216,6 +280,8 @@ impl Default for Contract {
                     },
                 )),
             ),
+            next_donation_id: 1,
+            storage_deposits: UnorderedMap::new(StorageKey::StorageDeposits),
         }
     }
 }
