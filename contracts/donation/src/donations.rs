@@ -337,7 +337,7 @@ impl Contract {
                 ),
             )
         } else {
-            let ft_transfer_args = json!({ "receiver_id": recipient_id, "amount": amount })
+            let ft_transfer_args = json!({ "receiver_id": recipient_id, "amount": U128(amount) })
                 .to_string()
                 .into_bytes();
             PromiseOrValue::Promise(
@@ -429,7 +429,7 @@ impl Contract {
                     // return funds to donor
                     if is_ft_transfer {
                         let donation_transfer_args =
-                            json!({ "receiver_id": donation.donor_id, "amount": donation.total_amount.clone() })
+                            json!({ "receiver_id": donation.donor_id, "amount": U128(donation.total_amount.clone()) })
                                 .to_string()
                                 .into_bytes();
                         Promise::new(AccountId::new_unchecked(donation.ft_id.to_string()))
@@ -467,7 +467,7 @@ impl Contract {
                     // return funds to donor
                     if is_ft_transfer {
                         let donation_transfer_args =
-                            json!({ "receiver_id": donation.donor_id, "amount": donation.protocol_fee })
+                            json!({ "receiver_id": donation.donor_id, "amount": U128(donation.protocol_fee) })
                                 .to_string()
                                 .into_bytes();
                         Promise::new(AccountId::new_unchecked(donation.ft_id.to_string()))
@@ -496,7 +496,7 @@ impl Contract {
                     // return funds to donor
                     if is_ft_transfer {
                         let donation_transfer_args =
-                            json!({ "receiver_id": donation.donor_id, "amount": donation.referrer_fee })
+                            json!({ "receiver_id": donation.donor_id, "amount": donation.referrer_fee.map(|v| U128(v)) })
                                 .to_string()
                                 .into_bytes();
                         Promise::new(AccountId::new_unchecked(donation.ft_id.to_string()))
