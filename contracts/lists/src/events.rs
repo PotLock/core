@@ -84,6 +84,50 @@ pub(crate) fn log_delete_list_event(list_id: ListId) {
     );
 }
 
+/// upvote list event
+pub(crate) fn log_upvote_event(list_id: ListId, account_id: AccountId) {
+    env::log_str(
+        format!(
+            "{}{}",
+            EVENT_JSON_PREFIX,
+            json!({
+                "standard": "potlock",
+                "version": "1.0.0",
+                "event": "upvote",
+                "data": [
+                    {
+                        "list_id": list_id,
+                        "account_id": account_id,
+                    }
+                ]
+            })
+        )
+        .as_ref(),
+    );
+}
+
+/// remove upvote list event
+pub(crate) fn log_remove_upvote_event(list_id: ListId, account_id: AccountId) {
+    env::log_str(
+        format!(
+            "{}{}",
+            EVENT_JSON_PREFIX,
+            json!({
+                "standard": "potlock",
+                "version": "1.0.0",
+                "event": "remove_upvote",
+                "data": [
+                    {
+                        "list_id": list_id,
+                        "account_id": account_id,
+                    }
+                ]
+            })
+        )
+        .as_ref(),
+    );
+}
+
 /// update (add or remove) admins event
 pub(crate) fn log_update_admins_event(list_id: ListId, admins: Vec<AccountId>) {
     env::log_str(

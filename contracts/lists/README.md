@@ -70,6 +70,8 @@ pub struct ListExternal {
     pub created_at: TimestampMs,
     pub updated_at: TimestampMs,
     pub default_registration_status: RegistrationStatus,
+    pub total_registrations_count: u64, // includes registrations of all statuses
+    pub total_upvotes_count: u64,
 }
 ```
 
@@ -149,6 +151,14 @@ pub fn delete_list(&mut self, list_id: ListId) // can only be called by list own
 // emits delete_list event
 
 #[payable]
+pub fn upvote(&mut self, list_id: ListId)
+// if upvote was added, emits upvote event
+
+#[payable]
+pub fn remove_upvote(&mut self, list_id: ListId)
+// if upvote was removed, emits remove_upvote event
+
+#[payable]
 pub fn owner_change_owner(&mut self, list_id: ListId, new_owner_id: AccountId) -> AccountId // returns new owner ID
 // emits owner_transfer event
 
@@ -206,6 +216,13 @@ pub fn get_lists(&self, from_index: Option<u64>, limit: Option<u64>) -> Vec<List
 pub fn get_lists_for_owner(&self, owner_id: AccountId) -> Vec<ListExternal>
 
 pub fn get_lists_for_registrant(&self, registrant_id: AccountId) -> Vec<ListExternal>
+
+pub fn get_upvotes_for_list(
+    &self,
+    list_id: ListId,
+    from_index: Option<u64>,
+    limit: Option<u64>,
+) -> Vec<AccountId>
 
 // REGISTRATIONS
 
@@ -317,6 +334,50 @@ pub(crate) fn log_delete_list_event(list_id: ListId) {
                 "data": [
                     {
                         "list_id": list_id,
+                    }
+                ]
+            })
+        )
+        .as_ref(),
+    );
+}
+
+/// upvote list event
+pub(crate) fn log_upvote_event(list_id: ListId, account_id: AccountId) {
+    env::log_str(
+        format!(
+            "{}{}",
+            EVENT_JSON_PREFIX,
+            json!({
+                "standard": "potlock",
+                "version": "1.0.0",
+                "event": "upvote",
+                "data": [
+                    {
+                        "list_id": list_id,
+                        "account_id": account_id,
+                    }
+                ]
+            })
+        )
+        .as_ref(),
+    );
+}
+
+/// remove upvote list event
+pub(crate) fn log_remove_upvote_event(list_id: ListId, account_id: AccountId) {
+    env::log_str(
+        format!(
+            "{}{}",
+            EVENT_JSON_PREFIX,
+            json!({
+                "standard": "potlock",
+                "version": "1.0.0",
+                "event": "remove_upvote",
+                "data": [
+                    {
+                        "list_id": list_id,
+                        "account_id": account_id,
                     }
                 ]
             })

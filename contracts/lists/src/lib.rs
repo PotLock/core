@@ -51,17 +51,19 @@ pub struct Contract {
     registration_ids_by_list_id: UnorderedMap<ListId, UnorderedSet<RegistrationId>>,
     /// Lookup from Registrant ID to registration IDs
     registration_ids_by_registrant_id: UnorderedMap<RegistrantId, UnorderedSet<RegistrationId>>,
+    /// Lookup from List ID to upvotes (account IDs)
+    upvotes_by_list_id: LookupMap<ListId, UnorderedSet<AccountId>>,
     // // TODO: might want to add a lookup from list ID to registration IDs e.g. all_registrations_by_list_id, so don't have to iterate through all registrations sets & synthesize data
     // /// Pending registrations by List ID
-    // pending_registrations_by_list_id: UnorderedMap<ListId, UnorderedSet<RegistrationId>>,
+    // pending_registration_ids_by_list_id: UnorderedMap<ListId, UnorderedSet<RegistrationId>>,
     // /// Approved registrations by List ID
-    // approved_registrations_by_list_id: UnorderedMap<ListId, UnorderedSet<RegistrationId>>,
-    // /// Rejected registrations by List ID
-    // rejected_registrations_by_list_id: UnorderedMap<ListId, UnorderedSet<RegistrationId>>,
-    // /// Graylisted registrations by List ID
-    // graylisted_registrations_by_list_id: UnorderedMap<ListId, UnorderedSet<RegistrationId>>,
-    // /// Blacklisted registrations by List ID
-    // blacklisted_registrations_by_list_id: UnorderedMap<ListId, UnorderedSet<RegistrationId>>,
+    // approved_registration_ids_by_list_id: UnorderedMap<ListId, UnorderedSet<RegistrationId>>,
+    // /// Rejected registration_ids by List ID
+    // rejected_registration_ids_by_list_id: UnorderedMap<ListId, UnorderedSet<RegistrationId>>,
+    // /// Graylisted registration_ids by List ID
+    // graylisted_registration_ids_by_list_id: UnorderedMap<ListId, UnorderedSet<RegistrationId>>,
+    // /// Blacklisted registration_ids by List ID
+    // blacklisted_registration_ids_by_list_id: UnorderedMap<ListId, UnorderedSet<RegistrationId>>,
     /// Contract "source" metadata
     contract_source_metadata: LazyOption<VersionedContractSourceMetadata>,
 }
@@ -80,6 +82,8 @@ pub enum StorageKey {
     RegistrationIdsByListIdInner { list_id: ListId },
     RegistrationIdsByRegistrantId,
     RegistrationIdsByRegistrantIdInner { registrant_id: AccountId },
+    UpvotesByListId,
+    UpvotesByListIdInner { list_id: ListId },
     // PendingRegistrantsByListId,
     // ApprovedRegistrantsByListId,
     // RejectedRegistrantsByListId,
@@ -104,6 +108,7 @@ impl Contract {
             registration_ids_by_registrant_id: UnorderedMap::new(
                 StorageKey::RegistrationIdsByRegistrantId,
             ),
+            upvotes_by_list_id: LookupMap::new(StorageKey::UpvotesByListId),
             contract_source_metadata: LazyOption::new(
                 StorageKey::SourceMetadata,
                 Some(&VersionedContractSourceMetadata::Current(source_metadata)),

@@ -38,6 +38,8 @@ pub struct ListExternal {
     pub created_at: TimestampMs,
     pub updated_at: TimestampMs,
     pub default_registration_status: RegistrationStatus,
+    pub total_registrations_count: u64,
+    pub total_upvotes_count: u64,
 }
 
 #[near_bindgen]
@@ -82,6 +84,12 @@ impl Contract {
         self.registration_ids_by_list_id.insert(
             &list_id,
             &UnorderedSet::new(StorageKey::RegistrationIdsByListIdInner {
+                list_id: self.next_list_id,
+            }),
+        );
+        self.upvotes_by_list_id.insert(
+            &list_id,
+            &UnorderedSet::new(StorageKey::UpvotesByListIdInner {
                 list_id: self.next_list_id,
             }),
         );
@@ -147,7 +155,39 @@ impl Contract {
                     .remove(&registration_id);
             }
         }
+        self.registration_ids_by_list_id.remove(&list_id);
+        self.upvotes_by_list_id.remove(&list_id);
         log_delete_list_event(list_id);
+        refund_deposit(initial_storage_usage);
+    }
+
+    #[payable]
+    pub fn upvote(&mut self, list_id: ListId) {
+        let initial_storage_usage = env::storage_usage();
+        let mut upvotes = self
+            .upvotes_by_list_id
+            .get(&list_id)
+            .expect("Upvotes by list ID do not exist");
+        let inserted = upvotes.insert(&env::predecessor_account_id());
+        self.upvotes_by_list_id.insert(&list_id, &upvotes);
+        if inserted {
+            log_upvote_event(list_id, env::predecessor_account_id());
+        }
+        refund_deposit(initial_storage_usage);
+    }
+
+    #[payable]
+    pub fn remove_upvote(&mut self, list_id: ListId) {
+        let initial_storage_usage = env::storage_usage();
+        let mut upvotes = self
+            .upvotes_by_list_id
+            .get(&list_id)
+            .expect("Upvotes by list ID do not exist");
+        let removed = upvotes.remove(&env::predecessor_account_id());
+        self.upvotes_by_list_id.insert(&list_id, &upvotes);
+        if removed {
+            log_remove_upvote_event(list_id, env::predecessor_account_id());
+        }
         refund_deposit(initial_storage_usage);
     }
 
@@ -192,6 +232,21 @@ impl Contract {
             .collect()
     }
 
+    pub fn get_upvotes_for_list(
+        &self,
+        list_id: ListId,
+        from_index: Option<u64>,
+        limit: Option<u64>,
+    ) -> Vec<AccountId> {
+        self.upvotes_by_list_id
+            .get(&list_id)
+            .expect("Upvotes by list ID do not exist")
+            .iter()
+            .skip(from_index.unwrap_or(0) as usize)
+            .take(limit.unwrap_or(u64::MAX) as usize)
+            .collect()
+    }
+
     pub(crate) fn format_list(&self, list_id: ListId, list_internal: ListInternal) -> ListExternal {
         ListExternal {
             id: list_id,
@@ -206,6 +261,16 @@ impl Contract {
             created_at: list_internal.created_at,
             updated_at: list_internal.updated_at,
             default_registration_status: list_internal.default_registration_status,
+            total_registrations_count: self
+                .registration_ids_by_list_id
+                .get(&list_id)
+                .expect("Registration IDs by list ID do not exist")
+                .len(),
+            total_upvotes_count: self
+                .upvotes_by_list_id
+                .get(&list_id)
+                .expect("Upvotes by list ID do not exist")
+                .len(),
         }
     }
 }
