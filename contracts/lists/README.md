@@ -152,6 +152,7 @@ pub fn delete_list(&mut self, list_id: ListId) // can only be called by list own
 
 #[payable]
 pub fn upvote(&mut self, list_id: ListId)
+// panics if list owner or admin (you can't upvote your own list)
 // if upvote was added, emits upvote event
 
 #[payable]
@@ -181,8 +182,11 @@ pub fn owner_clear_admins(&mut self, list_id: ListId) -> Vec<AccountId> // retur
 pub fn register(
     &mut self,
     list_id: ListId,
-    _registrant_id: Option<AccountId>, // can only be provided by list owner/admin (otherwise the calling account ID will be considered the registrant_id)
-    notes: Option<String>, // if called by owner/admin, these will be stored as Registration.admin_notes; otherwise, they will be Registration.registrant_notes
+    _registrant_id: Option<AccountId>,
+    _submitted_ms: Option<TimestampMs>, // added temporarily for the purposes of migrating existing Registry contract
+    _updated_ms: Option<TimestampMs>, // added temporarily for the purposes of migrating existing Registry contract
+    _status: Option<RegistrationStatus>, // added temporarily for the purposes of migrating existing Registry contract
+    notes: Option<String>,
 ) -> RegistrationExternal
 // emits create_registration event
 

@@ -76,6 +76,9 @@ impl Contract {
         &mut self,
         list_id: ListId,
         _registrant_id: Option<AccountId>,
+        _submitted_ms: Option<TimestampMs>, // added temporarily for the purposes of migrating existing Registry contract
+        _updated_ms: Option<TimestampMs>, // added temporarily for the purposes of migrating existing Registry contract
+        _status: Option<RegistrationStatus>, // added temporarily for the purposes of migrating existing Registry contract
         notes: Option<String>,
     ) -> RegistrationExternal {
         let initial_storage_usage = env::storage_usage();
@@ -101,17 +104,45 @@ impl Contract {
             "Registration already exists for this registrant on this list"
         );
 
+        let status = if caller_is_admin_or_greater {
+            if let Some(_status) = _status {
+                _status
+            } else {
+                RegistrationStatus::Approved
+            }
+        } else {
+            list.default_registration_status
+        };
+
+        let block_timestamp_ms = env::block_timestamp_ms();
+
+        let submitted_ms = if caller_is_admin_or_greater {
+            if let Some(_submitted_ms) = _submitted_ms {
+                _submitted_ms
+            } else {
+                block_timestamp_ms
+            }
+        } else {
+            block_timestamp_ms
+        };
+
+        let updated_ms = if caller_is_admin_or_greater {
+            if let Some(_updated_ms) = _updated_ms {
+                _updated_ms
+            } else {
+                block_timestamp_ms
+            }
+        } else {
+            block_timestamp_ms
+        };
+
         // create registration
         let registration_internal = RegistrationInternal {
             registrant_id: registrant_id.clone(),
             list_id,
-            status: if self.is_caller_list_admin_or_greater(&list_id) {
-                RegistrationStatus::Approved
-            } else {
-                list.default_registration_status
-            },
-            submitted_ms: env::block_timestamp_ms(),
-            updated_ms: env::block_timestamp_ms(),
+            status,
+            submitted_ms,
+            updated_ms,
             admin_notes: if caller_is_admin_or_greater {
                 notes.clone()
             } else {
