@@ -61,6 +61,8 @@ pub struct ListInternal {
     pub created_at: TimestampMs,
     pub updated_at: TimestampMs,
     pub default_registration_status: RegistrationStatus,
+    pub admin_only_registrations: bool, // defaults to false
+    pub cover_img_url: Option<String>,
     // consider adding list status, e.g. draft, active, inactive, etc.
 }
 
@@ -74,7 +76,8 @@ pub struct ListExternal {
     pub created_at: TimestampMs,
     pub updated_at: TimestampMs,
     pub default_registration_status: RegistrationStatus,
-    pub total_registrations_count: u64, // includes registrations of all statuses
+    pub admin_only_registrations: bool,
+    pub total_registrations_count: u64,
     pub total_upvotes_count: u64,
 }
 ```
@@ -135,8 +138,10 @@ pub fn create_list(
     &mut self,
     name: String,
     description: Option<String>,
+    cover_image_url: Option<String>,
     admins: Option<Vec<AccountId>>,
     default_registration_status: RegistrationStatus,
+    admin_only_registrations: Option<bool>,
 ) -> ListExternal
 // NB: Caller will be the list owner
 // emits create_list event
@@ -147,6 +152,8 @@ pub fn update_list(
     list_id: ListId,
     name: Option<String>,
     description: Option<String>,
+    cover_image_url: Option<String>,
+    remove_cover_image: Option<bool>,
     default_registration_status: Option<RegistrationStatus>,
 ) -> ListExternal // can only be called by list owner
 // emits update_list event

@@ -6,11 +6,13 @@ pub struct ListInternal {
     // don't need ID since it's the key, but should include in ListExternal
     pub name: String,
     pub description: Option<String>,
+    pub cover_image_url: Option<String>,
     pub owner: AccountId,
     pub created_at: TimestampMs,
     pub updated_at: TimestampMs,
     pub default_registration_status: RegistrationStatus,
-    // consider adding list status, e.g. draft, active, inactive, etc.
+    pub admin_only_registrations: bool, // defaults to false
+                                        // consider adding list status, e.g. draft, active, inactive, etc.
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -33,11 +35,13 @@ pub struct ListExternal {
     pub id: ListId,
     pub name: String,
     pub description: Option<String>,
+    pub cover_image_url: Option<String>,
     pub owner: AccountId,
     pub admins: Vec<AccountId>,
     pub created_at: TimestampMs,
     pub updated_at: TimestampMs,
     pub default_registration_status: RegistrationStatus,
+    pub admin_only_registrations: bool,
     pub total_registrations_count: u64,
     pub total_upvotes_count: u64,
 }
@@ -49,18 +53,22 @@ impl Contract {
         &mut self,
         name: String,
         description: Option<String>,
+        cover_image_url: Option<String>,
         admins: Option<Vec<AccountId>>,
         default_registration_status: RegistrationStatus,
+        admin_only_registrations: Option<bool>,
     ) -> ListExternal {
         let initial_storage_usage = env::storage_usage();
         let list_id = self.next_list_id;
         let list_internal = ListInternal {
             name,
             description,
+            cover_image_url,
             owner: env::predecessor_account_id(),
             created_at: env::block_timestamp_ms(),
             updated_at: env::block_timestamp_ms(),
             default_registration_status,
+            admin_only_registrations: admin_only_registrations.unwrap_or(false),
         };
         self.lists_by_id
             .insert(&list_id, &VersionedList::Current(list_internal.clone()));
@@ -106,6 +114,8 @@ impl Contract {
         list_id: ListId,
         name: Option<String>,
         description: Option<String>,
+        cover_image_url: Option<String>,
+        remove_cover_image: Option<bool>,
         default_registration_status: Option<RegistrationStatus>,
     ) -> ListExternal {
         self.assert_list_owner(&list_id);
@@ -117,6 +127,12 @@ impl Contract {
         }
         if let Some(description) = description {
             list.description = Some(description);
+        }
+        if let Some(cover_image_url) = cover_image_url {
+            list.cover_image_url = Some(cover_image_url);
+        }
+        if remove_cover_image.unwrap_or(false) {
+            list.cover_image_url = None;
         }
         if let Some(default_registration_status) = default_registration_status {
             list.default_registration_status = default_registration_status;
@@ -268,6 +284,7 @@ impl Contract {
             id: list_id,
             name: list_internal.name,
             description: list_internal.description,
+            cover_image_url: list_internal.cover_image_url,
             owner: list_internal.owner,
             admins: self
                 .list_admins_by_list_id
@@ -277,6 +294,7 @@ impl Contract {
             created_at: list_internal.created_at,
             updated_at: list_internal.updated_at,
             default_registration_status: list_internal.default_registration_status,
+            admin_only_registrations: list_internal.admin_only_registrations,
             total_registrations_count: self
                 .registration_ids_by_list_id
                 .get(&list_id)
