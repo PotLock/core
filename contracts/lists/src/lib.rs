@@ -56,6 +56,8 @@ pub struct Contract {
     registration_ids_by_registrant_id: UnorderedMap<RegistrantId, UnorderedSet<RegistrationId>>,
     /// Lookup from List ID to upvotes (account IDs)
     upvotes_by_list_id: LookupMap<ListId, UnorderedSet<AccountId>>,
+    /// Lookup from Account ID to List IDs upvoted
+    upvoted_lists_by_account_id: UnorderedMap<AccountId, UnorderedSet<ListId>>,
     /// Lookup from Registrant ID to storage claims (to refund registrants if a list owner deletes a list or removes their registration)
     refund_claims_by_registrant_id: UnorderedMap<RegistrantId, Balance>,
     // // TODO: might want to add a lookup from list ID to registration IDs e.g. all_registrations_by_list_id, so don't have to iterate through all registrations sets & synthesize data
@@ -89,6 +91,8 @@ pub enum StorageKey {
     RegistrationIdsByRegistrantIdInner { registrant_id: AccountId },
     UpvotesByListId,
     UpvotesByListIdInner { list_id: ListId },
+    UpvotedListsByAccountId,
+    UpvotedListsByAccountIdInner { account_id: AccountId },
     RefundClaimsByRegistrantId,
     // PendingRegistrantsByListId,
     // ApprovedRegistrantsByListId,
@@ -115,6 +119,7 @@ impl Contract {
                 StorageKey::RegistrationIdsByRegistrantId,
             ),
             upvotes_by_list_id: LookupMap::new(StorageKey::UpvotesByListId),
+            upvoted_lists_by_account_id: UnorderedMap::new(StorageKey::UpvotedListsByAccountId),
             refund_claims_by_registrant_id: UnorderedMap::new(
                 StorageKey::RefundClaimsByRegistrantId,
             ),

@@ -246,6 +246,13 @@ pub fn get_upvotes_for_list(
     limit: Option<u64>,
 ) -> Vec<AccountId>
 
+pub fn get_upvoted_lists_for_account(
+    &self,
+    account_id: AccountId,
+    from_index: Option<u64>,
+    limit: Option<u64>,
+) -> Vec<ListExternal>
+
 
 // REGISTRATIONS
 

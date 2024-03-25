@@ -202,6 +202,17 @@ impl Contract {
         }
         let inserted = upvotes.insert(&env::predecessor_account_id());
         self.upvotes_by_list_id.insert(&list_id, &upvotes);
+        let mut upvoted_lists = self
+            .upvoted_lists_by_account_id
+            .get(&env::predecessor_account_id())
+            .unwrap_or(UnorderedSet::new(
+                StorageKey::UpvotedListsByAccountIdInner {
+                    account_id: env::predecessor_account_id(),
+                },
+            ));
+        upvoted_lists.insert(&list_id);
+        self.upvoted_lists_by_account_id
+            .insert(&env::predecessor_account_id(), &upvoted_lists);
         refund_deposit(initial_storage_usage);
         if inserted {
             log_upvote_event(list_id, env::predecessor_account_id());
@@ -217,6 +228,13 @@ impl Contract {
             .expect("Upvotes by list ID do not exist");
         let removed = upvotes.remove(&env::predecessor_account_id());
         self.upvotes_by_list_id.insert(&list_id, &upvotes);
+        let mut upvoted_lists = self
+            .upvoted_lists_by_account_id
+            .get(&env::predecessor_account_id())
+            .expect("Upvoted lists by account ID do not exist");
+        upvoted_lists.remove(&list_id);
+        self.upvoted_lists_by_account_id
+            .insert(&env::predecessor_account_id(), &upvoted_lists);
         refund_deposit(initial_storage_usage);
         if removed {
             log_remove_upvote_event(list_id, env::predecessor_account_id());
@@ -276,6 +294,29 @@ impl Contract {
             .iter()
             .skip(from_index.unwrap_or(0) as usize)
             .take(limit.unwrap_or(u64::MAX) as usize)
+            .collect()
+    }
+
+    pub fn get_upvoted_lists_for_account(
+        &self,
+        account_id: AccountId,
+        from_index: Option<u64>,
+        limit: Option<u64>,
+    ) -> Vec<ListExternal> {
+        self.upvoted_lists_by_account_id
+            .get(&account_id)
+            .expect("Upvoted lists by account ID do not exist")
+            .iter()
+            .skip(from_index.unwrap_or(0) as usize)
+            .take(limit.unwrap_or(u64::MAX) as usize)
+            .map(|list_id| {
+                self.format_list(
+                    list_id,
+                    ListInternal::from(
+                        self.lists_by_id.get(&list_id).expect("List does not exist"),
+                    ),
+                )
+            })
             .collect()
     }
 
