@@ -143,6 +143,8 @@ impl Contract {
         // remove all registrations for this list
         if let Some(list_registrations) = list_registrations {
             for registration_id in list_registrations.iter() {
+                // track storage freed per registration removal & refund registrants
+                let storage_usage: u64 = env::storage_usage();
                 self.registrations_by_id.remove(&registration_id);
                 let registration = RegistrationInternal::from(
                     self.registrations_by_id
@@ -153,6 +155,16 @@ impl Contract {
                     .get(&registration.registrant_id)
                     .expect("Registrant IDs by registrant do not exist")
                     .remove(&registration_id);
+                let storage_freed = storage_usage - env::storage_usage();
+                let cost_freed = env::storage_byte_cost() * Balance::from(storage_freed);
+                let existing_refund = self
+                    .refund_claims_by_registrant_id
+                    .get(&registration.registrant_id)
+                    .unwrap_or(0);
+                self.refund_claims_by_registrant_id.insert(
+                    &registration.registrant_id,
+                    &(existing_refund + &cost_freed),
+                );
             }
         }
         self.registration_ids_by_list_id.remove(&list_id);

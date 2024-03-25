@@ -40,6 +40,10 @@ pub struct Contract {
     registration_ids_by_list_id: UnorderedMap<ListId, UnorderedSet<RegistrationId>>,
     /// Lookup from Registrant ID to registration IDs
     registration_ids_by_registrant_id: UnorderedMap<RegistrantId, UnorderedSet<RegistrationId>>,
+    /// Lookup from List ID to upvotes (account IDs)
+    upvotes_by_list_id: LookupMap<ListId, UnorderedSet<AccountId>>,
+    /// Lookup from Registrant ID to storage claims (to refund registrants if a list owner deletes a list or removes their registration)
+    refund_claims_by_registrant_id: UnorderedMap<RegistrantId, Balance>,
     /// Contract "source" metadata
     contract_source_metadata: LazyOption<VersionedContractSourceMetadata>,
 }
@@ -149,6 +153,7 @@ pub fn update_list(
 
 #[payable]
 pub fn delete_list(&mut self, list_id: ListId) // can only be called by list owner
+// records refunds for all registrants, which can be withdrawn at their leisure using withdraw_refund method
 // emits delete_list event
 
 #[payable]
@@ -205,6 +210,11 @@ pub fn update_registration(
 // emits update_registration event
 
 
+// REFUNDS
+
+pub fn withdraw_refund(&mut self) -> PromiseOrValue<u128> // allows a user to withdraw their refund balance
+
+
 // SOURCE METADATA
 
 pub fn self_set_source_metadata(&mut self, source_metadata: ContractSourceMetadata) // only callable by the contract account (reasoning is that this should be able to be updated by the same account that can deploy code to the account)
@@ -228,6 +238,7 @@ pub fn get_upvotes_for_list(
     from_index: Option<u64>,
     limit: Option<u64>,
 ) -> Vec<AccountId>
+
 
 // REGISTRATIONS
 
@@ -253,6 +264,13 @@ pub fn is_registered(
     account_id: RegistrantId,
     required_status: Option<RegistrationStatus>,
 ) -> bool
+
+
+// REFUNDS
+
+pub fn get_available_refund(&self, account_id: Option<AccountId>) -> Balance // falls back to caller account ID
+
+pub fn get_refunds(&self) -> HashMap<AccountId, Balance>
 
 
 // SOURCE METADATA

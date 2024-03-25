@@ -197,7 +197,6 @@ impl Contract {
 
     #[payable]
     pub fn unregister(&mut self, list_id: Option<ListId>, registration_id: Option<RegistrationId>) {
-        let initial_storage_usage = env::storage_usage();
         let registrant_id = env::predecessor_account_id();
 
         // unregister by list ID
@@ -217,16 +216,12 @@ impl Contract {
             });
             if let Some(registration_id) = registration_id {
                 self.unregister_by_registration_id(registration_id);
-                // refund any unused deposit
-                refund_deposit(initial_storage_usage);
                 log_delete_registration_event(registration_id);
             }
         }
         // unregister by registration ID
         else if let Some(registration_id) = registration_id {
             self.unregister_by_registration_id(registration_id);
-            // refund any unused deposit
-            refund_deposit(initial_storage_usage);
             log_delete_registration_event(registration_id);
         }
     }
@@ -255,6 +250,8 @@ impl Contract {
         }
 
         // update mappings
+        // track storage freed to refund to registrant (if caller is owner or admin)
+        let initial_storage_usage = env::storage_usage();
         let mut registration_ids_for_list = self
             .registration_ids_by_list_id
             .get(&list_id)
@@ -270,6 +267,20 @@ impl Contract {
         self.registration_ids_by_registrant_id
             .insert(&registrant_id, &registration_ids_for_registrant);
         self.registrations_by_id.remove(&registration_id);
+        if caller_is_admin_or_greater {
+            // track refund for registrant to claim when they wish
+            let storage_freed = initial_storage_usage - env::storage_usage();
+            let cost_freed = env::storage_byte_cost() * Balance::from(storage_freed);
+            let existing_refund = self
+                .refund_claims_by_registrant_id
+                .get(&registrant_id)
+                .unwrap_or(0);
+            self.refund_claims_by_registrant_id
+                .insert(&registrant_id, &(existing_refund + &cost_freed));
+        } else {
+            // refund caller (registrant) using usual method
+            refund_deposit(initial_storage_usage);
+        }
     }
 
     #[payable]
