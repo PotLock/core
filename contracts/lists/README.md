@@ -244,9 +244,9 @@ pub fn get_registrations_for_registrant(
 
 pub fn is_registered(
     &self,
-    list_id: ListId,
+    list_id: Option<ListId>, // Optional for now because it has to be compatible with current Pot implementation of RegistryProvider, which calls a contract providing only "account_id" arg
     account_id: RegistrantId,
-    required_status: Option<RegistrationStatus>, // the status that the registration must have in order to be considered "registered"
+    required_status: Option<RegistrationStatus>,
 ) -> bool
 
 

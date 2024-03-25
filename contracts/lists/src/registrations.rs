@@ -400,22 +400,24 @@ impl Contract {
 
     pub fn is_registered(
         &self,
-        list_id: ListId,
+        list_id: Option<ListId>, // Optional for now because it has to be compatible with current Pot implementation of RegistryProvider, which calls a contract providing only "account_id" arg
         account_id: RegistrantId,
         required_status: Option<RegistrationStatus>,
     ) -> bool {
-        let registration_ids = self
-            .registration_ids_by_list_id
-            .get(&list_id)
-            .expect("Registration IDs by list ID do not exist");
-        let registration_ids = registration_ids.to_vec();
-        registration_ids.into_iter().any(|registration_id| {
+        let list_id = list_id.unwrap_or(1); // defaults to potlock public goods registry which is list ID 1
+        let registration_ids = self.registration_ids_by_registrant_id.get(&account_id);
+        let registration_ids_vec = if let Some(registration_ids) = registration_ids {
+            registration_ids.to_vec()
+        } else {
+            vec![]
+        };
+        registration_ids_vec.into_iter().any(|registration_id| {
             let registration_internal = RegistrationInternal::from(
                 self.registrations_by_id
                     .get(&registration_id)
                     .expect("No registration found"),
             );
-            registration_internal.registrant_id == account_id
+            registration_internal.list_id == list_id
                 && (required_status.is_none()
                     || registration_internal.status == required_status.unwrap())
         })
