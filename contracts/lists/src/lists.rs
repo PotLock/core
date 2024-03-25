@@ -95,8 +95,8 @@ impl Contract {
         );
         self.next_list_id += 1;
         let formatted_list = self.format_list(list_id, list_internal);
-        log_create_list_event(&formatted_list);
         refund_deposit(initial_storage_usage);
+        log_create_list_event(&formatted_list);
         formatted_list
     }
 
@@ -124,8 +124,8 @@ impl Contract {
         list.updated_at = env::block_timestamp_ms();
         self.lists_by_id
             .insert(&list_id, &VersionedList::Current(list.clone()));
-        log_update_list_event(&list);
         refund_deposit(initial_storage_usage);
+        log_update_list_event(&list);
         self.format_list(list_id, list)
     }
 
@@ -157,8 +157,8 @@ impl Contract {
         }
         self.registration_ids_by_list_id.remove(&list_id);
         self.upvotes_by_list_id.remove(&list_id);
-        log_delete_list_event(list_id);
         refund_deposit(initial_storage_usage);
+        log_delete_list_event(list_id);
     }
 
     #[payable]
@@ -174,10 +174,10 @@ impl Contract {
         }
         let inserted = upvotes.insert(&env::predecessor_account_id());
         self.upvotes_by_list_id.insert(&list_id, &upvotes);
+        refund_deposit(initial_storage_usage);
         if inserted {
             log_upvote_event(list_id, env::predecessor_account_id());
         }
-        refund_deposit(initial_storage_usage);
     }
 
     #[payable]
@@ -189,10 +189,10 @@ impl Contract {
             .expect("Upvotes by list ID do not exist");
         let removed = upvotes.remove(&env::predecessor_account_id());
         self.upvotes_by_list_id.insert(&list_id, &upvotes);
+        refund_deposit(initial_storage_usage);
         if removed {
             log_remove_upvote_event(list_id, env::predecessor_account_id());
         }
-        refund_deposit(initial_storage_usage);
     }
 
     pub fn get_lists(&self, from_index: Option<u64>, limit: Option<u64>) -> Vec<ListExternal> {

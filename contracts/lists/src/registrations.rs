@@ -186,10 +186,10 @@ impl Contract {
 
         let formatted_registration = format_registration(registration_id, registration_internal);
 
-        log_create_registration_event(&formatted_registration);
-
         // refund any unused deposit
         refund_deposit(initial_storage_usage);
+
+        log_create_registration_event(&formatted_registration);
 
         // return formatted registration
         formatted_registration
@@ -217,17 +217,18 @@ impl Contract {
             });
             if let Some(registration_id) = registration_id {
                 self.unregister_by_registration_id(registration_id);
+                // refund any unused deposit
+                refund_deposit(initial_storage_usage);
                 log_delete_registration_event(registration_id);
             }
         }
         // unregister by registration ID
         else if let Some(registration_id) = registration_id {
             self.unregister_by_registration_id(registration_id);
+            // refund any unused deposit
+            refund_deposit(initial_storage_usage);
             log_delete_registration_event(registration_id);
         }
-
-        // refund any unused deposit
-        refund_deposit(initial_storage_usage);
     }
 
     pub(crate) fn unregister_by_registration_id(&mut self, registration_id: RegistrationId) {
@@ -322,11 +323,11 @@ impl Contract {
         // format registration
         let registration_external = format_registration(registration_id, registration_internal);
 
-        // log event
-        log_update_registration_event(&registration_external);
-
         // refund any unused deposit
         refund_deposit(initial_storage_usage);
+
+        // log event
+        log_update_registration_event(&registration_external);
 
         registration_external
     }

@@ -134,6 +134,7 @@ pub fn create_list(
     admins: Option<Vec<AccountId>>,
     default_registration_status: RegistrationStatus,
 ) -> ListExternal
+// NB: Caller will be the list owner
 // emits create_list event
 
 #[payable]
