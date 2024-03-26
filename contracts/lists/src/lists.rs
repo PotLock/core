@@ -65,6 +65,9 @@ impl Contract {
         if let Some(description) = description.as_ref() {
             assert_valid_list_description(description);
         }
+        if let Some(cover_image_url) = cover_image_url.as_ref() {
+            assert_valid_url(cover_image_url);
+        }
         let list_id = self.next_list_id;
         let list_internal = ListInternal {
             name,
@@ -138,6 +141,7 @@ impl Contract {
             list.description = Some(description);
         }
         if let Some(cover_image_url) = cover_image_url {
+            assert_valid_url(&cover_image_url);
             list.cover_image_url = Some(cover_image_url);
         }
         if remove_cover_image.unwrap_or(false) {

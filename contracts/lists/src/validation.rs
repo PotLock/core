@@ -13,3 +13,7 @@ pub(crate) fn assert_valid_list_description(description: &str) {
         "Provider description is too long"
     );
 }
+
+pub(crate) fn assert_valid_url(url: &str) {
+    assert!(url.starts_with("https://"), "Invalid URL");
+}
