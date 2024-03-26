@@ -16,6 +16,7 @@ pub mod lists;
 pub mod registrations;
 pub mod source;
 pub mod utils;
+pub mod validation;
 pub use crate::admins::*;
 pub use crate::constants::*;
 pub use crate::events::*;
@@ -24,6 +25,7 @@ pub use crate::lists::*;
 pub use crate::registrations::*;
 pub use crate::source::*;
 pub use crate::utils::*;
+pub use crate::validation::*;
 
 type RegistrantId = AccountId;
 type RegistrationId = u64;

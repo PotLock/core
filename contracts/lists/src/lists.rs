@@ -61,6 +61,10 @@ impl Contract {
         admin_only_registrations: Option<bool>,
     ) -> ListExternal {
         let initial_storage_usage = env::storage_usage();
+        assert_valid_list_name(&name);
+        if let Some(description) = description.as_ref() {
+            assert_valid_list_description(description);
+        }
         let list_id = self.next_list_id;
         let list_internal = ListInternal {
             name,
@@ -126,9 +130,11 @@ impl Contract {
         let mut list =
             ListInternal::from(self.lists_by_id.get(&list_id).expect("List does not exist"));
         if let Some(name) = name {
+            assert_valid_list_name(&name);
             list.name = name;
         }
         if let Some(description) = description {
+            assert_valid_list_description(&description);
             list.description = Some(description);
         }
         if let Some(cover_image_url) = cover_image_url {
