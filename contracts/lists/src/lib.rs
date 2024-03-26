@@ -1,9 +1,10 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap, UnorderedMap, UnorderedSet};
+use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, log, near_bindgen, require, serde_json::json, AccountId, Balance, BorshStorageKey, Gas,
-    PanicOnDefault, Promise, PromiseError,
+    PanicOnDefault, Promise, PromiseError, PromiseOrValue,
 };
 use std::collections::HashMap;
 
@@ -12,7 +13,6 @@ pub mod constants;
 pub mod events;
 pub mod internal;
 pub mod lists;
-pub mod refunds;
 pub mod registrations;
 pub mod source;
 pub mod utils;
@@ -21,7 +21,6 @@ pub use crate::constants::*;
 pub use crate::events::*;
 pub use crate::internal::*;
 pub use crate::lists::*;
-pub use crate::refunds::*;
 pub use crate::registrations::*;
 pub use crate::source::*;
 pub use crate::utils::*;
@@ -58,8 +57,6 @@ pub struct Contract {
     upvotes_by_list_id: LookupMap<ListId, UnorderedSet<AccountId>>,
     /// Lookup from Account ID to List IDs upvoted
     upvoted_lists_by_account_id: UnorderedMap<AccountId, UnorderedSet<ListId>>,
-    /// Lookup from Registrant ID to storage claims (to refund registrants if a list owner deletes a list or removes their registration)
-    refund_claims_by_registrant_id: UnorderedMap<RegistrantId, Balance>,
     // // TODO: might want to add a lookup from list ID to registration IDs e.g. all_registrations_by_list_id, so don't have to iterate through all registrations sets & synthesize data
     // /// Pending registrations by List ID
     // pending_registration_ids_by_list_id: UnorderedMap<ListId, UnorderedSet<RegistrationId>>,
@@ -93,7 +90,6 @@ pub enum StorageKey {
     UpvotesByListIdInner { list_id: ListId },
     UpvotedListsByAccountId,
     UpvotedListsByAccountIdInner { account_id: AccountId },
-    RefundClaimsByRegistrantId,
     // PendingRegistrantsByListId,
     // ApprovedRegistrantsByListId,
     // RejectedRegistrantsByListId,
@@ -120,9 +116,6 @@ impl Contract {
             ),
             upvotes_by_list_id: LookupMap::new(StorageKey::UpvotesByListId),
             upvoted_lists_by_account_id: UnorderedMap::new(StorageKey::UpvotedListsByAccountId),
-            refund_claims_by_registrant_id: UnorderedMap::new(
-                StorageKey::RefundClaimsByRegistrantId,
-            ),
             contract_source_metadata: LazyOption::new(
                 StorageKey::SourceMetadata,
                 Some(&VersionedContractSourceMetadata::Current(source_metadata)),

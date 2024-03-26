@@ -42,8 +42,6 @@ pub struct Contract {
     registration_ids_by_registrant_id: UnorderedMap<RegistrantId, UnorderedSet<RegistrationId>>,
     /// Lookup from List ID to upvotes (account IDs)
     upvotes_by_list_id: LookupMap<ListId, UnorderedSet<AccountId>>,
-    /// Lookup from Registrant ID to storage claims (to refund registrants if a list owner deletes a list or removes their registration)
-    refund_claims_by_registrant_id: UnorderedMap<RegistrantId, Balance>,
     /// Contract "source" metadata
     contract_source_metadata: LazyOption<VersionedContractSourceMetadata>,
 }
@@ -57,12 +55,12 @@ pub struct ListInternal {
     // don't need ID since it's the key, but should include in ListExternal
     pub name: String,
     pub description: Option<String>,
+    pub cover_img_url: Option<String>,
     pub owner: AccountId,
     pub created_at: TimestampMs,
     pub updated_at: TimestampMs,
     pub default_registration_status: RegistrationStatus,
     pub admin_only_registrations: bool, // defaults to false
-    pub cover_img_url: Option<String>,
     // consider adding list status, e.g. draft, active, inactive, etc.
 }
 
@@ -71,6 +69,7 @@ pub struct ListExternal {
     pub id: ListId,
     pub name: String,
     pub description: Option<String>,
+    pub cover_img_url: Option<String>,
     pub owner: AccountId,
     pub admins: Vec<AccountId>,
     pub created_at: TimestampMs,
@@ -103,6 +102,7 @@ pub struct RegistrationInternal {
     pub updated_ms: TimestampMs,
     pub admin_notes: Option<String>,
     pub registrant_notes: Option<String>,
+    pub registered_by: AccountId, // Could be list owner or a list admin. If None, use registrant_id. Used for processing refund on deletion of registration.
 }
 
 // Ephemeral data structure used for view methods, not stored within contract
@@ -115,6 +115,7 @@ pub struct RegistrationExternal {
     pub updated_ms: TimestampMs,
     pub admin_notes: Option<String>,
     pub registrant_notes: Option<String>,
+    pub registered_by: AccountId,
 }
 
 ```
@@ -155,12 +156,14 @@ pub fn update_list(
     cover_image_url: Option<String>,
     remove_cover_image: Option<bool>,
     default_registration_status: Option<RegistrationStatus>,
+    admin_only_registrations: Option<bool>,
 ) -> ListExternal // can only be called by list owner
 // emits update_list event
 
 #[payable]
-pub fn delete_list(&mut self, list_id: ListId) // can only be called by list owner
-// records refunds for all registrants, which can be withdrawn at their leisure using withdraw_refund method
+pub fn delete_list(&mut self, list_id: ListId)
+// can only be called by list owner
+// must attach enough gas to process storage refunds for all registrants; otherwise must delete registrations first
 // emits delete_list event
 
 #[payable]
@@ -195,11 +198,11 @@ pub fn owner_clear_admins(&mut self, list_id: ListId) -> Vec<AccountId> // retur
 pub fn register(
     &mut self,
     list_id: ListId,
+    notes: Option<String>,
     _registrant_id: Option<AccountId>,
     _submitted_ms: Option<TimestampMs>, // added temporarily for the purposes of migrating existing Registry contract
     _updated_ms: Option<TimestampMs>, // added temporarily for the purposes of migrating existing Registry contract
     _status: Option<RegistrationStatus>, // added temporarily for the purposes of migrating existing Registry contract
-    notes: Option<String>,
 ) -> RegistrationExternal
 // emits create_registration event
 
@@ -215,11 +218,6 @@ pub fn update_registration(
     notes: Option<String>, // if called by owner/admin, these will be stored as Registration.admin_notes; otherwise, they will be Registration.registrant_notes
 ) -> RegistrationExternal
 // emits update_registration event
-
-
-// REFUNDS
-
-pub fn withdraw_refund(&mut self) -> PromiseOrValue<u128> // allows a user to withdraw their refund balance
 
 
 // SOURCE METADATA
@@ -278,13 +276,6 @@ pub fn is_registered(
     account_id: RegistrantId,
     required_status: Option<RegistrationStatus>,
 ) -> bool
-
-
-// REFUNDS
-
-pub fn get_available_refund(&self, account_id: Option<AccountId>) -> Balance // falls back to caller account ID
-
-pub fn get_refunds(&self) -> HashMap<AccountId, Balance>
 
 
 // SOURCE METADATA

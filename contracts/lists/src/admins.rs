@@ -28,7 +28,7 @@ impl Contract {
         lists_for_new_owner.insert(&list_id);
         self.list_ids_by_owner
             .insert(&new_owner_id, &lists_for_new_owner);
-        refund_deposit(initial_storage_usage);
+        refund_deposit(initial_storage_usage, None);
         log_owner_transfer_event(list_id, new_owner_id.clone());
         new_owner_id
     }
@@ -45,7 +45,7 @@ impl Contract {
             list_admins.insert(&admin);
         }
         self.list_admins_by_list_id.insert(&list_id, &list_admins);
-        refund_deposit(initial_storage_usage);
+        refund_deposit(initial_storage_usage, None);
         log_update_admins_event(list_id, list_admins.to_vec());
         list_admins.to_vec()
     }
@@ -66,7 +66,7 @@ impl Contract {
             list_admins.remove(&admin);
         }
         self.list_admins_by_list_id.insert(&list_id, &list_admins);
-        refund_deposit(initial_storage_usage);
+        refund_deposit(initial_storage_usage, None);
         log_update_admins_event(list_id, list_admins.to_vec());
         list_admins.to_vec()
     }
@@ -83,7 +83,7 @@ impl Contract {
             &list_id,
             &UnorderedSet::new(StorageKey::ListAdminsByListIdInner { list_id }),
         );
-        refund_deposit(initial_storage_usage);
+        refund_deposit(initial_storage_usage, None);
         log_update_admins_event(list_id, vec![]);
         list_admins.to_vec()
     }

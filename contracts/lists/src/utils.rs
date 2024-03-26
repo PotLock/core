@@ -1,6 +1,7 @@
 use crate::*;
 
-pub fn refund_deposit(initial_storage_usage: u64) {
+pub fn refund_deposit(initial_storage_usage: u64, refund_to: Option<AccountId>) {
+    let refund_to = refund_to.unwrap_or_else(env::predecessor_account_id);
     let attached_deposit = env::attached_deposit();
     let mut refund = attached_deposit;
     if env::storage_usage() > initial_storage_usage {
@@ -21,7 +22,7 @@ pub fn refund_deposit(initial_storage_usage: u64) {
         refund += cost_freed;
     }
     if refund > 1 {
-        log!("Refunding {} yoctoNEAR", refund);
-        Promise::new(env::predecessor_account_id()).transfer(refund);
+        log!("Refunding {} yoctoNEAR to {}", refund, refund_to);
+        Promise::new(refund_to).transfer(refund);
     }
 }

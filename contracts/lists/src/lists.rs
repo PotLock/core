@@ -1,3 +1,5 @@
+use std::hash::Hash;
+
 use crate::*;
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
@@ -103,7 +105,7 @@ impl Contract {
         );
         self.next_list_id += 1;
         let formatted_list = self.format_list(list_id, list_internal);
-        refund_deposit(initial_storage_usage);
+        refund_deposit(initial_storage_usage, None);
         log_create_list_event(&formatted_list);
         formatted_list
     }
@@ -117,6 +119,7 @@ impl Contract {
         cover_image_url: Option<String>,
         remove_cover_image: Option<bool>,
         default_registration_status: Option<RegistrationStatus>,
+        admin_only_registrations: Option<bool>,
     ) -> ListExternal {
         self.assert_list_owner(&list_id);
         let initial_storage_usage = env::storage_usage();
@@ -137,10 +140,13 @@ impl Contract {
         if let Some(default_registration_status) = default_registration_status {
             list.default_registration_status = default_registration_status;
         }
+        if let Some(admin_only_registrations) = admin_only_registrations {
+            list.admin_only_registrations = admin_only_registrations;
+        }
         list.updated_at = env::block_timestamp_ms();
         self.lists_by_id
             .insert(&list_id, &VersionedList::Current(list.clone()));
-        refund_deposit(initial_storage_usage);
+        refund_deposit(initial_storage_usage, None);
         log_update_list_event(&list);
         self.format_list(list_id, list)
     }
@@ -148,6 +154,18 @@ impl Contract {
     #[payable]
     pub fn delete_list(&mut self, list_id: ListId) {
         self.assert_list_owner(&list_id);
+        // restrict deletions based on attached gas & gas per transfer, otherwise refunds will exceed gas limit
+        let attached_gas = env::prepaid_gas();
+        let max_deletions = attached_gas.0 / GAS_PER_TRANSFER.0;
+        if self
+            .registration_ids_by_list_id
+            .get(&list_id)
+            .expect("Registration IDs by list ID do not exist")
+            .len()
+            > max_deletions
+        {
+            panic!("Cannot delete list with more than {} registrations using attached gas of {}; please delete registrations first", max_deletions, attached_gas.0);
+        }
         let initial_storage_usage = env::storage_usage();
         self.lists_by_id.remove(&list_id);
         self.list_ids_by_owner
@@ -157,9 +175,10 @@ impl Contract {
         self.list_admins_by_list_id.remove(&list_id);
         let list_registrations = self.registration_ids_by_list_id.remove(&list_id);
         // remove all registrations for this list
+        let mut refunds: HashMap<AccountId, Balance> = HashMap::new();
         if let Some(list_registrations) = list_registrations {
             for registration_id in list_registrations.iter() {
-                // track storage freed per registration removal & refund registrants
+                // track storage freed per registration removal & refund account that registered
                 let storage_usage: u64 = env::storage_usage();
                 self.registrations_by_id.remove(&registration_id);
                 let registration = RegistrationInternal::from(
@@ -173,19 +192,25 @@ impl Contract {
                     .remove(&registration_id);
                 let storage_freed = storage_usage - env::storage_usage();
                 let cost_freed = env::storage_byte_cost() * Balance::from(storage_freed);
-                let existing_refund = self
-                    .refund_claims_by_registrant_id
-                    .get(&registration.registrant_id)
-                    .unwrap_or(0);
-                self.refund_claims_by_registrant_id.insert(
-                    &registration.registrant_id,
-                    &(existing_refund + &cost_freed),
-                );
+                let refund_to = registration
+                    .registered_by
+                    .unwrap_or_else(|| registration.registrant_id.clone());
+                if refunds.contains_key(&refund_to) {
+                    refunds.insert(
+                        refund_to.clone(),
+                        refunds.get(&refund_to).unwrap() + cost_freed,
+                    );
+                } else {
+                    refunds.insert(refund_to.clone(), cost_freed);
+                }
             }
+        }
+        for (account_id, amount) in refunds.iter() {
+            Promise::new(account_id.clone()).transfer(*amount);
         }
         self.registration_ids_by_list_id.remove(&list_id);
         self.upvotes_by_list_id.remove(&list_id);
-        refund_deposit(initial_storage_usage);
+        refund_deposit(initial_storage_usage, None);
         log_delete_list_event(list_id);
     }
 
@@ -213,7 +238,7 @@ impl Contract {
         upvoted_lists.insert(&list_id);
         self.upvoted_lists_by_account_id
             .insert(&env::predecessor_account_id(), &upvoted_lists);
-        refund_deposit(initial_storage_usage);
+        refund_deposit(initial_storage_usage, None);
         if inserted {
             log_upvote_event(list_id, env::predecessor_account_id());
         }
@@ -235,7 +260,7 @@ impl Contract {
         upvoted_lists.remove(&list_id);
         self.upvoted_lists_by_account_id
             .insert(&env::predecessor_account_id(), &upvoted_lists);
-        refund_deposit(initial_storage_usage);
+        refund_deposit(initial_storage_usage, None);
         if removed {
             log_remove_upvote_event(list_id, env::predecessor_account_id());
         }

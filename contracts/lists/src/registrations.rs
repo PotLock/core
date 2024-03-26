@@ -24,6 +24,7 @@ pub struct RegistrationInternal {
     pub updated_ms: TimestampMs,
     pub admin_notes: Option<String>,
     pub registrant_notes: Option<String>,
+    pub registered_by: Option<AccountId>, // Could be list owner or a list admin. If None, use registrant_id. Used for processing refund on deletion of registration.
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -51,6 +52,7 @@ pub struct RegistrationExternal {
     pub updated_ms: TimestampMs,
     pub admin_notes: Option<String>,
     pub registrant_notes: Option<String>,
+    pub registered_by: AccountId,
 }
 
 pub(crate) fn format_registration(
@@ -59,13 +61,16 @@ pub(crate) fn format_registration(
 ) -> RegistrationExternal {
     RegistrationExternal {
         id: registration_id,
-        registrant_id: registration_internal.registrant_id,
+        registrant_id: registration_internal.registrant_id.clone(),
         list_id: registration_internal.list_id,
         status: registration_internal.status,
         submitted_ms: registration_internal.submitted_ms,
         updated_ms: registration_internal.updated_ms,
         admin_notes: registration_internal.admin_notes,
         registrant_notes: registration_internal.registrant_notes,
+        registered_by: registration_internal
+            .registered_by
+            .unwrap_or_else(|| registration_internal.registrant_id.clone()),
     }
 }
 
@@ -85,6 +90,10 @@ impl Contract {
 
         let list = ListInternal::from(self.lists_by_id.get(&list_id).expect("List does not exist"));
         let caller_is_admin_or_greater = self.is_caller_list_admin_or_greater(&list_id);
+
+        if list.admin_only_registrations && !caller_is_admin_or_greater {
+            panic!("Only admins can create registrations for this list");
+        }
 
         // _registrant_id can only be specified by admin or greater; otherwise, it is the caller
         let mut registrant_id = env::predecessor_account_id();
@@ -153,6 +162,11 @@ impl Contract {
             } else {
                 None
             },
+            registered_by: if caller_is_admin_or_greater {
+                Some(env::predecessor_account_id())
+            } else {
+                None
+            },
         };
 
         // update mappings
@@ -187,7 +201,7 @@ impl Contract {
         let formatted_registration = format_registration(registration_id, registration_internal);
 
         // refund any unused deposit
-        refund_deposit(initial_storage_usage);
+        refund_deposit(initial_storage_usage, None);
 
         log_create_registration_event(&formatted_registration);
 
@@ -267,20 +281,15 @@ impl Contract {
         self.registration_ids_by_registrant_id
             .insert(&registrant_id, &registration_ids_for_registrant);
         self.registrations_by_id.remove(&registration_id);
-        if caller_is_admin_or_greater {
-            // track refund for registrant to claim when they wish
-            let storage_freed = initial_storage_usage - env::storage_usage();
-            let cost_freed = env::storage_byte_cost() * Balance::from(storage_freed);
-            let existing_refund = self
-                .refund_claims_by_registrant_id
-                .get(&registrant_id)
-                .unwrap_or(0);
-            self.refund_claims_by_registrant_id
-                .insert(&registrant_id, &(existing_refund + &cost_freed));
-        } else {
-            // refund caller (registrant) using usual method
-            refund_deposit(initial_storage_usage);
-        }
+        // refund to original account that registered the registration
+        refund_deposit(
+            initial_storage_usage,
+            Some(
+                registration_internal
+                    .registered_by
+                    .unwrap_or_else(|| registrant_id),
+            ),
+        );
     }
 
     #[payable]
@@ -335,7 +344,7 @@ impl Contract {
         let registration_external = format_registration(registration_id, registration_internal);
 
         // refund any unused deposit
-        refund_deposit(initial_storage_usage);
+        refund_deposit(initial_storage_usage, None);
 
         // log event
         log_update_registration_event(&registration_external);
