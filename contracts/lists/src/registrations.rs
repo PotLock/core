@@ -411,6 +411,15 @@ impl Contract {
         registration_external
     }
 
+    pub fn get_registration(&self, registration_id: RegistrationId) -> RegistrationExternal {
+        let registration_internal = RegistrationInternal::from(
+            self.registrations_by_id
+                .get(&registration_id)
+                .expect("No registration found"),
+        );
+        format_registration(registration_id, registration_internal)
+    }
+
     pub fn get_registrations_for_list(
         &self,
         list_id: ListId,

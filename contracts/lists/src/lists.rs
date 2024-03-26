@@ -272,6 +272,13 @@ impl Contract {
         }
     }
 
+    pub fn get_list(&self, list_id: ListId) -> ListExternal {
+        self.format_list(
+            list_id,
+            ListInternal::from(self.lists_by_id.get(&list_id).expect("List does not exist")),
+        )
+    }
+
     pub fn get_lists(&self, from_index: Option<u64>, limit: Option<u64>) -> Vec<ListExternal> {
         self.lists_by_id
             .iter()

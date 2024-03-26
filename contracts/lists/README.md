@@ -236,6 +236,8 @@ pub fn self_set_source_metadata(&mut self, source_metadata: ContractSourceMetada
 ```rs
 // LISTS
 
+pub fn get_list(&self, list_id: ListId) -> ListExternal
+
 pub fn get_lists(&self, from_index: Option<u64>, limit: Option<u64>) -> Vec<ListExternal>
 
 pub fn get_lists_for_owner(&self, owner_id: AccountId) -> Vec<ListExternal>
@@ -258,6 +260,8 @@ pub fn get_upvoted_lists_for_account(
 
 
 // REGISTRATIONS
+
+pub fn get_registration(&self, registration_id: RegistrationId) -> RegistrationExternal
 
 pub fn get_registrations_for_list(
     &self,
