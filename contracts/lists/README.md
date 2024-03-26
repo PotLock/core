@@ -4,8 +4,6 @@
 
 Anyone can curate their own list of accounts ("registrants"). Accounts can register to be on a list, or be added to a list by the owner or admins. An owner can add and remove list admins, or transfer ownership. An owner or admin can update the list name & description.
 
-// TODO: Add constraints for name & description (max chars)
-
 ## Contract Structure
 
 ### General Types
@@ -53,9 +51,9 @@ pub struct Contract {
 // ListInternal is the data structure that is stored within the contract
 pub struct ListInternal {
     // don't need ID since it's the key, but should include in ListExternal
-    pub name: String,
-    pub description: Option<String>,
-    pub cover_img_url: Option<String>,
+    pub name: String, // max length 64
+    pub description: Option<String>, // max length 256
+    pub cover_img_url: Option<String>, // must start with https://
     pub owner: AccountId,
     pub created_at: TimestampMs,
     pub updated_at: TimestampMs,
