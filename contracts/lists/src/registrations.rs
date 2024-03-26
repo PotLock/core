@@ -479,13 +479,14 @@ impl Contract {
         let start_index: u64 = from_index.unwrap_or_default();
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
         assert_ne!(limit, 0, "Cannot provide limit of 0.");
-        let registration_ids = self
-            .registration_ids_by_registrant_id
-            .get(&registrant_id)
-            .expect("Registration IDs by registrant ID do not exist");
-        let registration_ids = registration_ids.to_vec();
-        let registration_ids = if let Some(status) = status {
-            registration_ids
+        let registration_ids_set = self.registration_ids_by_registrant_id.get(&registrant_id);
+        let mut registration_ids = if let Some(registration_ids_set) = registration_ids_set {
+            registration_ids_set.to_vec()
+        } else {
+            vec![]
+        };
+        if let Some(status) = status {
+            registration_ids = registration_ids
                 .into_iter()
                 .filter(|registration_id| {
                     let registration_internal = RegistrationInternal::from(
@@ -496,8 +497,6 @@ impl Contract {
                     registration_internal.status == status
                 })
                 .collect()
-        } else {
-            registration_ids
         };
         assert!(
             (registration_ids.len() as u64) >= start_index,

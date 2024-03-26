@@ -289,35 +289,41 @@ impl Contract {
     }
 
     pub fn get_lists_for_owner(&self, owner_id: AccountId) -> Vec<ListExternal> {
-        self.list_ids_by_owner
-            .get(&owner_id)
-            .expect("List IDs by owner do not exist")
-            .iter()
-            .map(|list_id| {
-                self.format_list(
-                    list_id,
-                    ListInternal::from(
-                        self.lists_by_id.get(&list_id).expect("List does not exist"),
-                    ),
-                )
-            })
-            .collect()
+        let list_ids_by_owner = self.list_ids_by_owner.get(&owner_id);
+        if let Some(list_ids_by_owner) = list_ids_by_owner {
+            list_ids_by_owner
+                .iter()
+                .map(|list_id| {
+                    self.format_list(
+                        list_id,
+                        ListInternal::from(
+                            self.lists_by_id.get(&list_id).expect("List does not exist"),
+                        ),
+                    )
+                })
+                .collect()
+        } else {
+            vec![]
+        }
     }
 
     pub fn get_lists_for_registrant(&self, registrant_id: AccountId) -> Vec<ListExternal> {
-        self.list_ids_by_registrant
-            .get(&registrant_id)
-            .expect("List IDs by registrant do not exist")
-            .iter()
-            .map(|list_id| {
-                self.format_list(
-                    list_id,
-                    ListInternal::from(
-                        self.lists_by_id.get(&list_id).expect("List does not exist"),
-                    ),
-                )
-            })
-            .collect()
+        let lists_for_registrant = self.list_ids_by_registrant.get(&registrant_id);
+        if let Some(lists_for_registrant) = lists_for_registrant {
+            lists_for_registrant
+                .iter()
+                .map(|list_id| {
+                    self.format_list(
+                        list_id,
+                        ListInternal::from(
+                            self.lists_by_id.get(&list_id).expect("List does not exist"),
+                        ),
+                    )
+                })
+                .collect()
+        } else {
+            vec![]
+        }
     }
 
     pub fn get_upvotes_for_list(
@@ -341,21 +347,24 @@ impl Contract {
         from_index: Option<u64>,
         limit: Option<u64>,
     ) -> Vec<ListExternal> {
-        self.upvoted_lists_by_account_id
-            .get(&account_id)
-            .expect("Upvoted lists by account ID do not exist")
-            .iter()
-            .skip(from_index.unwrap_or(0) as usize)
-            .take(limit.unwrap_or(u64::MAX) as usize)
-            .map(|list_id| {
-                self.format_list(
-                    list_id,
-                    ListInternal::from(
-                        self.lists_by_id.get(&list_id).expect("List does not exist"),
-                    ),
-                )
-            })
-            .collect()
+        let lists_for_account = self.upvoted_lists_by_account_id.get(&account_id);
+        if let Some(lists_for_account) = lists_for_account {
+            lists_for_account
+                .iter()
+                .skip(from_index.unwrap_or(0) as usize)
+                .take(limit.unwrap_or(u64::MAX) as usize)
+                .map(|list_id| {
+                    self.format_list(
+                        list_id,
+                        ListInternal::from(
+                            self.lists_by_id.get(&list_id).expect("List does not exist"),
+                        ),
+                    )
+                })
+                .collect()
+        } else {
+            vec![]
+        }
     }
 
     pub(crate) fn format_list(&self, list_id: ListId, list_internal: ListInternal) -> ListExternal {
