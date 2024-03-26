@@ -74,21 +74,29 @@ pub(crate) fn format_registration(
     }
 }
 
+// Ephemeral struct for admins to use when registering a registrant
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct RegistrationInput {
+    pub registrant_id: AccountId,
+    pub status: RegistrationStatus,
+    pub submitted_ms: Option<TimestampMs>,
+    pub updated_ms: Option<TimestampMs>,
+    pub notes: Option<String>,
+}
+
 #[near_bindgen]
 impl Contract {
-    #[payable]
-    pub fn register(
+    pub(crate) fn register(
         &mut self,
         list_id: ListId,
+        list: ListInternal,
+        notes: Option<String>,
         _registrant_id: Option<AccountId>,
         _submitted_ms: Option<TimestampMs>, // added temporarily for the purposes of migrating existing Registry contract
         _updated_ms: Option<TimestampMs>, // added temporarily for the purposes of migrating existing Registry contract
         _status: Option<RegistrationStatus>, // added temporarily for the purposes of migrating existing Registry contract
-        notes: Option<String>,
     ) -> RegistrationExternal {
-        let initial_storage_usage = env::storage_usage();
-
-        let list = ListInternal::from(self.lists_by_id.get(&list_id).expect("List does not exist"));
         let caller_is_admin_or_greater = self.is_caller_list_admin_or_greater(&list_id);
 
         if list.admin_only_registrations && !caller_is_admin_or_greater {
@@ -110,7 +118,8 @@ impl Contract {
             }));
         assert!(
             !list_ids_for_registrant.contains(&list_id),
-            "Registration already exists for this registrant on this list"
+            "Registration already exists for {} on this list",
+            registrant_id
         );
 
         let status = if caller_is_admin_or_greater {
@@ -200,13 +209,63 @@ impl Contract {
 
         let formatted_registration = format_registration(registration_id, registration_internal);
 
+        // return formatted registration
+        formatted_registration
+    }
+
+    #[payable]
+    pub fn register_batch(
+        &mut self,
+        list_id: ListId,
+        notes: Option<String>, // provided by non-admin registrants
+        registrations: Option<Vec<RegistrationInput>>, // provided by admin registrants
+    ) -> Vec<RegistrationExternal> {
+        let list = ListInternal::from(self.lists_by_id.get(&list_id).expect("List does not exist"));
+        let caller_is_admin_or_greater = self.is_caller_list_admin_or_greater(&list_id);
+        let mut registrations = if caller_is_admin_or_greater {
+            registrations.expect("registrations arg is required for admin calls")
+        } else {
+            Vec::new()
+        };
+        if !caller_is_admin_or_greater {
+            registrations.push(RegistrationInput {
+                registrant_id: env::predecessor_account_id(),
+                status: list.default_registration_status,
+                submitted_ms: None,
+                updated_ms: None,
+                notes,
+            });
+        }
+        // make sure batch size is within limit
+        assert!(
+            registrations.len() <= MAX_REGISTRATION_BATCH_SIZE as usize,
+            "Batch size exceeds limit"
+        );
+        let initial_storage_usage = env::storage_usage();
+        let mut completed_registrations = Vec::new();
+        // iterate through registrations and call self.register each one
+        for registration in registrations {
+            completed_registrations.push(self.register(
+                list_id,
+                list.clone(),
+                registration.notes,
+                Some(registration.registrant_id),
+                registration.submitted_ms,
+                registration.updated_ms,
+                Some(registration.status),
+            ));
+        }
+
         // refund any unused deposit
         refund_deposit(initial_storage_usage, None);
 
-        log_create_registration_event(&formatted_registration);
+        // log events
+        for formatted_registration in completed_registrations.iter() {
+            log_create_registration_event(formatted_registration);
+        }
 
-        // return formatted registration
-        formatted_registration
+        // return formatted registrations
+        completed_registrations
     }
 
     #[payable]

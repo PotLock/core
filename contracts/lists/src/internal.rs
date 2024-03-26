@@ -20,12 +20,12 @@ impl Contract {
     }
 
     pub(crate) fn is_caller_list_admin_or_greater(&self, list_id: &ListId) -> bool {
-        let predecessor_account_id = env::predecessor_account_id();
+        let caller_id = env::predecessor_account_id();
         let list = ListInternal::from(self.lists_by_id.get(list_id).expect("List does not exist"));
         let list_admins = self
             .list_admins_by_list_id
             .get(list_id)
             .expect("List admins do not exist");
-        list.owner == predecessor_account_id || list_admins.contains(&predecessor_account_id)
+        list.owner == caller_id || list_admins.contains(&caller_id)
     }
 }

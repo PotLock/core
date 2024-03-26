@@ -116,6 +116,17 @@ pub struct RegistrationExternal {
     pub registered_by: AccountId,
 }
 
+// Ephemeral struct for admins to use when registering a registrant
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[serde(crate = "near_sdk::serde")]
+pub struct RegistrationInput {
+    pub registrant_id: AccountId,
+    pub status: RegistrationStatus,
+    pub submitted_ms: Option<TimestampMs>,
+    pub updated_ms: Option<TimestampMs>,
+    pub notes: Option<String>,
+}
+
 ```
 
 ## Methods
@@ -193,16 +204,13 @@ pub fn owner_clear_admins(&mut self, list_id: ListId) -> Vec<AccountId> // retur
 // REGISTRATIONS
 
 #[payable]
-pub fn register(
+pub fn register_batch(
     &mut self,
     list_id: ListId,
-    notes: Option<String>,
-    _registrant_id: Option<AccountId>,
-    _submitted_ms: Option<TimestampMs>, // added temporarily for the purposes of migrating existing Registry contract
-    _updated_ms: Option<TimestampMs>, // added temporarily for the purposes of migrating existing Registry contract
-    _status: Option<RegistrationStatus>, // added temporarily for the purposes of migrating existing Registry contract
-) -> RegistrationExternal
-// emits create_registration event
+    notes: Option<String>, // provided by non-admin registrants
+    registrations: Option<Vec<RegistrationInput>>, // provided by admin registrants
+) -> Vec<RegistrationExternal>
+// emits create_registration event for each Registration created
 
 #[payable]
 pub fn unregister(&mut self, list_id: Option<ListId>, registration_id: Option<RegistrationId>) // can only be called by registrant or list owner/admin
