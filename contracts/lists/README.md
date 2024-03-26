@@ -177,7 +177,6 @@ pub fn delete_list(&mut self, list_id: ListId)
 
 #[payable]
 pub fn upvote(&mut self, list_id: ListId)
-// panics if list owner or admin (you can't upvote your own list)
 // if upvote was added, emits upvote event
 
 #[payable]

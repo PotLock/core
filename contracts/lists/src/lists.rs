@@ -231,10 +231,6 @@ impl Contract {
             .upvotes_by_list_id
             .get(&list_id)
             .expect("Upvotes by list ID do not exist");
-        // list owner & admins cannot upvote
-        if self.is_caller_list_admin_or_greater(&list_id) {
-            panic!("List owner & admins cannot upvote");
-        }
         let inserted = upvotes.insert(&env::predecessor_account_id());
         self.upvotes_by_list_id.insert(&list_id, &upvotes);
         let mut upvoted_lists = self
