@@ -529,8 +529,8 @@ impl Contract {
                     .expect("No registration found"),
             );
             registration_internal.list_id == list_id
-                && (required_status.is_none()
-                    || registration_internal.status == required_status.unwrap())
+                && (registration_internal.status
+                    == required_status.unwrap_or(RegistrationStatus::Approved))
         })
     }
 }

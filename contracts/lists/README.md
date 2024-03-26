@@ -280,7 +280,7 @@ pub fn is_registered(
     &self,
     list_id: Option<ListId>, // Optional for now because it has to be compatible with current Pot implementation of RegistryProvider, which calls a contract providing only "account_id" arg
     account_id: RegistrantId,
-    required_status: Option<RegistrationStatus>,
+    required_status: Option<RegistrationStatus>, // defaults to Approved
 ) -> bool
 
 
