@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "donation",
+    "lists",
     "pot",
     "pot_factory",
     "registry",
