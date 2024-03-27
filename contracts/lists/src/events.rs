@@ -137,7 +137,7 @@ pub(crate) fn log_update_admins_event(list_id: ListId, admins: Vec<AccountId>) {
             json!({
                 "standard": "potlock",
                 "version": "1.0.0",
-                "event": "add_admins",
+                "event": "update_admins",
                 "data": [
                     {
                         "list_id": list_id,
