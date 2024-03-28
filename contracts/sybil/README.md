@@ -1,4 +1,4 @@
-# PotLock Sybil Contract
+# PotLock Sybil Contract (V2)
 
 ## Purpose
 
