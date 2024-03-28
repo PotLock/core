@@ -7,7 +7,7 @@ impl Contract {
         &mut self,
         provider_id: ProviderId,
         status: ProviderStatus,
-    ) -> ProviderExternal {
+    ) -> Provider {
         self.assert_owner_or_admin();
         // check that provider exists
         if let Some(versioned_provider) = self.providers_by_id.get(&provider_id) {
@@ -44,23 +44,21 @@ impl Contract {
                 }
             }
             refund_deposit(initial_storage_usage);
-
-            let formatted_provider = format_provider(&provider_id, &provider);
             // log event
-            log_add_or_update_provider_event(&formatted_provider);
-            formatted_provider
+            log_update_provider_event(&provider_id, &provider);
+            provider
         } else {
             env::panic_str("Provider does not exist");
         }
     }
 
     #[payable]
-    pub fn admin_activate_provider(&mut self, provider_id: ProviderId) -> ProviderExternal {
+    pub fn admin_activate_provider(&mut self, provider_id: ProviderId) -> Provider {
         self.admin_update_provider_status(provider_id, ProviderStatus::Active)
     }
 
     #[payable]
-    pub fn admin_deactivate_provider(&mut self, provider_id: ProviderId) -> ProviderExternal {
+    pub fn admin_deactivate_provider(&mut self, provider_id: ProviderId) -> Provider {
         self.admin_update_provider_status(provider_id, ProviderStatus::Deactivated)
     }
 
@@ -74,12 +72,11 @@ impl Contract {
         // clear existing default providers
         self.default_provider_ids.clear();
         // add new default providers
-        for provider_id in provider_ids.clone() {
+        for provider_id in provider_ids {
             self.default_provider_ids.insert(&provider_id);
         }
         // refund any unused deposit
         refund_deposit(initial_storage_usage);
-        log_update_default_providers_event(self.default_provider_ids.iter().collect());
     }
 
     #[payable]
@@ -88,12 +85,11 @@ impl Contract {
         self.assert_owner_or_admin();
         let initial_storage_usage = env::storage_usage();
         // add new default providers
-        for provider_id in provider_ids.clone() {
+        for provider_id in provider_ids {
             self.default_provider_ids.insert(&provider_id);
         }
         // refund any unused deposit
         refund_deposit(initial_storage_usage);
-        log_update_default_providers_event(self.default_provider_ids.iter().collect());
     }
 
     #[payable]
@@ -107,7 +103,6 @@ impl Contract {
         }
         // refund any unused deposit
         refund_deposit(initial_storage_usage);
-        log_update_default_providers_event(self.default_provider_ids.iter().collect());
     }
 
     #[payable]
@@ -119,7 +114,6 @@ impl Contract {
         self.default_provider_ids.clear();
         // refund any unused deposit
         refund_deposit(initial_storage_usage);
-        log_update_default_providers_event(self.default_provider_ids.iter().collect());
     }
 
     #[payable]
@@ -128,6 +122,5 @@ impl Contract {
         self.assert_owner_or_admin();
         // set default human threshold
         self.default_human_threshold = default_human_threshold;
-        log_update_default_human_threshold_event(default_human_threshold);
     }
 }

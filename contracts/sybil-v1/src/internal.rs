@@ -26,11 +26,11 @@ impl Contract {
         self.assert_at_least_one_yocto();
     }
 
-    // pub(crate) fn assert_admin(&self) {
-    //     assert!(self.is_admin(), "Only contract admin can call this method");
-    //     // require caller to attach at least one yoctoNEAR for security purposes
-    //     self.assert_at_least_one_yocto();
-    // }
+    pub(crate) fn assert_admin(&self) {
+        assert!(self.is_admin(), "Only contract admin can call this method");
+        // require caller to attach at least one yoctoNEAR for security purposes
+        self.assert_at_least_one_yocto();
+    }
 
     pub(crate) fn assert_owner_or_admin(&self) {
         assert!(

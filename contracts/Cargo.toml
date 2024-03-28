@@ -5,6 +5,7 @@ members = [
     "pot",
     "pot_factory",
     "registry",
+    "sybil-v1",
     "sybil",
     "sybil_provider_simulator"
 ]

@@ -1233,6 +1233,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sybil-v1"
+version = "0.1.0"
+dependencies = [
+ "near-sdk",
+]
+
+[[package]]
 name = "sybil_provider_simulator"
 version = "0.1.0"
 dependencies = [
