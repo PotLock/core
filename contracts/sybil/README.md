@@ -190,7 +190,7 @@ pub struct Stamp {
 /// Ephermal stamp data returned to user (not stored in contract)
 pub struct StampExternal {
     pub user_id: AccountId,
-    pub provider_id: ProviderId,
+    pub provider: ProviderExternal,
     pub validated_at_ms: TimestampMs,
 }
 ```

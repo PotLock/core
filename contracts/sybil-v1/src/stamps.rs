@@ -266,6 +266,41 @@ impl Contract {
         Promise::new(user_id.clone()).transfer(cost_freed + attached_deposit);
     }
 
+    pub fn get_stamps(&self, from_index: Option<u128>, limit: Option<u64>) -> Vec<StampExternal> {
+        let start_index: u128 = from_index.unwrap_or_default();
+        assert!(
+            (self.stamps_by_id.len() as u128) >= start_index,
+            "Out of bounds, please use a smaller from_index."
+        );
+        let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
+        assert_ne!(limit, 0, "Cannot provide limit of 0.");
+        self.stamps_by_id
+            .iter()
+            .skip(start_index as usize)
+            .take(limit)
+            .map(|(stamp_id, versioned_stamp)| {
+                let stamp = Stamp::from(versioned_stamp);
+                let provider_id = ProviderId(
+                    stamp_id.0.split(STAMP_ID_DELIMITER).collect::<Vec<&str>>()[1].to_string(),
+                );
+                StampExternal {
+                    user_id: AccountId::new_unchecked(
+                        stamp_id.0.split(STAMP_ID_DELIMITER).collect::<Vec<&str>>()[0].to_string(),
+                    ),
+                    provider: ProviderExternal::from_provider_id(
+                        &provider_id.0,
+                        Provider::from(
+                            self.providers_by_id
+                                .get(&provider_id)
+                                .expect("Provider does not exist"),
+                        ),
+                    ),
+                    validated_at_ms: stamp.validated_at_ms,
+                }
+            })
+            .collect()
+    }
+
     pub fn get_stamps_for_account_id(
         &self,
         account_id: AccountId,

@@ -199,6 +199,31 @@ impl Contract {
 
     // TODO: REMOVE AFTER MIGRATING
     #[payable]
+    pub fn _clear_stamp_count_for_all_providers(&mut self) {
+        self.assert_owner_or_admin();
+
+        // Collect the provider IDs into a temporary vector to avoid borrowing issues
+        let provider_ids: Vec<ProviderId> = self.providers_by_id.keys().collect();
+
+        for provider_id in &provider_ids {
+            if let Some(versioned) = self.providers_by_id.get(&provider_id) {
+                let mut provider = Provider::from(versioned);
+                provider.stamp_count = 0; // Assuming you can directly mutate the fetched provider; otherwise, see below
+                self.providers_by_id
+                    .insert(&provider_id, &VersionedProvider::Current(provider));
+            }
+        }
+        // log events
+        for provider_id in provider_ids.iter() {
+            log_add_or_update_provider_event(&format_provider(
+                provider_id,
+                &Provider::from(self.providers_by_id.get(provider_id).unwrap()),
+            ));
+        }
+    }
+
+    // TODO: REMOVE AFTER MIGRATING
+    #[payable]
     pub fn _add_stamps_unsafe(&mut self, stamps: Vec<Stamp>) {
         let initial_storage_usage = env::storage_usage();
         for stamp in &stamps {
@@ -206,10 +231,6 @@ impl Contract {
                 self.providers_by_id
                     .get(&stamp.provider_id)
                     .expect("Provider does not exist"),
-            );
-            assert!(
-                provider.status == ProviderStatus::Active,
-                "Provider is not active"
             );
             self.insert_stamp_record(
                 self.next_stamp_id,
@@ -228,7 +249,14 @@ impl Contract {
         for stamp in stamps.iter() {
             log_add_stamp_event(&StampExternal {
                 user_id: stamp.user_id.clone(),
-                provider_id: stamp.provider_id.clone(),
+                provider: format_provider(
+                    &stamp.provider_id,
+                    &Provider::from(
+                        self.providers_by_id
+                            .get(&stamp.provider_id)
+                            .expect("Provider does not exist"),
+                    ),
+                ),
                 validated_at_ms: stamp.validated_at_ms,
             });
         }
