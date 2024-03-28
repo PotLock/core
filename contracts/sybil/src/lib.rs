@@ -175,4 +175,62 @@ impl Contract {
             deactivated_provider_count: self.deactivated_provider_ids.len(),
         }
     }
+
+    // TODO: REMOVE AFTER MIGRATING
+    #[payable]
+    pub fn _register_providers_unsafe(&mut self, providers: Vec<Provider>) {
+        self.assert_owner_or_admin();
+        let initial_storage_usage = env::storage_usage();
+        for provider in &providers {
+            let provider_id = self.next_provider_id;
+            self.next_provider_id += 1;
+            self.providers_by_id.insert(
+                &provider_id,
+                &VersionedProvider::from(VersionedProvider::Current(provider.clone())),
+            );
+            self.pending_provider_ids.insert(&provider_id);
+        }
+        refund_deposit(initial_storage_usage);
+        // log events
+        for provider in providers.iter() {
+            log_add_or_update_provider_event(&format_provider(&self.next_provider_id, &provider));
+        }
+    }
+
+    // TODO: REMOVE AFTER MIGRATING
+    #[payable]
+    pub fn _add_stamps_unsafe(&mut self, stamps: Vec<Stamp>) {
+        let initial_storage_usage = env::storage_usage();
+        for stamp in &stamps {
+            let mut provider = Provider::from(
+                self.providers_by_id
+                    .get(&stamp.provider_id)
+                    .expect("Provider does not exist"),
+            );
+            assert!(
+                provider.status == ProviderStatus::Active,
+                "Provider is not active"
+            );
+            self.insert_stamp_record(
+                self.next_stamp_id,
+                stamp.clone(),
+                stamp.provider_id.clone(),
+                stamp.user_id.clone(),
+            );
+            self.next_stamp_id += 1;
+            provider.stamp_count += 1;
+            self.providers_by_id.insert(
+                &stamp.provider_id,
+                &VersionedProvider::Current(provider.clone()),
+            );
+        }
+        refund_deposit(initial_storage_usage);
+        for stamp in stamps.iter() {
+            log_add_stamp_event(&StampExternal {
+                user_id: stamp.user_id.clone(),
+                provider_id: stamp.provider_id.clone(),
+                validated_at_ms: stamp.validated_at_ms,
+            });
+        }
+    }
 }

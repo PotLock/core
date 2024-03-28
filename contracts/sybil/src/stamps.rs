@@ -42,9 +42,9 @@ impl From<VersionedStamp> for Stamp {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
 pub struct StampExternal {
-    user_id: AccountId,
-    provider_id: ProviderId,
-    validated_at_ms: TimestampMs,
+    pub user_id: AccountId,
+    pub provider_id: ProviderId,
+    pub validated_at_ms: TimestampMs,
 }
 
 #[near_bindgen]
