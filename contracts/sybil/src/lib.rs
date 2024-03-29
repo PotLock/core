@@ -55,20 +55,22 @@ pub struct Contract {
     default_human_threshold: u32,
     next_provider_id: ProviderId,
     next_stamp_id: StampId,
+    next_group_id: GroupId,
     // MAPPINGS
     // Stores all Stamp records, versioned for easy upgradeability
     stamps_by_id: UnorderedMap<StampId, VersionedStamp>,
-    // Enables fetching of all stamps for a user
-    // provider_ids_for_user: LookupMap<AccountId, UnorderedSet<ProviderId>>,
-    stamp_ids_for_user: LookupMap<AccountId, UnorderedSet<StampId>>,
+    // Enables fetching of all stamps for a user (also allows fetching of all users by iteration)
+    stamp_ids_for_user: UnorderedMap<AccountId, UnorderedSet<StampId>>,
     // Enables fetching of all users with given stamp (provider ID)
     user_ids_for_provider: LookupMap<ProviderId, UnorderedSet<AccountId>>,
     // Enables fetching of providers that a user has submitted (e.g. if user has submitted one malicious provider, they are likely to submit more and you'll want to be able to fetch these or filter them out of results)
-    provider_ids_for_submitter: LookupMap<AccountId, UnorderedSet<ProviderId>>,
-    // Maps group name to Group struct
-    groups_by_name: UnorderedMap<String, Group>,
-    // Mapping of group name to provider IDs
-    provider_ids_for_group: UnorderedMap<String, UnorderedSet<ProviderId>>,
+    provider_ids_for_submitter: UnorderedMap<AccountId, UnorderedSet<ProviderId>>,
+    // Maps group ID to Group struct
+    groups_by_id: UnorderedMap<GroupId, Group>,
+    // Mapping of group ID to provider IDs
+    provider_ids_for_group: LookupMap<GroupId, UnorderedSet<ProviderId>>,
+    // Mapping of provider ID to group IDs
+    group_ids_for_provider: LookupMap<ProviderId, UnorderedSet<GroupId>>,
     // Blacklisted accounts
     blacklisted_accounts: UnorderedSet<AccountId>,
 }
@@ -116,9 +118,11 @@ pub enum StorageKey {
     UserIdsForProviderInner { provider_id: ProviderId },
     SubmitterIdsForProvider,
     SubmitterIdsForProviderInner { provider_id: ProviderId },
-    GroupsByName,
+    GroupsById,
     ProviderIdsForGroup,
     ProviderIdsForGroupInner { group_name: String },
+    GroupIdsForProvider,
+    GroupIdsForProviderInner { provider_id: ProviderId },
     BlacklistedAccounts,
 }
 
@@ -148,6 +152,7 @@ impl Contract {
             ),
             next_provider_id: 1,
             next_stamp_id: 1,
+            next_group_id: 1,
             providers_by_id: UnorderedMap::new(StorageKey::ProvidersById),
             pending_provider_ids: UnorderedSet::new(StorageKey::PendingProviderIds),
             active_provider_ids: UnorderedSet::new(StorageKey::ActiveProviderIds),
@@ -155,11 +160,12 @@ impl Contract {
             default_provider_ids: UnorderedSet::new(StorageKey::DefaultProviderIds),
             default_human_threshold: 0,
             stamps_by_id: UnorderedMap::new(StorageKey::StampsById),
-            stamp_ids_for_user: LookupMap::new(StorageKey::StampIdsForUser),
+            stamp_ids_for_user: UnorderedMap::new(StorageKey::StampIdsForUser),
             user_ids_for_provider: LookupMap::new(StorageKey::UserIdsForProvider),
-            provider_ids_for_submitter: LookupMap::new(StorageKey::SubmitterIdsForProvider),
-            groups_by_name: UnorderedMap::new(StorageKey::GroupsByName),
-            provider_ids_for_group: UnorderedMap::new(StorageKey::ProviderIdsForGroup),
+            provider_ids_for_submitter: UnorderedMap::new(StorageKey::SubmitterIdsForProvider),
+            groups_by_id: UnorderedMap::new(StorageKey::GroupsById),
+            provider_ids_for_group: LookupMap::new(StorageKey::ProviderIdsForGroup),
+            group_ids_for_provider: LookupMap::new(StorageKey::GroupIdsForProvider),
             blacklisted_accounts: UnorderedSet::new(StorageKey::BlacklistedAccounts),
         }
     }
@@ -184,41 +190,12 @@ impl Contract {
         for provider in &providers {
             let provider_id = self.next_provider_id;
             self.next_provider_id += 1;
-            self.providers_by_id.insert(
-                &provider_id,
-                &VersionedProvider::from(VersionedProvider::Current(provider.clone())),
-            );
-            self.pending_provider_ids.insert(&provider_id);
+            self.handle_store_provider(provider_id, provider.clone());
         }
         refund_deposit(initial_storage_usage);
         // log events
         for provider in providers.iter() {
             log_add_or_update_provider_event(&format_provider(&self.next_provider_id, &provider));
-        }
-    }
-
-    // TODO: REMOVE AFTER MIGRATING
-    #[payable]
-    pub fn _clear_stamp_count_for_all_providers(&mut self) {
-        self.assert_owner_or_admin();
-
-        // Collect the provider IDs into a temporary vector to avoid borrowing issues
-        let provider_ids: Vec<ProviderId> = self.providers_by_id.keys().collect();
-
-        for provider_id in &provider_ids {
-            if let Some(versioned) = self.providers_by_id.get(&provider_id) {
-                let mut provider = Provider::from(versioned);
-                provider.stamp_count = 0; // Assuming you can directly mutate the fetched provider; otherwise, see below
-                self.providers_by_id
-                    .insert(&provider_id, &VersionedProvider::Current(provider));
-            }
-        }
-        // log events
-        for provider_id in provider_ids.iter() {
-            log_add_or_update_provider_event(&format_provider(
-                provider_id,
-                &Provider::from(self.providers_by_id.get(provider_id).unwrap()),
-            ));
         }
     }
 

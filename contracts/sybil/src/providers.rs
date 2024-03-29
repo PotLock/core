@@ -451,6 +451,18 @@ impl Contract {
             &provider_id,
             &VersionedProvider::from(VersionedProvider::Current(provider.clone())),
         );
+        if self.user_ids_for_provider.get(&provider_id).is_none() {
+            self.user_ids_for_provider.insert(
+                &provider_id,
+                &UnorderedSet::new(StorageKey::UserIdsForProviderInner { provider_id }),
+            );
+        }
+        if self.group_ids_for_provider.get(&provider_id).is_none() {
+            self.group_ids_for_provider.insert(
+                &provider_id,
+                &UnorderedSet::new(StorageKey::GroupIdsForProviderInner { provider_id }),
+            );
+        }
         match provider.status {
             ProviderStatus::Pending => {
                 self.pending_provider_ids.insert(&provider_id);

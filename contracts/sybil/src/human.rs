@@ -46,8 +46,12 @@ impl Contract {
 
     pub(crate) fn get_score_for_account_id(&self, account_id: AccountId) -> u32 {
         let mut total_score = 0;
-        let mut provider_scores: HashMap<ProviderId, (u32, usize)> = HashMap::new();
-        let mut group_scores: HashMap<String, Vec<u32>> = HashMap::new();
+        if self.blacklisted_accounts.contains(&account_id) {
+            return total_score;
+        }
+
+        let mut group_scores: HashMap<u64, Vec<u32>> = HashMap::new(); // Scores indexed by group ID
+        let mut provider_to_smallest_group: HashMap<ProviderId, u64> = HashMap::new(); // Maps provider to its smallest group by size
 
         if let Some(user_stamp_ids) = self.stamp_ids_for_user.get(&account_id) {
             for stamp_id in user_stamp_ids.iter() {
@@ -64,37 +68,37 @@ impl Contract {
                             .stamp_validity_ms
                             .map_or(true, |validity_period| stamp_age_ms <= validity_period)
                         {
-                            // Aggregate scores, considering provider is part of any group
-                            for (group_name, group) in self.groups_by_name.iter() {
-                                let providers_for_group =
-                                    self.provider_ids_for_group.get(&group_name);
-                                if let Some(providers) = providers_for_group {
-                                    if providers.contains(&provider_id) {
-                                        // Ensure group_size is u64 here as intended
-                                        let group_size: usize = providers.len() as usize;
-                                        let score = provider.default_weight;
+                            let score = provider.default_weight;
 
-                                        provider_scores
-                                            .entry(provider_id.clone())
-                                            .and_modify(|e| {
-                                                // Now e.1 is expected to be u64, so no type mismatch
-                                                if group_size < e.1 {
-                                                    *e = (score, group_size);
-                                                    group_scores
-                                                        .entry(group_name.clone())
-                                                        .or_default()
-                                                        .push(score);
-                                                }
-                                            })
-                                            .or_insert_with(|| {
-                                                group_scores
-                                                    .entry(group_name.clone())
-                                                    .or_default()
-                                                    .push(score);
-                                                (score, group_size)
-                                            });
+                            // Determine the smallest group for this provider
+                            if let Some(group_ids) = self.group_ids_for_provider.get(&provider_id) {
+                                let mut smallest_group_size = u64::MAX;
+                                let mut smallest_group_id = 0;
+
+                                for group_id in group_ids.iter() {
+                                    // if let Some(group) = self.groups_by_id.get(&group_id) {
+                                    let providers =
+                                        self.provider_ids_for_group.get(&group_id).unwrap();
+                                    let group_size = providers.len() as u64;
+                                    if group_size < smallest_group_size {
+                                        smallest_group_size = group_size;
+                                        smallest_group_id = group_id;
                                     }
+                                    // }
                                 }
+
+                                // Update the provider to its smallest group mapping
+                                provider_to_smallest_group
+                                    .insert(provider_id.clone(), smallest_group_id);
+
+                                // Add the provider's score to its smallest group's scores
+                                group_scores
+                                    .entry(smallest_group_id)
+                                    .or_insert_with(Vec::new)
+                                    .push(score);
+                            } else {
+                                // Providers not in any group are added directly to the total score
+                                total_score += score;
                             }
                         }
                     }
@@ -102,29 +106,29 @@ impl Contract {
             }
         }
 
-        // Calculate group scores based on the rules
-        for (group_id, scores) in group_scores {
-            let group_rule = &self.groups_by_name.get(&group_id).unwrap().rule;
+        // Now, apply group rules to calculate the scores for each group
+        for (&group_id, scores) in &group_scores {
+            if let Some(group) = self.groups_by_id.get(&group_id) {
+                let group_rule = &group.rule; // Assuming a `rule` field exists in the Group struct
 
-            let group_score = match group_rule {
-                Rule::Highest => *scores.iter().max().unwrap_or(&0),
-                Rule::Lowest => *scores.iter().min().unwrap_or(&0),
-                Rule::Sum(max_value_option) => {
-                    let sum: u32 = scores.iter().sum();
-                    if let Some(max_value) = max_value_option {
-                        std::cmp::min(sum, *max_value)
-                    } else {
-                        sum
+                let group_score = match group_rule {
+                    Rule::Highest => *scores.iter().max().unwrap_or(&0),
+                    Rule::Lowest => *scores.iter().min().unwrap_or(&0),
+                    Rule::Sum(max_value_option) => {
+                        let sum: u32 = scores.iter().sum();
+                        max_value_option.map_or(sum, |max_value| std::cmp::min(sum, max_value))
                     }
-                }
-                Rule::DiminishingReturns(factor) => calculate_diminishing_returns(&scores, *factor),
-                Rule::IncreasingReturns(factor) => calculate_increasing_returns(&scores, *factor),
-            };
+                    Rule::DiminishingReturns(factor) => {
+                        calculate_diminishing_returns(scores, *factor)
+                    }
+                    Rule::IncreasingReturns(factor) => {
+                        calculate_increasing_returns(scores, *factor)
+                    }
+                };
 
-            total_score += group_score;
+                total_score += group_score;
+            }
         }
-
-        // No need to handle ungrouped providers explicitly if stamps cover all providers
 
         total_score
     }

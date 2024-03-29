@@ -126,8 +126,11 @@ impl Contract {
     pub fn admin_set_default_human_threshold(&mut self, default_human_threshold: u32) {
         // only contract owner or admin can call this method
         self.assert_owner_or_admin();
+        let initial_storage_usage = env::storage_usage();
         // set default human threshold
         self.default_human_threshold = default_human_threshold;
+        // refund any unused deposit
+        refund_deposit(initial_storage_usage);
         log_update_default_human_threshold_event(default_human_threshold);
     }
 }

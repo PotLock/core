@@ -148,7 +148,7 @@ pub(crate) fn log_add_or_update_group_event(group: &GroupExternal) {
 }
 
 /// delete group
-pub(crate) fn log_delete_group_event(group_name: &String) {
+pub(crate) fn log_delete_group_event(group_id: &GroupId) {
     env::log_str(
         format!(
             "{}{}",
@@ -159,7 +159,7 @@ pub(crate) fn log_delete_group_event(group_name: &String) {
                 "event": "delete_group",
                 "data": [
                     {
-                        "group_name": group_name,
+                        "group_id": group_id,
                     }
                 ]
             })
