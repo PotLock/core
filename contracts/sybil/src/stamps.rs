@@ -42,6 +42,7 @@ impl From<VersionedStamp> for Stamp {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
 pub struct StampExternal {
+    pub id: StampId,
     pub user_id: AccountId,
     pub provider: ProviderExternal,
     pub validated_at_ms: TimestampMs,
@@ -143,17 +144,16 @@ impl Contract {
                             ));
                         }
 
-                        let formatted_stamp = StampExternal {
+                        // log event
+                        log_add_stamp_event(&stamp_id, &stamp);
+
+                        // return stamp
+                        return Some(StampExternal {
+                            id: stamp_id.clone(),
                             user_id: user_id.clone(),
                             provider: format_provider(&provider_id, &provider),
                             validated_at_ms: stamp.validated_at_ms,
-                        };
-
-                        // log event
-                        log_add_stamp_event(&formatted_stamp);
-
-                        // return stamp
-                        return Some(formatted_stamp);
+                        });
                     }
                 } else {
                     // Response type is incorrect. Refund deposit.
@@ -294,6 +294,7 @@ impl Contract {
             .map(|(stamp_id, versioned_stamp)| {
                 let stamp = Stamp::from(versioned_stamp);
                 StampExternal {
+                    id: stamp_id.clone(),
                     user_id: stamp.user_id.clone(),
                     provider: format_provider(
                         &stamp.provider_id,
@@ -334,6 +335,7 @@ impl Contract {
                             .expect("Stamp does not exist"),
                     );
                     StampExternal {
+                        id: stamp_id.clone(),
                         user_id: account_id.clone(),
                         provider: format_provider(
                             &stamp.provider_id,

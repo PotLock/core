@@ -72,33 +72,36 @@ impl Contract {
 
                             // Determine the smallest group for this provider
                             if let Some(group_ids) = self.group_ids_for_provider.get(&provider_id) {
-                                let mut smallest_group_size = u64::MAX;
-                                let mut smallest_group_id = 0;
+                                // each provider will always have a set of group_ids, but it may be empty if the provider is not in any groups
+                                if !group_ids.is_empty() {
+                                    let mut smallest_group_size = u64::MAX;
+                                    let mut smallest_group_id = 0;
 
-                                for group_id in group_ids.iter() {
-                                    // if let Some(group) = self.groups_by_id.get(&group_id) {
-                                    let providers =
-                                        self.provider_ids_for_group.get(&group_id).unwrap();
-                                    let group_size = providers.len() as u64;
-                                    if group_size < smallest_group_size {
-                                        smallest_group_size = group_size;
-                                        smallest_group_id = group_id;
+                                    for group_id in group_ids.iter() {
+                                        // if let Some(group) = self.groups_by_id.get(&group_id) {
+                                        let providers =
+                                            self.provider_ids_for_group.get(&group_id).unwrap();
+                                        let group_size = providers.len() as u64;
+                                        if group_size < smallest_group_size {
+                                            smallest_group_size = group_size;
+                                            smallest_group_id = group_id;
+                                        }
+                                        // }
                                     }
-                                    // }
+
+                                    // Update the provider to its smallest group mapping
+                                    provider_to_smallest_group
+                                        .insert(provider_id.clone(), smallest_group_id);
+
+                                    // Add the provider's score to its smallest group's scores
+                                    group_scores
+                                        .entry(smallest_group_id)
+                                        .or_insert_with(Vec::new)
+                                        .push(score);
+                                } else {
+                                    // Providers not in any group are added directly to the total score
+                                    total_score += score;
                                 }
-
-                                // Update the provider to its smallest group mapping
-                                provider_to_smallest_group
-                                    .insert(provider_id.clone(), smallest_group_id);
-
-                                // Add the provider's score to its smallest group's scores
-                                group_scores
-                                    .entry(smallest_group_id)
-                                    .or_insert_with(Vec::new)
-                                    .push(score);
-                            } else {
-                                // Providers not in any group are added directly to the total score
-                                total_score += score;
                             }
                         }
                     }
@@ -109,7 +112,7 @@ impl Contract {
         // Now, apply group rules to calculate the scores for each group
         for (&group_id, scores) in &group_scores {
             if let Some(group) = self.groups_by_id.get(&group_id) {
-                let group_rule = &group.rule; // Assuming a `rule` field exists in the Group struct
+                let group_rule = &group.rule;
 
                 let group_score = match group_rule {
                     Rule::Highest => *scores.iter().max().unwrap_or(&0),

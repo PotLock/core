@@ -62,15 +62,15 @@ pub struct Contract {
     // Enables fetching of all stamps for a user (also allows fetching of all users by iteration)
     stamp_ids_for_user: UnorderedMap<AccountId, UnorderedSet<StampId>>,
     // Enables fetching of all users with given stamp (provider ID)
-    user_ids_for_provider: LookupMap<ProviderId, UnorderedSet<AccountId>>,
+    user_ids_for_provider: UnorderedMap<ProviderId, UnorderedSet<AccountId>>,
     // Enables fetching of providers that a user has submitted (e.g. if user has submitted one malicious provider, they are likely to submit more and you'll want to be able to fetch these or filter them out of results)
     provider_ids_for_submitter: UnorderedMap<AccountId, UnorderedSet<ProviderId>>,
     // Maps group ID to Group struct
     groups_by_id: UnorderedMap<GroupId, Group>,
     // Mapping of group ID to provider IDs
-    provider_ids_for_group: LookupMap<GroupId, UnorderedSet<ProviderId>>,
+    provider_ids_for_group: UnorderedMap<GroupId, UnorderedSet<ProviderId>>,
     // Mapping of provider ID to group IDs
-    group_ids_for_provider: LookupMap<ProviderId, UnorderedSet<GroupId>>,
+    group_ids_for_provider: UnorderedMap<ProviderId, UnorderedSet<GroupId>>,
     // Blacklisted accounts
     blacklisted_accounts: UnorderedSet<AccountId>,
 }
@@ -161,11 +161,11 @@ impl Contract {
             default_human_threshold: 0,
             stamps_by_id: UnorderedMap::new(StorageKey::StampsById),
             stamp_ids_for_user: UnorderedMap::new(StorageKey::StampIdsForUser),
-            user_ids_for_provider: LookupMap::new(StorageKey::UserIdsForProvider),
+            user_ids_for_provider: UnorderedMap::new(StorageKey::UserIdsForProvider),
             provider_ids_for_submitter: UnorderedMap::new(StorageKey::SubmitterIdsForProvider),
             groups_by_id: UnorderedMap::new(StorageKey::GroupsById),
-            provider_ids_for_group: LookupMap::new(StorageKey::ProviderIdsForGroup),
-            group_ids_for_provider: LookupMap::new(StorageKey::GroupIdsForProvider),
+            provider_ids_for_group: UnorderedMap::new(StorageKey::ProviderIdsForGroup),
+            group_ids_for_provider: UnorderedMap::new(StorageKey::GroupIdsForProvider),
             blacklisted_accounts: UnorderedSet::new(StorageKey::BlacklistedAccounts),
         }
     }
@@ -203,6 +203,7 @@ impl Contract {
     #[payable]
     pub fn _add_stamps_unsafe(&mut self, stamps: Vec<Stamp>) {
         let initial_storage_usage = env::storage_usage();
+        let mut stamp_ids = vec![];
         for stamp in &stamps {
             let mut provider = Provider::from(
                 self.providers_by_id
@@ -215,6 +216,7 @@ impl Contract {
                 stamp.provider_id.clone(),
                 stamp.user_id.clone(),
             );
+            stamp_ids.push(self.next_stamp_id);
             self.next_stamp_id += 1;
             provider.stamp_count += 1;
             self.providers_by_id.insert(
@@ -223,19 +225,27 @@ impl Contract {
             );
         }
         refund_deposit(initial_storage_usage);
-        for stamp in stamps.iter() {
-            log_add_stamp_event(&StampExternal {
-                user_id: stamp.user_id.clone(),
-                provider: format_provider(
-                    &stamp.provider_id,
-                    &Provider::from(
-                        self.providers_by_id
-                            .get(&stamp.provider_id)
-                            .expect("Provider does not exist"),
-                    ),
-                ),
-                validated_at_ms: stamp.validated_at_ms,
-            });
+        // for stamp in stamps.iter() {
+        //     log_add_stamp_event(&stamp);
+        // }
+        for (idx, stamp) in stamps.iter().enumerate() {
+            log_add_stamp_event(&stamp_ids[idx], &stamp);
         }
     }
+
+    // #[payable]
+    // pub fn _delete_stamps_unsafe(&mut self, start_id: u64, end_id: u64) {
+    //     self.assert_owner_or_admin();
+    //     let initial_storage_usage = env::storage_usage();
+    //     for stamp_id in start_id..end_id {
+    //         self.stamps_by_id.remove(&stamp_id);
+    //     }
+    //     refund_deposit(initial_storage_usage);
+    // }
+
+    // #[payable]
+    // pub fn _set_next_stamp_id_unsafe(&mut self, next_stamp_id: StampId) {
+    //     self.assert_owner_or_admin();
+    //     self.next_stamp_id = next_stamp_id;
+    // }
 }

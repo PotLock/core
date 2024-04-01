@@ -85,7 +85,7 @@ pub(crate) fn log_add_or_update_provider_event(provider: &ProviderExternal) {
 }
 
 /// add stamp
-pub(crate) fn log_add_stamp_event(stamp: &StampExternal) {
+pub(crate) fn log_add_stamp_event(stamp_id: &StampId, stamp: &Stamp) {
     env::log_str(
         format!(
             "{}{}",
@@ -96,6 +96,7 @@ pub(crate) fn log_add_stamp_event(stamp: &StampExternal) {
                 "event": "add_stamp",
                 "data": [
                     {
+                        "stamp_id": stamp_id,
                         "stamp": stamp,
                     }
                 ]
