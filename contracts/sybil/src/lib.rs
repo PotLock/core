@@ -6,6 +6,7 @@ use near_sdk::{
     env, log, near_bindgen, require, serde_json::json, AccountId, Balance, BorshStorageKey, Gas,
     PanicOnDefault, Promise, PromiseError, PromiseResult,
 };
+use std::collections::HashMap;
 
 pub mod admin;
 pub mod constants;

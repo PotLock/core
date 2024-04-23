@@ -11,6 +11,7 @@
 ### General Types
 
 ```rs
+
 ```
 
 ### Contract
@@ -51,7 +52,7 @@ pub struct Config {
 
 ### Providers
 
-*NB: Providers are stored by their ID, which is a concatenation of the contract ID + method name, e.g. "iamhuman.near:is_human"*
+_NB: Providers are stored by their ID, which is a concatenation of the contract ID + method name, e.g. "iamhuman.near:is_human"_
 
 ```rs
 type ProviderId = String; // NB: this is stored internally as a struct
@@ -339,6 +340,11 @@ pub struct HumanScoreResponse {
 
 pub fn get_human_score(&self, account_id: AccountId) -> HumanScoreResponse
 
+pub fn get_human_score_batch(
+    &self,
+    account_ids: Vec<AccountId>,
+) -> HashMap<AccountId, HumanScoreResponse>
+
 pub fn is_human(&self, account_id: AccountId) -> bool // TODO: add option for caller to specify providers (with weights) + min_human_threshold
 
 
@@ -364,18 +370,18 @@ Indicates that `ContractSourceMetadata` object has been set/updated.
 
 ```json
 {
-    "standard": "potlock",
-    "version": "1.0.0",
-    "event": "set_source_metadata",
-    "data": [
-        {
-            "source_metadata": {
-                "commit_hash":"ec02294253b22c2d4c50a75331df23ada9eb04db",
-                "link":"https://github.com/PotLock/core",
-                "version":"0.1.0",
-            }
-        }
-    ]
+  "standard": "potlock",
+  "version": "1.0.0",
+  "event": "set_source_metadata",
+  "data": [
+    {
+      "source_metadata": {
+        "commit_hash": "ec02294253b22c2d4c50a75331df23ada9eb04db",
+        "link": "https://github.com/PotLock/core",
+        "version": "0.1.0"
+      }
+    }
+  ]
 }
 ```
 
@@ -387,27 +393,27 @@ Indicates that a new provider has been added.
 
 ```json
 {
-    "standard": "potlock",
-    "version": "1.0.0",
-    "event": "add_provider",
-    "data": [
-        {
-            "provider_id": "provider.near:is_human",
-            "provider": {
-                "name": "Provider Name",
-                "description": "Description of the provider",
-                "tags": ["face-scan", "twitter"],
-                "icon_url": "https://google.com/myimage.png",
-                "external_url": "https://provider.example.com",
-                "submitted_by": "user.near",
-                "submitted_at_ms": 1706289760834,
-                "stamp_count": 0,
-                "status": "Pending",
-                "default_weight": 100,
-                "admin_notes": null,
-            }
-        }
-    ]
+  "standard": "potlock",
+  "version": "1.0.0",
+  "event": "add_provider",
+  "data": [
+    {
+      "provider_id": "provider.near:is_human",
+      "provider": {
+        "name": "Provider Name",
+        "description": "Description of the provider",
+        "tags": ["face-scan", "twitter"],
+        "icon_url": "https://google.com/myimage.png",
+        "external_url": "https://provider.example.com",
+        "submitted_by": "user.near",
+        "submitted_at_ms": 1706289760834,
+        "stamp_count": 0,
+        "status": "Pending",
+        "default_weight": 100,
+        "admin_notes": null
+      }
+    }
+  ]
 }
 ```
 
@@ -419,26 +425,26 @@ Indicates that an existing provider has been updated.
 
 ```json
 {
-    "standard": "potlock",
-    "version": "1.0.0",
-    "event": "update_provider",
-    "data": [
-        {
-            "provider_id": "provider.near:is_human",
-            "provider": {
-                "name": "Provider Name",
-                "description": "Description of the provider",
-                "tags": ["face-scan", "twitter"],
-                "icon_url": "https://google.com/myimage.png",
-                "external_url": "https://provider.example.com",
-                "submitted_by": "user.near",
-                "submitted_at_ms": 1706289760834,
-                "stamp_count": 0,
-                "status": "Active",
-                "default_weight": 20,
-                "admin_notes": null,
-            }
-        }
-    ]
+  "standard": "potlock",
+  "version": "1.0.0",
+  "event": "update_provider",
+  "data": [
+    {
+      "provider_id": "provider.near:is_human",
+      "provider": {
+        "name": "Provider Name",
+        "description": "Description of the provider",
+        "tags": ["face-scan", "twitter"],
+        "icon_url": "https://google.com/myimage.png",
+        "external_url": "https://provider.example.com",
+        "submitted_by": "user.near",
+        "submitted_at_ms": 1706289760834,
+        "stamp_count": 0,
+        "status": "Active",
+        "default_weight": 20,
+        "admin_notes": null
+      }
+    }
+  ]
 }
 ```

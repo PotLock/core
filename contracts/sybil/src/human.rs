@@ -17,6 +17,17 @@ impl Contract {
         }
     }
 
+    pub fn get_human_score_batch(
+        &self,
+        account_ids: Vec<AccountId>,
+    ) -> HashMap<AccountId, HumanScoreResponse> {
+        let mut result = HashMap::new();
+        for account_id in account_ids.iter() {
+            result.insert(account_id.clone(), self.get_human_score(account_id.clone()));
+        }
+        result
+    }
+
     pub fn is_human(&self, account_id: AccountId) -> bool {
         // TODO: add option for caller to specify providers or custom default_human_threshold
         self.get_human_score(account_id).is_human
