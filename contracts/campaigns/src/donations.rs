@@ -27,7 +27,7 @@ pub struct Donation {
     /// Referrer fee
     pub referrer_fee: Option<u128>,
     /// Whether the donation was returned to sender
-    pub returned_at: Option<TimestampMs>,
+    pub returned: bool,
     // /// When donation was actually paid
     // pub paid_at_ms: Option<TimestampMs>,
 }
@@ -74,7 +74,7 @@ pub struct DonationExternal {
     // /// When donation was actually paid
     // pub paid_at_ms: Option<TimestampMs>,
     /// Whether the donation was returned to sender
-    pub returned_at: Option<TimestampMs>,
+    pub returned: bool,
     /// Whether the donation is currently in escrow
     pub is_in_escrow: bool,
     /// ID of the account receiving the donation  
@@ -150,8 +150,7 @@ impl Contract {
             protocol_fee,
             referrer_id: msg_json.referrer_id.clone(),
             referrer_fee,
-            returned_at: None,
-            // returned: false,
+            returned: false,
             // paid_at_ms: if should_escrow {
             //     None
             // } else {
@@ -245,8 +244,7 @@ impl Contract {
             protocol_fee,
             referrer_id,
             referrer_fee,
-            returned_at: None,
-            // returned: false,
+            returned: false,
             // paid_at_ms: if should_escrow {
             //     None
             // } else {
@@ -481,7 +479,7 @@ impl Contract {
                     }
                     // delete donation record, and refund freed storage cost to donor's storage balance
                     let initial_storage_usage = env::storage_usage();
-                    self.remove_donation_record_internal(&self.unformat_donation(&donation));
+                    self.internal_remove_donation_record(&self.unformat_donation(&donation));
                     let storage_freed = initial_storage_usage - env::storage_usage();
                     let cost_freed = env::storage_byte_cost() * Balance::from(storage_freed);
                     let storage_balance = self.storage_balance_of(&donation.donor_id);
@@ -825,7 +823,7 @@ impl Contract {
             .insert(&donation.donor_id, &donation_ids_by_donor_set);
     }
 
-    pub(crate) fn remove_donation_record_internal(&mut self, donation: &Donation) {
+    pub(crate) fn internal_remove_donation_record(&mut self, donation: &Donation) {
         // remove from donations-by-id mapping
         self.donations_by_id.remove(&donation.id);
 
@@ -988,7 +986,8 @@ impl Contract {
             referrer_id: donation.referrer_id.clone(),
             referrer_fee: donation.referrer_fee.map(|v| U128(v)),
             // paid_at_ms: donation.paid_at_ms,
-            returned_at: donation.returned_at,
+            // returned_at: donation.returned_at,
+            returned: donation.returned,
             is_in_escrow: self
                 .escrowed_donation_ids_by_campaign_id
                 .get(&donation.campaign_id)
@@ -1011,7 +1010,8 @@ impl Contract {
             referrer_id: donation.referrer_id.clone(),
             referrer_fee: donation.referrer_fee.map(|v| v.0),
             // paid_at_ms: donation.paid_at_ms,
-            returned_at: donation.returned_at,
+            // returned_at: donation.returned_at,
+            returned: donation.returned,
         }
     }
 }

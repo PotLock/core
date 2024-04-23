@@ -295,6 +295,60 @@ impl Contract {
         refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
+    pub fn process_refunds_batch(&mut self, campaign_id: CampaignId) {
+        // TODO: WIP
+        let initial_storage_usage = env::storage_usage();
+        let campaign = Campaign::from(
+            self.campaigns_by_id
+                .get(&campaign_id)
+                .expect("Campaign not found"),
+        );
+        // Anyone can process refunds for a campaign if it has ended and min_amount has not been reached
+        assert!(
+            campaign.end_ms.unwrap_or(u64::MAX) < env::block_timestamp_ms(),
+            "Cannot process refunds until campaign has ended"
+        );
+        assert!(
+            campaign.net_raised_amount < campaign.min_amount.unwrap_or(u128::MAX),
+            "Cannot process refunds once min_amount has been reached"
+        );
+        // Get escrowed donation IDs & process refunds in batches of 100
+        let mut escrowed_donation_ids = self
+            .escrowed_donation_ids_by_campaign_id
+            .get(&campaign_id)
+            .expect("No escrowed donations found for campaign");
+        let mut escrowed_donation_ids_vec = escrowed_donation_ids.to_vec();
+        let mut i = 0;
+        let mut refunds: HashMap<AccountId, Balance> = HashMap::new();
+        while i < escrowed_donation_ids_vec.len() {
+            let batch = escrowed_donation_ids_vec
+                .drain(i..std::cmp::min(i + 100, escrowed_donation_ids_vec.len())) // TODO: SET MAX BATCH SIZE AS UPDATEABLE VAR IN CONTRACT
+                .collect::<Vec<DonationId>>();
+            for donation_id in batch {
+                let donation = Donation::from(
+                    self.donations_by_id
+                        .get(&donation_id)
+                        .expect("Donation not found"),
+                );
+                let mut refund_amount = donation.total_amount;
+                // refund total amount minus storage costs (donation record won't actually be deleted on refund)
+                let storage_before = env::storage_usage();
+                // temporarily remove donation record to check how much storage cost was
+                self.internal_remove_donation_record(&donation);
+                let storage_after = env::storage_usage();
+                refund_amount -=
+                    Balance::from(storage_after - storage_before) * env::storage_byte_cost();
+                // add donation record back
+                self.internal_insert_donation_record(&donation, true);
+                // add refund amount to current balance for donor, or create new entry
+                let current_balance = refunds.get(&donation.donor_id).unwrap_or(&0);
+                refunds.insert(donation.donor_id, current_balance + refund_amount);
+            }
+        }
+        // process refunds, call callback to verify refund was successful and update escrowed_donation_ids and Donation.returned
+    }
+
     // VIEW METHODS
 
     pub fn get_campaign(&self, campaign_id: CampaignId) -> CampaignExternal {
