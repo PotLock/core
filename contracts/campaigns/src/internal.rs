@@ -31,7 +31,7 @@ impl Contract {
         );
     }
 
-    /// Asserts that the campaign is live (before start or after end, or max_amount reached)
+    /// Asserts that the campaign is live (before start or after end, or next_raised_amount >= max_amount)
     pub(crate) fn assert_campaign_live(&self, campaign_id: &CampaignId) {
         let campaign = Campaign::from(
             self.campaigns_by_id
@@ -39,18 +39,18 @@ impl Contract {
                 .expect("Campaign not found"),
         );
         assert!(
-            campaign.start_ms <= env::block_timestamp(),
+            campaign.start_ms <= env::block_timestamp_ms(),
             "Campaign has not started yet"
         );
         if let Some(end_ms) = campaign.end_ms {
             assert!(
-                end_ms > env::block_timestamp(),
+                end_ms > env::block_timestamp_ms(),
                 "Campaign has already ended"
             );
         }
         if let Some(max_amount) = campaign.max_amount {
             assert!(
-                campaign.raised_amount < max_amount,
+                campaign.net_raised_amount < max_amount,
                 "Campaign has reached max amount"
             );
         }

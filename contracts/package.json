@@ -7,6 +7,7 @@
   "author": "Lachlan Glen <54282009+lachlanglen@users.noreply.github.com>",
   "license": "MIT",
   "scripts": {
+    "build:campaigns": "cd campaigns && ./scripts/build.sh && cd ..",
     "build:donation": "cd donation && ./scripts/build.sh && cd ..",
     "build:lists": "cd lists && ./scripts/build.sh && cd ..",
     "build:pot": "cd pot && ./scripts/build.sh && cd ..",
@@ -14,6 +15,8 @@
     "build:registry": "cd registry && ./scripts/build.sh && cd ..",
     "build:sybil": "cd sybil && ./scripts/build.sh && cd ..",
     "build:sybilprovider": "cd sybil_provider_simulator && ./scripts/build.sh && cd ..",
+    "dev:deploy:campaigns": "cd campaigns && ./scripts/deploy.sh && cd .. && yarn patch:config campaigns",
+    "dev:deploy:campaigns:refresh": "cd campaigns && rm -rf neardev && ./scripts/deploy.sh && cd .. && yarn patch:config campaigns",
     "dev:deploy:donation": "cd donation && ./scripts/deploy.sh && cd .. && yarn patch:config donation",
     "dev:deploy:donation:refresh": "cd donation && rm -rf neardev && ./scripts/deploy.sh && cd .. && yarn patch:config donation",
     "dev:deploy:lists": "cd lists && ./scripts/deploy.sh && cd .. && yarn patch:config lists",
