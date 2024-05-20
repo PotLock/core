@@ -53,4 +53,32 @@ impl Contract {
     pub fn storage_balance_of(&self, account_id: &AccountId) -> U128 {
         self.storage_deposits.get(account_id).unwrap_or(0).into()
     }
+
+    /// Calculates currently used storage & determines whether caller has sufficient storage balance to cover storage costs
+    pub(crate) fn verify_and_update_storage_balance(
+        &mut self,
+        sender_id: AccountId,
+        initial_storage_usage: u64,
+    ) {
+        // verify that deposit is sufficient to cover storage
+        let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
+        let storage_balance = self.storage_balance_of(&sender_id);
+        assert!(
+            storage_balance.0 >= required_deposit,
+            "{} must add storage deposit of at least {} yoctoNEAR to cover Donation storage",
+            sender_id,
+            required_deposit
+        );
+
+        log!("Old storage balance: {}", storage_balance.0);
+        // deduct storage deposit from user's balance
+        let new_storage_balance = storage_balance.0 - required_deposit;
+        self.storage_deposits
+            .insert(&sender_id, &new_storage_balance);
+        log!("New storage balance: {}", new_storage_balance);
+        log!(format!(
+            "Deducted {} yoctoNEAR from {}'s storage balance to cover storage",
+            required_deposit, sender_id
+        ));
+    }
 }

@@ -8,24 +8,32 @@ use near_sdk::{
 };
 use std::collections::HashMap;
 
+pub mod admin;
 pub mod campaigns;
 pub mod constants;
 pub mod donations;
+pub mod escrow;
 pub mod events;
 pub mod internal;
 pub mod owner;
 pub mod source;
 pub mod storage;
+pub mod transfer;
 pub mod utils;
+pub mod validation;
+pub use crate::admin::*;
 pub use crate::campaigns::*;
 pub use crate::constants::*;
 pub use crate::donations::*;
+pub use crate::escrow::*;
 pub use crate::events::*;
 pub use crate::internal::*;
 pub use crate::owner::*;
 pub use crate::source::*;
 pub use crate::storage::*;
+pub use crate::transfer::*;
 pub use crate::utils::*;
+pub use crate::validation::*;
 
 type DonationId = u64;
 type TimestampMs = u64;
@@ -42,18 +50,17 @@ pub struct Contract {
     protocol_fee_recipient_account: AccountId,
     default_referral_fee_basis_points: u32,
     default_creator_fee_basis_points: u32,
+    // TODO: add batch_size rather than storing as constant, so that we can adjust dynamically after contract is locked
     next_campaign_id: CampaignId,
     campaigns_by_id: UnorderedMap<CampaignId, VersionedCampaign>,
     campaign_ids_by_owner: UnorderedMap<AccountId, UnorderedSet<CampaignId>>,
     campaign_ids_by_recipient: UnorderedMap<AccountId, UnorderedSet<CampaignId>>,
     next_donation_id: DonationId,
     donations_by_id: UnorderedMap<DonationId, VersionedDonation>,
-    // donation_ids_by_campaign_id: UnorderedMap<CampaignId, UnorderedSet<DonationId>>,
     escrowed_donation_ids_by_campaign_id: UnorderedMap<CampaignId, UnorderedSet<DonationId>>,
     unescrowed_donation_ids_by_campaign_id: UnorderedMap<CampaignId, UnorderedSet<DonationId>>,
-    // donation_ids_by_recipient_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
+    returned_donation_ids_by_campaign_id: UnorderedMap<CampaignId, UnorderedSet<DonationId>>,
     donation_ids_by_donor_id: UnorderedMap<AccountId, UnorderedSet<DonationId>>,
-    // donation_ids_by_ft_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
     storage_deposits: UnorderedMap<AccountId, Balance>, // Add storage_deposits to track storage deposits for FTs
 }
 
@@ -80,18 +87,14 @@ pub enum StorageKey {
     CampaignIdsByRecipient,
     CampaignIdsByRecipientInner { recipient_id: AccountId },
     DonationsById,
-    // DonationIdsByRecipientId,
-    // DonationIdsByRecipientIdInner { recipient_id: AccountId },
-    // DonationIdsByCampaignId,
-    // DonationIdsByCampaignIdInner { campaign_id: CampaignId },
     EscrowedDonationIdsByCampaignId,
     EscrowedDonationIdsByCampaignIdInner { campaign_id: CampaignId },
     UnescrowedDonationIdsByCampaignId,
     UnescrowedDonationIdsByCampaignIdInner { campaign_id: CampaignId },
+    ReturnedDonationIdsByCampaignId,
+    ReturnedDonationIdsByCampaignIdInner { campaign_id: CampaignId },
     DonationIdsByDonorId,
     DonationIdsByDonorIdInner { donor_id: AccountId },
-    // DonationIdsByFtId,
-    // DonationIdsByFtIdInner { ft_id: AccountId },
     SourceMetadata,
     StorageDeposits,
 }
@@ -127,6 +130,9 @@ impl Contract {
             ),
             unescrowed_donation_ids_by_campaign_id: UnorderedMap::new(
                 StorageKey::UnescrowedDonationIdsByCampaignId,
+            ),
+            returned_donation_ids_by_campaign_id: UnorderedMap::new(
+                StorageKey::ReturnedDonationIdsByCampaignId,
             ),
             donation_ids_by_donor_id: UnorderedMap::new(StorageKey::DonationIdsByDonorId),
             contract_source_metadata: LazyOption::new(

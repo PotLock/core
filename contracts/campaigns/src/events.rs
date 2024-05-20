@@ -106,6 +106,27 @@ pub(crate) fn log_donation_event(donation: &DonationExternal) {
     );
 }
 
+/// escrowed donation insert
+pub(crate) fn log_escrow_insert_event(donation: &DonationExternal) {
+    env::log_str(
+        format!(
+            "{}{}",
+            EVENT_JSON_PREFIX,
+            json!({
+                "standard": "potlock",
+                "version": "1.0.0",
+                "event": "escrow_insert",
+                "data": [
+                    {
+                        "donation": donation,
+                    }
+                ]
+            })
+        )
+        .as_ref(),
+    );
+}
+
 /// escrowed donation refund
 pub(crate) fn log_escrow_refund_event(temp_refund_record: &TempRefundRecord) {
     env::log_str(
@@ -115,12 +136,32 @@ pub(crate) fn log_escrow_refund_event(temp_refund_record: &TempRefundRecord) {
             json!({
                 "standard": "potlock",
                 "version": "1.0.0",
-                "event": "refund",
+                "event": "escrow_refund",
                 "data": [
                     {
                         "amount": temp_refund_record.amount,
                         "donations": temp_refund_record.donations,
-                        "type": "escrow",
+                    }
+                ]
+            })
+        )
+        .as_ref(),
+    );
+}
+
+/// escrowed donation process
+pub(crate) fn log_escrow_process_event(donation_ids: &Vec<DonationId>) {
+    env::log_str(
+        format!(
+            "{}{}",
+            EVENT_JSON_PREFIX,
+            json!({
+                "standard": "potlock",
+                "version": "1.0.0",
+                "event": "escrow_process",
+                "data": [
+                    {
+                        "donation_ids": donation_ids,
                     }
                 ]
             })

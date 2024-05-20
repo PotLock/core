@@ -1,6 +1,7 @@
 use crate::*;
 
-// Donation is the data structure that is stored within the contract
+/// * `Donation` is the data structure that is stored within the contract.
+/// * *NB: recipient & ft_id are stored in the Campaign struct.*
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Debug)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Donation {
@@ -14,8 +15,6 @@ pub struct Donation {
     pub total_amount: u128,
     /// Net amount, after all fees & storage costs
     pub net_amount: u128,
-    // /// FT ID (if None, it's a native NEAR donation)
-    // pub ft_id: Option<AccountId>,
     /// Optional message from the donor          
     pub message: Option<String>,
     /// Timestamp when the donation was made
@@ -26,10 +25,11 @@ pub struct Donation {
     pub referrer_id: Option<AccountId>,
     /// Referrer fee
     pub referrer_fee: Option<u128>,
-    /// Whether the donation was returned to sender
-    pub returned: bool,
-    // /// When donation was actually paid
-    // pub paid_at_ms: Option<TimestampMs>,
+    /// Creator fee
+    pub creator_fee: u128,
+    /// Whether (and when) the donation was returned to sender
+    pub returned_at_ms: Option<TimestampMs>,
+    // TODO: add paid_at_ms?
 }
 
 #[derive(BorshSerialize, BorshDeserialize)]
@@ -71,10 +71,10 @@ pub struct DonationExternal {
     pub referrer_id: Option<AccountId>,
     /// Referrer fee
     pub referrer_fee: Option<U128>,
-    // /// When donation was actually paid
-    // pub paid_at_ms: Option<TimestampMs>,
+    /// Creator fee
+    pub creator_fee: U128,
     /// Whether the donation was returned to sender
-    pub returned: bool,
+    pub returned_at_ms: Option<TimestampMs>,
     /// Whether the donation is currently in escrow
     pub is_in_escrow: bool,
     /// ID of the account receiving the donation  
@@ -88,17 +88,16 @@ pub struct FtReceiverMsg {
     pub referrer_id: Option<AccountId>,
     pub message: Option<String>,
     pub bypass_protocol_fee: Option<bool>,
+    pub bypass_creator_fee: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
-pub enum TransferType {
-    DonationTransfer,
-    ProtocolFeeTransfer,
-    ReferrerFeeTransfer,
-    EscrowTransferDonation,
-    EscrowTransferProtocolFee,
-    EscrowTransferReferrerFee,
+pub enum FundsReceiver {
+    Recipient,
+    Protocol,
+    Referrer,
+    Creator,
 }
 
 #[near_bindgen]
@@ -114,12 +113,13 @@ impl Contract {
         let msg_json: FtReceiverMsg = near_sdk::serde_json::from_str(&msg)
             .expect("Invalid msg string. Must implement FtReceiverMsg.");
         log!(format!(
-            "Campaign ID {:?}, Referrer ID {:?}, Amount {}, Message {:?}",
-            msg_json.campaign_id, msg_json.referrer_id, amount.0, msg_json.message
+            "Campaign ID {:?}, Referrer ID {:?}, Amount {}, Message {:?}, ByPass Protocol Fee {:?}, ByPass Creator Fee {:?}",
+            msg_json.campaign_id, msg_json.referrer_id, amount.0, msg_json.message, msg_json.bypass_protocol_fee, msg_json.bypass_creator_fee
         ));
 
+        self.assert_campaign_live(&msg_json.campaign_id);
         // fetch campaign
-        let mut campaign = Campaign::from(
+        let campaign = Campaign::from(
             self.campaigns_by_id
                 .get(&msg_json.campaign_id)
                 .expect("Campaign not found"),
@@ -137,74 +137,34 @@ impl Contract {
         );
 
         // calculate amounts
-        let (protocol_fee, referrer_fee, amount_after_fees) = self.calculate_fees_and_remainder(
-            amount.0,
-            msg_json.campaign_id.clone(),
-            msg_json.referrer_id.clone(),
-            msg_json.bypass_protocol_fee,
-        );
+        let (protocol_fee, referrer_fee, creator_fee, amount_after_fees) = self
+            .calculate_fees_and_remainder(
+                amount.0,
+                &campaign,
+                msg_json.referrer_id.clone(),
+                msg_json.bypass_protocol_fee,
+                msg_json.bypass_creator_fee,
+            );
 
-        let net_amount = amount.0 - protocol_fee - referrer_fee.unwrap_or(0);
-
-        // if min_amount present & has not been reached, donation is accepted but not paid out (goes into escrow)
-        let should_escrow = campaign.net_raised_amount < campaign.min_amount.unwrap_or(0);
-
-        // create and insert donation record
-        let initial_storage_usage = env::storage_usage();
+        // compose Donation record
         let donation = Donation {
             id: self.next_donation_id,
             campaign_id: msg_json.campaign_id.clone(),
-            donor_id: env::predecessor_account_id(),
+            donor_id: sender_id.clone(),
             total_amount: amount.0,
-            net_amount,
+            net_amount: amount_after_fees,
             message: msg_json.message,
             donated_at_ms: env::block_timestamp_ms(),
             protocol_fee,
             referrer_id: msg_json.referrer_id.clone(),
             referrer_fee,
-            returned: false,
-            // paid_at_ms: if should_escrow {
-            //     None
-            // } else {
-            //     Some(env::block_timestamp_ms())
-            // },
+            creator_fee,
+            returned_at_ms: None,
         };
-        self.next_donation_id += 1;
-        self.internal_insert_donation_record(&donation, should_escrow);
+        self.handle_donation(donation, campaign);
 
-        // verify and update storage balance for FT donation
-        self.verify_and_update_storage_balance(sender_id.clone(), initial_storage_usage);
-
-        if should_escrow {
-            log!(format!(
-                "Donation {} ({}) accepted but not paid out (escrowed) for campaign {}",
-                amount_after_fees, ft_id, msg_json.campaign_id
-            ));
-            // update campaign (raised_amount & escrow_balance)
-            campaign.total_raised_amount += amount.0;
-            campaign.net_raised_amount += net_amount;
-            campaign.escrow_balance += net_amount;
-            self.campaigns_by_id.insert(
-                &msg_json.campaign_id,
-                &VersionedCampaign::Current(campaign.clone()),
-            );
-            // log event
-            log_donation_event(&self.format_donation(&donation));
-            // return # unused tokens as per NEP-144 standard
-            return PromiseOrValue::Value(U128(0));
-        } else {
-            // transfer donation
-            log!(format!(
-                "Transferring donation {} to {}",
-                amount_after_fees,
-                campaign.recipient.clone()
-            ));
-            self.handle_transfer_donation(self.format_donation(&donation), amount_after_fees);
-            // * NB: fees will be transferred in transfer_funds_callback after successful transfer of donation
-
-            // return # unused tokens as per NEP-144 standard
-            PromiseOrValue::Value(U128(0))
-        }
+        // Return amount of unused tokens, as per NEP-144 standard
+        PromiseOrValue::Value(U128(0))
     }
 
     #[payable]
@@ -214,575 +174,109 @@ impl Contract {
         message: Option<String>,
         referrer_id: Option<AccountId>,
         bypass_protocol_fee: Option<bool>,
+        bypass_creator_fee: Option<bool>,
     ) -> PromiseOrValue<DonationExternal> {
         /*
         DONATION SCENARIOS
         1. Campaign is not live (before start or after end, or max_amount reached), donate call fails
         2. Campaign is live, min_amount present & has not been reached, donation is accepted but not paid out (goes into escrow)
         3. Campaign is live, no min_amount or min_amount has been reached, donation is accepted and paid out
-
          */
         self.assert_campaign_live(&campaign_id);
-        // calculate amounts
-        let amount = env::attached_deposit();
-        let (protocol_fee, referrer_fee, mut amount_after_fees) = self
-            .calculate_fees_and_remainder(
-                amount.clone(),
-                campaign_id.clone(),
-                referrer_id.clone(),
-                bypass_protocol_fee,
-            );
-        let net_amount = amount - protocol_fee - referrer_fee.unwrap_or(0);
-
-        // if min_amount present & has not been reached, donation is accepted but not paid out (goes into escrow)
-        let mut campaign = Campaign::from(
+        let campaign = Campaign::from(
             self.campaigns_by_id
                 .get(&campaign_id)
                 .expect("Campaign not found"),
         );
-        let should_escrow = campaign.net_raised_amount < campaign.min_amount.unwrap_or(0);
+        // calculate amounts
+        let amount = env::attached_deposit();
+        let (protocol_fee, referrer_fee, creator_fee, amount_after_fees) = self
+            .calculate_fees_and_remainder(
+                amount.clone(),
+                &campaign,
+                referrer_id.clone(),
+                bypass_protocol_fee,
+                bypass_creator_fee,
+            );
 
-        // create and insert donation record
-        let initial_storage_usage = env::storage_usage();
-        let mut donation = Donation {
+        // compose Donation record
+        let donation = Donation {
             id: self.next_donation_id,
             campaign_id,
             donor_id: env::predecessor_account_id(),
             total_amount: amount,
-            net_amount,
+            net_amount: amount_after_fees,
             message,
             donated_at_ms: env::block_timestamp_ms(),
             protocol_fee,
             referrer_id,
             referrer_fee,
-            returned: false,
-            // paid_at_ms: if should_escrow {
-            //     None
-            // } else {
-            //     Some(env::block_timestamp_ms())
-            // },
+            creator_fee,
+            returned_at_ms: None,
         };
+        self.handle_donation(donation.clone(), campaign);
+        PromiseOrValue::Value(self.format_donation(&donation))
+    }
+
+    /// * Increments self.next_donation_id
+    /// * Inserts donation record & ID into appropriate mappings
+    /// * Asserts that storage cost is covered
+    /// * If campaign.total_amount >= campaign.min_amount, transfers donation; otherwise, donation is escrowed
+    pub(crate) fn handle_donation(&mut self, mut donation: Donation, mut campaign: Campaign) {
+        let initial_storage_usage = env::storage_usage();
         self.next_donation_id += 1;
+        // if min_amount present & has not been reached, donation is accepted but not paid out (goes into escrow)
+        let should_escrow = campaign.total_raised_amount < campaign.min_amount.unwrap_or(0);
         self.internal_insert_donation_record(&donation, should_escrow);
 
-        // assert that donation after fees > storage cost
-        let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
-        require!(
-            amount_after_fees > required_deposit,
-            format!(
-                "Must attach {} yoctoNEAR to cover storage",
-                required_deposit
-            )
-        );
-        amount_after_fees -= required_deposit;
+        if campaign.ft_id.is_some() {
+            // verify and update storage balance for FT donation
+            self.verify_and_update_storage_balance(
+                donation.donor_id.clone(),
+                initial_storage_usage,
+            );
+        } else {
+            // assert that donation after fees > storage cost
+            let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
+            require!(
+                donation.net_amount > required_deposit,
+                format!(
+                    "Must attach {} yoctoNEAR to cover storage", // TODO: update this amount to reflect fees
+                    required_deposit
+                )
+            );
 
-        // update net_amount with storage taken out
-        donation.net_amount = net_amount - required_deposit;
-        self.donations_by_id
-            .insert(&donation.id, &VersionedDonation::Current(donation.clone()));
+            // update net_amount with storage taken out
+            donation.net_amount = donation.net_amount - required_deposit;
+            self.donations_by_id
+                .insert(&donation.id, &VersionedDonation::Current(donation.clone()));
+        }
 
         if should_escrow {
             log!(format!(
-                "Donation {} accepted but not paid out (escrowed) for campaign {}",
-                amount_after_fees, campaign_id
+                "Donation {} (ft_id {:?}) accepted but not paid out (escrowed) for campaign {}",
+                donation.net_amount, campaign.ft_id, donation.campaign_id
             ));
             // update campaign (raised_amount & escrow_balance)
-            campaign.total_raised_amount += amount;
-            campaign.net_raised_amount += net_amount;
-            campaign.escrow_balance += net_amount;
-            self.campaigns_by_id
-                .insert(&campaign_id, &VersionedCampaign::Current(campaign.clone()));
+            campaign.total_raised_amount += donation.total_amount;
+            campaign.net_raised_amount += donation.net_amount;
+            campaign.escrow_balance += donation.net_amount;
+            self.campaigns_by_id.insert(
+                &donation.campaign_id,
+                &VersionedCampaign::Current(campaign.clone()),
+            );
             // log event
-            log_donation_event(&self.format_donation(&donation));
-            return PromiseOrValue::Value(self.format_donation(&donation));
+            log_escrow_insert_event(&self.format_donation(&donation));
         } else {
             // transfer donation
             log!(format!(
                 "Transferring donation {} to {}",
-                amount_after_fees,
+                donation.net_amount,
                 campaign.recipient.clone()
             ));
-            self.handle_transfer_donation(self.format_donation(&donation), amount_after_fees)
-            // * NB: fees will be transferred in transfer_funds_callback after successful transfer of donation
+            self.handle_transfer_recipient_amount(self.format_donation(&donation));
+            // * NB: fees will be transferred in transfer_funds_callback after successful transfer to recipient
         }
-    }
-
-    pub(crate) fn calculate_fees_and_remainder(
-        &self,
-        amount: u128,
-        campaign_id: CampaignId,
-        referrer_id: Option<AccountId>,
-        bypass_protocol_fee: Option<bool>,
-    ) -> (u128, Option<u128>, u128) {
-        // calculate protocol fee
-        let mut remainder = amount;
-        let protocol_fee = if bypass_protocol_fee.unwrap_or(false) {
-            0
-        } else {
-            self.calculate_protocol_fee(amount)
-        };
-
-        remainder -= protocol_fee;
-
-        // calculate referrer fee, if applicable
-        let mut referrer_fee = None;
-        if let Some(_referrer_id) = referrer_id.clone() {
-            let campaign = Campaign::from(
-                self.campaigns_by_id
-                    .get(&campaign_id)
-                    .expect("Campaign not found"),
-            );
-            let referrer_amount =
-                self.calculate_referrer_fee(amount, campaign.referral_fee_basis_points);
-            remainder -= referrer_amount;
-            referrer_fee = Some(referrer_amount);
-        }
-
-        (protocol_fee, referrer_fee, remainder)
-    }
-
-    pub(crate) fn verify_and_update_storage_balance(
-        &mut self,
-        sender_id: AccountId,
-        initial_storage_usage: u64,
-    ) {
-        // verify that deposit is sufficient to cover storage
-        let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
-        let storage_balance = self.storage_balance_of(&sender_id);
-        assert!(
-            storage_balance.0 >= required_deposit,
-            "{} must add storage deposit of at least {} yoctoNEAR to cover Donation storage",
-            sender_id,
-            required_deposit
-        );
-
-        log!("Old storage balance: {}", storage_balance.0);
-        // deduct storage deposit from user's balance
-        let new_storage_balance = storage_balance.0 - required_deposit;
-        self.storage_deposits
-            .insert(&sender_id, &new_storage_balance);
-        log!("New storage balance: {}", new_storage_balance);
-        log!(format!(
-            "Deducted {} yoctoNEAR from {}'s storage balance to cover storage",
-            required_deposit, sender_id
-        ));
-    }
-
-    pub(crate) fn handle_transfer(
-        &self,
-        donation: DonationExternal,
-        amount_after_fees: Balance,
-        transfer_type: TransferType,
-    ) -> PromiseOrValue<DonationExternal> {
-        if let Some(ft_id) = donation.ft_id.clone() {
-            // FT donation
-            let ft_transfer_args =
-                json!({ "receiver_id": donation.recipient_id, "amount": U128(amount_after_fees) })
-                    .to_string()
-                    .into_bytes();
-            PromiseOrValue::Promise(
-                Promise::new(ft_id.clone())
-                    .function_call(
-                        "ft_transfer".to_string(),
-                        ft_transfer_args,
-                        ONE_YOCTO,
-                        Gas(XCC_GAS_DEFAULT),
-                    )
-                    .then(
-                        Self::ext(env::current_account_id())
-                            .with_static_gas(Gas(XCC_GAS_DEFAULT))
-                            .transfer_funds_callback(
-                                amount_after_fees,
-                                donation.clone(),
-                                transfer_type,
-                                None,
-                            ),
-                    ),
-            )
-        } else {
-            // native NEAR donation
-            PromiseOrValue::Promise(
-                Promise::new(donation.recipient_id.clone())
-                    .transfer(amount_after_fees)
-                    .then(
-                        Self::ext(env::current_account_id())
-                            .with_static_gas(Gas(XCC_GAS_DEFAULT))
-                            .transfer_funds_callback(
-                                amount_after_fees,
-                                donation.clone(),
-                                transfer_type,
-                                None,
-                            ),
-                    ),
-            )
-        }
-    }
-
-    pub(crate) fn handle_transfer_donation(
-        &self,
-        donation: DonationExternal,
-        amount_after_fees: Balance,
-    ) -> PromiseOrValue<DonationExternal> {
-        self.handle_transfer(donation, amount_after_fees, TransferType::DonationTransfer)
-    }
-
-    pub(crate) fn handle_transfer_protocol_fee(
-        &self,
-        donation: DonationExternal,
-        amount_after_fees: Balance,
-    ) -> PromiseOrValue<DonationExternal> {
-        self.handle_transfer(
-            donation,
-            amount_after_fees,
-            TransferType::ProtocolFeeTransfer,
-        )
-    }
-
-    pub(crate) fn handle_transfer_referrer_fee(
-        &self,
-        donation: DonationExternal,
-        amount_after_fees: Balance,
-    ) -> PromiseOrValue<DonationExternal> {
-        self.handle_transfer(
-            donation,
-            amount_after_fees,
-            TransferType::ReferrerFeeTransfer,
-        )
-    }
-
-    /// Verifies whether donation & fees have been paid out for a given donation
-    #[private]
-    pub fn transfer_funds_callback(
-        &mut self,
-        amount: Balance,
-        mut donation: DonationExternal,
-        transfer_type: TransferType,
-        donation_ids: Option<Vec<DonationId>>,
-        #[callback_result] call_result: Result<(), PromiseError>,
-    ) -> Option<DonationExternal> {
-        let is_ft_transfer = donation.ft_id.is_some();
-        if call_result.is_err() {
-            // ERROR CASE HANDLING
-            // TODO: HANDLE REVERT PAID_AT_MS ON DONATION
-            // 1. If donation transfer failed, delete Donation record and return all funds to donor. NB: fees have not been transferred yet.
-            // 2. If protocol fee transfer failed, update donation record to indicate protocol fee of "0". NB: donation has already been transferred to recipient and this cannot be reversed.
-            // 3. If referrer fee transfer failed, update donation record to indicate referrer fee of "0". NB: donation has already been transferred to recipient and this cannot be reversed.
-            match transfer_type {
-                TransferType::DonationTransfer => {
-                    log!(format!(
-                        "Error transferring donation {:?} to {}. Returning funds to donor.",
-                        donation.total_amount, donation.recipient_id
-                    ));
-                    // return funds to donor
-                    if is_ft_transfer {
-                        let donation_transfer_args =
-                            json!({ "receiver_id": donation.donor_id, "amount": donation.total_amount.clone() })
-                                .to_string()
-                                .into_bytes();
-                        Promise::new(donation.ft_id.clone().unwrap()).function_call(
-                            "ft_transfer".to_string(),
-                            donation_transfer_args,
-                            ONE_YOCTO,
-                            Gas(XCC_GAS_DEFAULT),
-                        );
-                    } else {
-                        Promise::new(donation.donor_id.clone()).transfer(donation.total_amount.0);
-                    }
-                    // delete donation record, and refund freed storage cost to donor's storage balance
-                    let initial_storage_usage = env::storage_usage();
-                    self.internal_remove_donation_record(&self.unformat_donation(&donation));
-                    let storage_freed = initial_storage_usage - env::storage_usage();
-                    let cost_freed = env::storage_byte_cost() * Balance::from(storage_freed);
-                    let storage_balance = self.storage_balance_of(&donation.donor_id);
-                    let new_storage_balance = storage_balance.0 + cost_freed;
-                    log!("Old storage balance: {}", storage_balance.0);
-                    log!("New storage balance: {}", new_storage_balance);
-                    self.storage_deposits
-                        .insert(&donation.donor_id, &new_storage_balance); // TODO: check if this is hackable, e.g. if user can withdraw all their storage before this callback runs and therefore get a higher refund
-                    log!(format!(
-                        "Refunded {} yoctoNEAR to {}'s storage balance for freed storage",
-                        cost_freed, donation.donor_id
-                    ));
-                    None
-                }
-                TransferType::EscrowTransferDonation => {
-                    // transfer of escrowed donations to recipient failed
-                    // TODO: how to handle this case?
-                    None
-                }
-                TransferType::ProtocolFeeTransfer => {
-                    log!(format!(
-                        "Error transferring protocol fee {:?} to {}. Returning funds to donor.",
-                        donation.protocol_fee, self.protocol_fee_recipient_account
-                    ));
-                    // return funds to donor
-                    if is_ft_transfer {
-                        let donation_transfer_args =
-                            json!({ "receiver_id": donation.donor_id, "amount": donation.protocol_fee })
-                                .to_string()
-                                .into_bytes();
-                        Promise::new(donation.ft_id.clone().unwrap()).function_call(
-                            "ft_transfer".to_string(),
-                            donation_transfer_args,
-                            ONE_YOCTO,
-                            Gas(XCC_GAS_DEFAULT),
-                        );
-                    } else {
-                        Promise::new(donation.donor_id.clone()).transfer(donation.protocol_fee.0);
-                    }
-                    // update fee on Donation record to indicate error transferring funds
-                    donation.protocol_fee = U128(0);
-                    self.donations_by_id.insert(
-                        &donation.id.clone(),
-                        &VersionedDonation::Current(self.unformat_donation(&donation)),
-                    );
-                    Some(donation)
-                }
-                TransferType::EscrowTransferProtocolFee => {
-                    // transfer of protocol fee for escrowed donations failed
-                    // TODO: how to handle this case?
-                    None
-                }
-                TransferType::ReferrerFeeTransfer => {
-                    log!(format!(
-                        "Error transferring referrer fee {:?} to {:?}. Returning funds to donor.",
-                        donation.referrer_fee, donation.referrer_id
-                    ));
-                    // return funds to donor
-                    if is_ft_transfer {
-                        let donation_transfer_args =
-                            json!({ "receiver_id": donation.donor_id, "amount": donation.referrer_fee.unwrap() })
-                                .to_string()
-                                .into_bytes();
-                        Promise::new(donation.ft_id.clone().unwrap()).function_call(
-                            "ft_transfer".to_string(),
-                            donation_transfer_args,
-                            ONE_YOCTO,
-                            Gas(XCC_GAS_DEFAULT),
-                        );
-                    } else {
-                        Promise::new(donation.donor_id.clone())
-                            .transfer(donation.referrer_fee.unwrap().0);
-                    }
-                    // update fee on Donation record to indicate error transferring funds
-                    donation.referrer_fee = Some(U128(0));
-                    self.donations_by_id.insert(
-                        &donation.id.clone(),
-                        &VersionedDonation::Current(self.unformat_donation(&donation)),
-                    );
-                    Some(donation)
-                }
-                TransferType::EscrowTransferReferrerFee => {
-                    // transfer of referrer fee for escrowed donations failed
-                    // TODO: how to handle this case?
-                    None
-                }
-            }
-        } else {
-            // SUCCESS CASE HANDLING
-            if transfer_type == TransferType::EscrowTransferDonation {
-                log!(format!(
-                    "Successfully transferred donation {} out of escrow to {}!",
-                    amount, donation.recipient_id
-                ));
-                // reduce campaign.escrow_balance by amount
-                let mut campaign = Campaign::from(
-                    self.campaigns_by_id
-                        .get(&donation.campaign_id)
-                        .expect("Campaign not found"),
-                );
-                campaign.escrow_balance -= amount;
-                self.campaigns_by_id
-                    .insert(&donation.campaign_id, &VersionedCampaign::Current(campaign));
-
-                // remove donation IDs from escrowed set...
-                let mut escrowed_donation_ids_by_campaign = self
-                    .escrowed_donation_ids_by_campaign_id
-                    .get(&donation.campaign_id)
-                    .expect("Campaign not found");
-                for donation_id in donation_ids.as_ref().expect("No donation IDs provided") {
-                    escrowed_donation_ids_by_campaign.remove(&donation_id);
-                }
-                self.escrowed_donation_ids_by_campaign_id
-                    .insert(&donation.campaign_id, &escrowed_donation_ids_by_campaign);
-
-                // ...and add them to unescrowed set
-                let mut unescrowed_donation_ids_by_campaign = self
-                    .unescrowed_donation_ids_by_campaign_id
-                    .get(&donation.campaign_id)
-                    .expect("Campaign not found");
-                for donation_id in donation_ids.expect("No donation IDs provided") {
-                    unescrowed_donation_ids_by_campaign.remove(&donation_id);
-                }
-                self.unescrowed_donation_ids_by_campaign_id
-                    .insert(&donation.campaign_id, &unescrowed_donation_ids_by_campaign);
-
-                // no need to transfer protocol fee or referrer fee for escrowed donations as this is handled separately
-
-                Some(donation)
-            } else if transfer_type == TransferType::DonationTransfer {
-                log!(format!(
-                    "Successfully transferred donation {} to {}!",
-                    amount, donation.recipient_id
-                ));
-
-                // transfer protocol fee
-                if donation.protocol_fee.0 > 0 {
-                    log!(format!(
-                        "Transferring protocol fee {:?} to {}",
-                        donation.protocol_fee, self.protocol_fee_recipient_account
-                    ));
-                    self.handle_transfer_protocol_fee(donation.clone(), amount);
-                }
-
-                // transfer referrer fee
-                if let (Some(referrer_fee), Some(referrer_id)) =
-                    (donation.referrer_fee.clone(), donation.referrer_id.clone())
-                {
-                    if referrer_fee.0 > 0 {
-                        log!(format!(
-                            "Transferring referrer fee {:?} to {}",
-                            referrer_fee, referrer_id
-                        ));
-                        self.handle_transfer_referrer_fee(donation.clone(), amount);
-                    }
-                }
-
-                // TODO: transfer creator fee?
-
-                // if this donation is the one that meets or exceeds the min_amount for campaign, trigger payouts for all escrowed donations
-                let mut campaign = Campaign::from(
-                    self.campaigns_by_id
-                        .get(&donation.campaign_id)
-                        .expect("Campaign not found"),
-                );
-                if campaign.net_raised_amount < campaign.min_amount.unwrap_or(0)
-                    && campaign.net_raised_amount + amount >= campaign.min_amount.unwrap()
-                {
-                    log!(format!(
-                        "Campaign {} has reached min_amount! Triggering payouts for all escrowed donations.",
-                        donation.campaign_id
-                    ));
-                    // self.trigger_payouts_for_campaign(&donation.campaign_id);
-                    // get donation IDs for campaign
-                    // consolidate recipients and amounts into HashMap (campaign recipient, protocol fee recipient, referrer)
-                    // transfer funds to recipients
-                    // update donation records
-                    // log events
-                    let donation_ids = self
-                        .escrowed_donation_ids_by_campaign_id
-                        .get(&donation.campaign_id)
-                        .expect("Campaign not found"); // NB: this set will include the current donation
-                                                       // let mut recipients: HashMap<AccountId, Balance> = HashMap::new();
-                    let mut recipient_balance: Balance = 0;
-                    let mut protocol_fee_recipient_balance: Balance = 0;
-                    let mut referrers_balances: HashMap<AccountId, Balance> = HashMap::new();
-                    for donation_id in donation_ids.iter() {
-                        let donation = Donation::from(
-                            self.donations_by_id
-                                .get(&donation_id)
-                                .expect("Donation not found"),
-                        );
-                        let amount = donation.net_amount;
-                        recipient_balance += amount;
-                        if donation.protocol_fee > 0 {
-                            protocol_fee_recipient_balance += donation.protocol_fee;
-                        }
-                        if let Some(referrer_id) = donation.referrer_id {
-                            if let Some(referrer_fee) = donation.referrer_fee {
-                                referrers_balances
-                                    .entry(referrer_id)
-                                    .and_modify(|v| *v += referrer_fee)
-                                    .or_insert(referrer_fee);
-                            }
-                        }
-                    }
-                    // transfer funds to recipients
-                    if recipient_balance > 0 {
-                        log!(format!(
-                            "Transferring {} to campaign recipient {} for campaign {}",
-                            recipient_balance, campaign.recipient, donation.campaign_id
-                        ));
-                        Promise::new(campaign.recipient.clone())
-                            .transfer(recipient_balance)
-                            .then(
-                                Self::ext(env::current_account_id())
-                                    .with_static_gas(Gas(XCC_GAS_DEFAULT))
-                                    .transfer_funds_callback(
-                                        recipient_balance,
-                                        donation.clone(),
-                                        TransferType::EscrowTransferDonation,
-                                        Some(donation_ids.to_vec()),
-                                    ),
-                            );
-                    }
-                    if protocol_fee_recipient_balance > 0 {
-                        log!(format!(
-                            "Transferring {} to protocol fee recipient {} for campaign {}",
-                            protocol_fee_recipient_balance,
-                            self.protocol_fee_recipient_account,
-                            donation.campaign_id
-                        ));
-                        Promise::new(self.protocol_fee_recipient_account.clone())
-                            .transfer(protocol_fee_recipient_balance)
-                            .then(
-                                Self::ext(env::current_account_id())
-                                    .with_static_gas(Gas(XCC_GAS_DEFAULT))
-                                    .transfer_funds_callback(
-                                        protocol_fee_recipient_balance,
-                                        donation.clone(),
-                                        TransferType::EscrowTransferProtocolFee,
-                                        None,
-                                    ),
-                            );
-                    }
-                    for (referrer, amount) in referrers_balances.iter() {
-                        if amount > &0 {
-                            log!(format!(
-                                "Transferring {} to referrer {} for campaign {}",
-                                amount, referrer, donation.campaign_id
-                            ));
-                            Promise::new(referrer.clone()).transfer(*amount).then(
-                                Self::ext(env::current_account_id())
-                                    .with_static_gas(Gas(XCC_GAS_DEFAULT))
-                                    .transfer_funds_callback(
-                                        *amount,
-                                        donation.clone(),
-                                        TransferType::EscrowTransferReferrerFee,
-                                        None,
-                                    ),
-                            );
-                        }
-                    }
-                }
-
-                // log event indicating successful donation/transfer!
-                log_donation_event(&donation);
-
-                // return donation
-                Some(donation)
-            } else {
-                None
-            }
-        }
-    }
-
-    pub(crate) fn calculate_protocol_fee(&self, amount: u128) -> u128 {
-        let total_basis_points = 10_000u128;
-        let fee_amount = (self.protocol_fee_basis_points as u128).saturating_mul(amount);
-        // Round up
-        fee_amount.div_ceil(total_basis_points)
-    }
-
-    pub(crate) fn calculate_referrer_fee(
-        &self,
-        amount: u128,
-        referral_fee_basis_points: u32,
-    ) -> u128 {
-        let total_basis_points = 10_000u128;
-        let fee_amount = (referral_fee_basis_points as u128).saturating_mul(amount);
-        // Round down
-        fee_amount / total_basis_points
     }
 
     pub(crate) fn internal_insert_donation_record(&mut self, donation: &Donation, escrow: bool) {
@@ -790,38 +284,34 @@ impl Contract {
         self.donations_by_id
             .insert(&donation.id, &VersionedDonation::Current(donation.clone()));
 
-        // add to appropriate donations-by-campaign mapping, according to whether donation is escrowed or not
+        // insert into appropriate donations-by-campaign mapping, according to whether donation is escrowed or not
         if escrow {
-            let mut donation_ids_by_campaign_set = if let Some(donation_ids_by_campaign_set) = self
-                .escrowed_donation_ids_by_campaign_id
-                .get(&donation.campaign_id)
-            {
-                donation_ids_by_campaign_set
-            } else {
-                UnorderedSet::new(StorageKey::EscrowedDonationIdsByCampaignIdInner {
-                    campaign_id: donation.campaign_id.clone(),
-                })
-            };
-            donation_ids_by_campaign_set.insert(&donation.id);
+            // insert into escrowed set
             self.escrowed_donation_ids_by_campaign_id
-                .insert(&donation.campaign_id, &donation_ids_by_campaign_set);
-        } else {
-            let mut donation_ids_by_campaign_set = if let Some(donation_ids_by_campaign_set) = self
-                .unescrowed_donation_ids_by_campaign_id
                 .get(&donation.campaign_id)
-            {
-                donation_ids_by_campaign_set
-            } else {
-                UnorderedSet::new(StorageKey::UnescrowedDonationIdsByCampaignIdInner {
-                    campaign_id: donation.campaign_id.clone(),
-                })
-            };
-            donation_ids_by_campaign_set.insert(&donation.id);
+                .map(|mut v| v.insert(&donation.id));
+            // ensure that donation is not in unescrowed or returned sets
             self.unescrowed_donation_ids_by_campaign_id
-                .insert(&donation.campaign_id, &donation_ids_by_campaign_set);
+                .get(&donation.campaign_id)
+                .map(|mut v| v.remove(&donation.id));
+            self.returned_donation_ids_by_campaign_id
+                .get(&donation.campaign_id)
+                .map(|mut v| v.remove(&donation.id));
+        } else {
+            // insert into unescrowed set
+            self.unescrowed_donation_ids_by_campaign_id
+                .get(&donation.campaign_id)
+                .map(|mut v| v.insert(&donation.id));
+            // ensure that donation is not in escrowed or returned sets
+            self.escrowed_donation_ids_by_campaign_id
+                .get(&donation.campaign_id)
+                .map(|mut v| v.remove(&donation.id));
+            self.returned_donation_ids_by_campaign_id
+                .get(&donation.campaign_id)
+                .map(|mut v| v.remove(&donation.id));
         }
 
-        // add to donations-by-donor mapping
+        // insert into donations-by-donor mapping
         let mut donation_ids_by_donor_set = if let Some(donation_ids_by_donor_set) =
             self.donation_ids_by_donor_id.get(&donation.donor_id)
         {
@@ -872,8 +362,7 @@ impl Contract {
     }
 
     // GETTERS
-    // get_donations
-    // get_matching_pool_balance
+
     pub fn get_donations(
         &self,
         from_index: Option<u128>,
@@ -932,18 +421,12 @@ impl Contract {
         } else {
             vec![]
         };
-        log!(
-            "Num escrowed donations: {}",
-            escrowed_donation_ids_vec.len()
-        );
-        log!(
-            "Num unescrowed donations: {}",
-            unescrowed_donation_ids_vec.len()
-        );
 
         // combine both vecs
         let mut donation_ids_by_campaign = escrowed_donation_ids_vec;
         donation_ids_by_campaign.extend(unescrowed_donation_ids_vec);
+
+        // return formatted donations
         donation_ids_by_campaign
             .iter()
             .skip(start_index as usize)
@@ -1006,9 +489,8 @@ impl Contract {
             protocol_fee: U128(donation.protocol_fee),
             referrer_id: donation.referrer_id.clone(),
             referrer_fee: donation.referrer_fee.map(|v| U128(v)),
-            // paid_at_ms: donation.paid_at_ms,
-            // returned_at: donation.returned_at,
-            returned: donation.returned,
+            creator_fee: U128(donation.creator_fee),
+            returned_at_ms: donation.returned_at_ms,
             is_in_escrow: self
                 .escrowed_donation_ids_by_campaign_id
                 .get(&donation.campaign_id)
@@ -1029,9 +511,8 @@ impl Contract {
             protocol_fee: donation.protocol_fee.0,
             referrer_id: donation.referrer_id.clone(),
             referrer_fee: donation.referrer_fee.map(|v| v.0),
-            // paid_at_ms: donation.paid_at_ms,
-            // returned_at: donation.returned_at,
-            returned: donation.returned,
+            creator_fee: donation.creator_fee.0,
+            returned_at_ms: donation.returned_at_ms,
         }
     }
 }
