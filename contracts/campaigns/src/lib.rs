@@ -18,6 +18,7 @@ pub mod internal;
 pub mod owner;
 pub mod source;
 pub mod storage;
+pub mod tests;
 pub mod transfer;
 pub mod utils;
 pub mod validation;
@@ -31,6 +32,7 @@ pub use crate::internal::*;
 pub use crate::owner::*;
 pub use crate::source::*;
 pub use crate::storage::*;
+pub use crate::tests::*;
 pub use crate::transfer::*;
 pub use crate::utils::*;
 pub use crate::validation::*;
@@ -101,6 +103,23 @@ pub enum StorageKey {
 
 #[near_bindgen]
 impl Contract {
+    /// For testing purposes only
+    #[init]
+    pub fn new_default_meta(owner: AccountId) -> Self {
+        Self::new(
+            owner.clone(),
+            100,
+            owner.clone(),
+            100,
+            100,
+            ContractSourceMetadata {
+                version: "0.1.0".to_string(),
+                commit_hash: "".to_string(),
+                link: "".to_string(),
+            },
+        )
+    }
+
     #[init]
     pub fn new(
         owner: AccountId,

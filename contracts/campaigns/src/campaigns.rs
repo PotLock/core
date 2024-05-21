@@ -122,24 +122,16 @@ impl Contract {
             total_raised_amount: 0,
             net_raised_amount: 0,
             escrow_balance: 0,
-            referral_fee_basis_points: std::cmp::max(
+            referral_fee_basis_points: std::cmp::min(
                 referral_fee_basis_points.unwrap_or(self.default_referral_fee_basis_points),
                 MAX_REFERRAL_FEE_BASIS_POINTS,
             ),
-            creator_fee_basis_points: std::cmp::max(
+            creator_fee_basis_points: std::cmp::min(
                 creator_fee_basis_points.unwrap_or(self.default_creator_fee_basis_points),
                 MAX_CREATOR_FEE_BASIS_POINTS,
             ),
             allow_fee_avoidance: allow_fee_avoidance.unwrap_or(false),
         };
-        if let Some(ft_id) = ft_id.clone() {
-            Promise::new(ft_id).function_call(
-                "ft_metadata".to_string(),
-                json!({}).to_string().into_bytes(),
-                0,
-                Gas(XCC_GAS_DEFAULT),
-            );
-        }
         self.internal_insert_new_campaign_record(&campaign_id, &campaign);
         refund_deposit(initial_storage_usage);
         let formatted = format_campaign(&campaign_id, &campaign);
@@ -187,21 +179,21 @@ impl Contract {
     //     }
     // }
 
-    #[private]
-    pub fn add_campaign(
-        &mut self,
-        caller_id: AccountId,
-        campaign_id: &CampaignId,
-        campaign: &Campaign,
-    ) -> CampaignExternal {
-        let initial_storage_usage = env::storage_usage();
-        self.internal_insert_new_campaign_record(campaign_id, campaign);
-        // refund_deposit(initial_storage_usage);
-        let storage_used = env::storage_usage() - initial_storage_usage;
-        let formatted = format_campaign(&campaign_id, campaign);
-        log_campaign_create_event(&formatted);
-        formatted
-    }
+    // #[private]
+    // pub fn add_campaign(
+    //     &mut self,
+    //     caller_id: AccountId,
+    //     campaign_id: &CampaignId,
+    //     campaign: &Campaign,
+    // ) -> CampaignExternal {
+    //     let initial_storage_usage = env::storage_usage();
+    //     self.internal_insert_new_campaign_record(campaign_id, campaign);
+    //     // refund_deposit(initial_storage_usage);
+    //     let storage_used = env::storage_usage() - initial_storage_usage;
+    //     let formatted = format_campaign(&campaign_id, campaign);
+    //     log_campaign_create_event(&formatted);
+    //     formatted
+    // }
 
     #[payable]
     pub fn update_campaign(
