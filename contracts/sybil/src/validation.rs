@@ -49,3 +49,19 @@ pub(crate) fn assert_valid_provider_tags(tags: &[String]) {
         assert_valid_provider_tag(tag);
     }
 }
+
+#[near_bindgen]
+impl Contract {
+    /// Panics if exact set of providers already exists in another group. Ignores empty set.
+    pub(crate) fn assert_valid_providers_vec(&self, providers: &Vec<ProviderId>) {
+        if providers.len() > 0 {
+            for (group_id, _group) in self.groups_by_id.iter() {
+                if let Some(provider_ids) = self.provider_ids_for_group.get(&group_id) {
+                    if provider_ids.to_vec() == *providers {
+                        env::panic_str("Group with the same providers already exists");
+                    }
+                }
+            }
+        }
+    }
+}

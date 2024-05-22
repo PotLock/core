@@ -295,11 +295,21 @@ pub fn delete_stamp(&mut self, provider_id: ProviderId) -> ()
 // GROUPS
 
 #[payable]
-pub fn add_or_update_group(
+pub fn create_group(
     &mut self,
     group_name: String,
     providers: Vec<ProviderId>,
     rule: Rule,
+) -> GroupExternal
+// emits add_or_update_group event
+
+#[payable]
+pub fn update_group(
+    &mut self,
+    group_id: GroupId,
+    group_name: Option<String>,
+    providers: Option<Vec<ProviderId>>, // if provided, overwrites existing providers (pass an empty vector to remove all providers)
+    rule: Option<Rule>,
 ) -> GroupExternal
 // emits add_or_update_group event
 
