@@ -32,24 +32,16 @@ pub struct GroupExternal {
 
 #[near_bindgen]
 impl Contract {
-    // Function to add a new group or modify an existing one
+    // Function to create a new group
     #[payable]
-    pub fn add_or_update_group(
+    pub fn create_group(
         &mut self,
         group_name: String,
         providers: Vec<ProviderId>,
         rule: Rule,
     ) -> GroupExternal {
-        self.assert_owner_or_admin(); // Ensure that only authorized users can modify groups
-
-        // Check if any other group has this exact set of providers
-        for (group_id, group) in self.groups_by_id.iter() {
-            if let Some(provider_ids) = self.provider_ids_for_group.get(&group_id) {
-                if provider_ids.to_vec() == providers {
-                    env::panic_str("Group with the same providers already exists");
-                }
-            }
-        }
+        self.assert_owner_or_admin(); // Ensure that only authorized users can create groups
+        self.assert_valid_providers_vec(&providers); // Ensure that the providers are valid (exact same set doesn't exist for another group - empty set is allowed)
 
         // If no providers are found in other groups, proceed to add or update the group
         let initial_storage_usage = env::storage_usage();
@@ -91,6 +83,68 @@ impl Contract {
             name: group_name,
             providers,
             rule,
+        };
+        log_add_or_update_group_event(&formatted_group); // Log the event
+        formatted_group
+    }
+
+    // Function to modify an existing group
+    #[payable]
+    pub fn update_group(
+        &mut self,
+        group_id: GroupId,
+        group_name: Option<String>,
+        providers: Option<Vec<ProviderId>>, // if provided, overwrites existing providers (pass an empty vector to remove all providers)
+        rule: Option<Rule>,
+    ) -> GroupExternal {
+        self.assert_owner_or_admin(); // Ensure that only authorized users can update groups
+        let mut group = self.groups_by_id.get(&group_id).expect("Group not found");
+
+        let initial_storage_usage = env::storage_usage();
+
+        if let Some(providers) = providers {
+            self.assert_valid_providers_vec(&providers);
+            let mut provider_ids_for_group = self
+                .provider_ids_for_group
+                .get(&group_id)
+                .expect("Provider IDs for group not found");
+            provider_ids_for_group.clear();
+            for provider_id in providers.iter() {
+                provider_ids_for_group.insert(provider_id);
+                let mut groups_for_provider_set = self
+                    .group_ids_for_provider
+                    .get(&provider_id)
+                    .expect("Group IDs for provider not found");
+                groups_for_provider_set.insert(&group_id);
+                self.group_ids_for_provider
+                    .insert(&provider_id, &groups_for_provider_set);
+            }
+        }
+
+        // Update group name if provided
+        if let Some(group_name) = group_name {
+            group.name = group_name.clone();
+        }
+
+        // Update rule if provided
+        if let Some(rule) = rule {
+            group.rule = rule.clone();
+        }
+
+        // insert updated group
+        self.groups_by_id.insert(&group_id, &group);
+
+        refund_deposit(initial_storage_usage); // Refund any unused deposit
+
+        let formatted_group = GroupExternal {
+            id: group_id,
+            name: group.name.clone(),
+            providers: self
+                .provider_ids_for_group
+                .get(&group_id)
+                .expect("Provider IDs for group not found")
+                .to_vec(),
+            rule: group.rule.clone(),
         };
         log_add_or_update_group_event(&formatted_group); // Log the event
         formatted_group
