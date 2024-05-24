@@ -119,6 +119,8 @@ impl Contract {
                 self.group_ids_for_provider
                     .insert(&provider_id, &groups_for_provider_set);
             }
+            self.provider_ids_for_group
+                .insert(&group_id, &provider_ids_for_group);
         }
 
         // Update group name if provided
