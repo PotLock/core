@@ -40,6 +40,8 @@ pub struct Contract {
     pot_name: String,
     /// User-facing description for this Pot
     pot_description: String,
+    /// Tags, e.g. to indicate type of pot
+    tags: Vec<String>,
     /// Maximum number of projects that can be approved for the round. Considerations include gas limits for payouts, etc.
     max_projects: u32,
     /// Base currency for the round
@@ -126,6 +128,7 @@ pub struct PotConfig {
     pub chef: Option<AccountId>,
     pub pot_name: String,
     pub pot_description: String,
+    pub tags: Vec<String>,
     pub max_projects: u32,
     pub base_currency: AccountId,
     pub application_start_ms: TimestampMs,
@@ -157,6 +160,7 @@ pub struct UpdatePotArgs {
     pub chef: Option<AccountId>,
     pub pot_name: Option<String>,
     pub pot_description: Option<String>,
+    pub tags: Option<Vec<String>>,
     pub max_projects: Option<u32>,
     pub application_start_ms: Option<TimestampMs>,
     pub application_end_ms: Option<TimestampMs>,
@@ -574,6 +578,9 @@ pub fn admin_set_pot_name(&mut self, pot_name: String) -> ()
 
 #[payable]
 pub fn admin_set_pot_description(&mut self, pot_description: String) -> ()
+
+#[payable]
+pub fn admin_set_tags(&mut self, tags: Vec<String>) -> ()
 
 #[payable]
 pub fn admin_set_max_projects(&mut self, max_projects: u32) -> ()

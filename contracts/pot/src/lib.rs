@@ -117,6 +117,8 @@ pub struct Contract {
     pot_name: String,
     /// User-facing description for this Pot
     pot_description: String,
+    /// Tags, e.g. to indicate type of pot
+    tags: Vec<String>,
     /// Maximum number of projects that can be approved for the round. Considerations include gas limits for payouts, etc.
     max_projects: u32,
     /// Base currency for the round
@@ -238,6 +240,7 @@ impl Contract {
         // pot config
         pot_name: String,
         pot_description: String,
+        tags: Option<Vec<String>>,
         max_projects: u32,
         application_start_ms: TimestampMs,
         application_end_ms: TimestampMs,
@@ -280,6 +283,7 @@ impl Contract {
             // pot config
             pot_name,
             pot_description,
+            tags: tags.unwrap_or(vec![]),
             max_projects,
             base_currency: AccountId::new_unchecked("near".to_string()),
             application_start_ms,

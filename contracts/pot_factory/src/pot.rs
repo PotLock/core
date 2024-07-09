@@ -43,6 +43,7 @@ pub struct PotArgs {
     pub chef: Option<AccountId>,
     pub pot_name: String,
     pub pot_description: String,
+    pub tags: Option<Vec<String>>,
     pub max_projects: u32,
     pub application_start_ms: TimestampMs,
     pub application_end_ms: TimestampMs,

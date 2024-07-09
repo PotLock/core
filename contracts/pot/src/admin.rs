@@ -11,6 +11,7 @@ pub struct UpdatePotArgs {
     pub chef: Option<AccountId>,
     pub pot_name: Option<String>,
     pub pot_description: Option<String>,
+    pub tags: Option<Vec<String>>,
     pub max_projects: Option<u32>,
     pub application_start_ms: Option<TimestampMs>,
     pub application_end_ms: Option<TimestampMs>,
@@ -126,6 +127,15 @@ impl Contract {
         assert_valid_pot_description(&pot_description);
         let initial_storage_usage = env::storage_usage();
         self.pot_description = pot_description;
+        log_update_pot_config_event(&self.get_config());
+        refund_deposit(initial_storage_usage);
+    }
+
+    #[payable]
+    pub fn admin_set_tags(&mut self, tags: Vec<String>) {
+        self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
+        self.tags = tags;
         log_update_pot_config_event(&self.get_config());
         refund_deposit(initial_storage_usage);
     }
@@ -411,6 +421,9 @@ impl Contract {
         if let Some(pot_description) = update_args.pot_description {
             assert_valid_pot_description(&pot_description);
             self.pot_description = pot_description;
+        }
+        if let Some(tags) = update_args.tags {
+            self.tags = tags;
         }
         if let Some(max_projects) = update_args.max_projects {
             assert_valid_max_projects(max_projects);
