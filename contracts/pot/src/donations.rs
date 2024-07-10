@@ -303,7 +303,7 @@ impl Contract {
         bypass_protocol_fee: Option<bool>,
         custom_chef_fee_basis_points: Option<u32>,
     ) -> PromiseOrValue<DonationExternal> {
-        let caller_id = env::predecessor_account_id();
+        let donor_id = env::predecessor_account_id();
         if matching_pool {
             assert!(
                 deposit >= self.min_matching_pool_donation_amount,
@@ -313,6 +313,7 @@ impl Contract {
             // matching pool donations not subject to sybil checks, so move on to protocol fee handler
             self.handle_protocol_fee(
                 deposit,
+                donor_id,
                 project_id.clone(),
                 message.clone(),
                 referrer_id.clone(),
@@ -323,12 +324,12 @@ impl Contract {
         } else {
             // // donor should not be blacklisted
             // assert!(
-            //     !self.blacklisted_donors.contains(&caller_id),
+            //     !self.blacklisted_donors.contains(&donor_id),
             //     "Donor is blacklisted and cannot donate"
             // );
             if let Some(sybil_wrapper_provider) = self.sybil_wrapper_provider.get() {
                 let (contract_id, method_name) = sybil_wrapper_provider.decompose();
-                let args = json!({ "account_id": caller_id.clone() })
+                let args = json!({ "account_id": donor_id.clone() })
                     .to_string()
                     .into_bytes();
                 PromiseOrValue::Promise(Promise::new(AccountId::new_unchecked(contract_id.clone()))
@@ -337,8 +338,8 @@ impl Contract {
                         Self::ext(env::current_account_id())
                             .with_static_gas(XCC_GAS)
                             .sybil_callback(
-                                caller_id,
                                 deposit,
+                                donor_id,
                                 project_id.clone(),
                                 message.clone(),
                                 referrer_id.clone(),
@@ -351,6 +352,7 @@ impl Contract {
                 // no sybil wrapper provider, so move on to protocol fee handler
                 self.handle_protocol_fee(
                     deposit,
+                    donor_id,
                     project_id.clone(),
                     message.clone(),
                     referrer_id.clone(),
@@ -365,8 +367,8 @@ impl Contract {
     #[private] // Public - but only callable by env::current_account_id()
     pub fn sybil_callback(
         &mut self,
-        caller_id: AccountId,
         deposit: Balance,
+        donor_id: AccountId,
         project_id: Option<ProjectId>,
         message: Option<String>,
         referrer_id: Option<AccountId>,
@@ -378,9 +380,9 @@ impl Contract {
         if call_result.is_err() {
             log!(format!(
                 "Error verifying sybil check; returning donation {} to donor {}",
-                deposit, caller_id
+                deposit, donor_id
             ));
-            Promise::new(caller_id).transfer(deposit);
+            Promise::new(donor_id).transfer(deposit);
             env::panic_str(
                 "There was an error querying sybil check. Donation has been returned to donor.",
             );
@@ -389,15 +391,16 @@ impl Contract {
         if !is_human {
             log!(format!(
                 "Sybil provider wrapper check returned false; returning donation {} to donor {}",
-                deposit, caller_id
+                deposit, donor_id
             ));
-            Promise::new(caller_id).transfer(deposit);
+            Promise::new(donor_id).transfer(deposit);
             env::panic_str(
                 "Sybil provider wrapper check returned false. Donation has been returned to donor.",
             );
         } else {
             self.handle_protocol_fee(
                 deposit,
+                donor_id,
                 project_id,
                 message,
                 referrer_id,
@@ -412,6 +415,7 @@ impl Contract {
     pub fn handle_protocol_fee(
         &mut self,
         deposit: Balance,
+        donor_id: AccountId,
         project_id: Option<ProjectId>,
         message: Option<String>,
         referrer_id: Option<AccountId>,
@@ -423,6 +427,7 @@ impl Contract {
             // bypass protocol fee
             PromiseOrValue::Value(self.process_donation(
                     deposit,
+                    donor_id,
                     0,
                     None,
                     project_id.clone(),
@@ -441,6 +446,7 @@ impl Contract {
                         .with_static_gas(XCC_GAS)
                         .handle_protocol_fee_callback(
                             deposit,
+                            donor_id,
                             project_id,
                             message,
                             referrer_id,
@@ -452,6 +458,7 @@ impl Contract {
             // bypass protocol fee
             PromiseOrValue::Value(self.process_donation(
                 deposit,
+                donor_id,
                 0,
                 None,
                 project_id.clone(),
@@ -468,6 +475,7 @@ impl Contract {
     pub fn handle_protocol_fee_callback(
         &mut self,
         deposit: Balance,
+        donor_id: AccountId,
         project_id: Option<ProjectId>,
         message: Option<String>,
         referrer_id: Option<AccountId>,
@@ -481,6 +489,7 @@ impl Contract {
             ));
             self.process_donation(
                 deposit,
+                donor_id,
                 0,
                 None,
                 project_id,
@@ -497,6 +506,7 @@ impl Contract {
             let protocol_fee = self.calculate_fee(deposit, protocol_fee_basis_points, true);
             self.process_donation(
                 deposit,
+                donor_id,
                 protocol_fee,
                 Some(protocol_fee_recipient_account),
                 project_id,
@@ -512,6 +522,7 @@ impl Contract {
     pub fn process_donation(
         &mut self,
         deposit: Balance,
+        donor_id: AccountId,
         protocol_fee: u128,
         protocol_fee_recipient_account: Option<AccountId>,
         project_id: Option<ProjectId>,
@@ -559,7 +570,7 @@ impl Contract {
         // insert mappings
         let donation_id = (self.donations_by_id.len() + 1) as DonationId;
         let donation = Donation {
-            donor_id: env::signer_account_id(),
+            donor_id: donor_id.clone(),
             total_amount: deposit,
             net_amount: 0, // this will be updated in a moment after storage cost is subtracted
             message,
