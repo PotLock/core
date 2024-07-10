@@ -170,7 +170,7 @@ pub struct Contract {
     /// Cooldown period starts when Chef sets payouts
     cooldown_end_ms: LazyOption<TimestampMs>,
     /// Indicates whether all projects been paid out (this would be considered the "end-of-lifecycle" for the Pot)
-    all_paid_out: bool,
+    all_paid_out: bool, // TODO: consider changing this to pot_closed or similar, and allowing it to be manually set by admin
 
     // MAPPINGS
     /// All application records
@@ -188,8 +188,8 @@ pub struct Contract {
     /// IDs of donations made by a given donor (user)
     donation_ids_by_donor_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
     // payouts
-    payouts_by_id: UnorderedMap<PayoutId, VersionedPayout>, // can iterate over this to get all payouts
-    payout_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<PayoutId>>,
+    payouts_by_id: UnorderedMap<PayoutId, Payout>, // can iterate over this to get all payouts
+    payout_ids_by_recipient_id: LookupMap<ProjectId, UnorderedSet<PayoutId>>,
     /// Challenges to payouts (if any) made during cooldown period
     payouts_challenges: UnorderedMap<AccountId, VersionedPayoutsChallenge>,
 
@@ -223,8 +223,8 @@ pub enum StorageKey {
     DonationIdsByDonorId,
     DonationIdsByDonorIdInner { donor_id: AccountId },
     PayoutsById,
-    PayoutIdsByProjectId,
-    PayoutIdsByProjectIdInner { project_id: ProjectId },
+    PayoutIdsByRecipientId,
+    PayoutIdsByRecipientIdInner { recipient_id: AccountId },
     PayoutsChallenges,
 }
 
@@ -336,7 +336,7 @@ impl Contract {
             matching_pool_donation_ids: UnorderedSet::new(StorageKey::MatchingPoolDonationIds),
             donation_ids_by_project_id: LookupMap::new(StorageKey::DonationIdsByProjectId),
             donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
-            payout_ids_by_project_id: LookupMap::new(StorageKey::PayoutIdsByProjectId),
+            payout_ids_by_recipient_id: LookupMap::new(StorageKey::PayoutIdsByRecipientId),
             payouts_by_id: UnorderedMap::new(StorageKey::PayoutsById),
             payouts_challenges: UnorderedMap::new(StorageKey::PayoutsChallenges),
 

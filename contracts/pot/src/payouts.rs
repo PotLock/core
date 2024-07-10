@@ -11,24 +11,15 @@ pub struct Payout {
     /// Unique identifier for the payout
     pub id: PayoutId,
     /// ID of the application receiving the payout
-    pub project_id: ProjectId,
+    pub recipient_id: AccountId,
     /// Amount to be paid out
     pub amount: u128,
     /// Timestamp when the payout was made. None if not yet paid out.
     pub paid_at: Option<TimestampMs>,
-}
-
-#[derive(BorshSerialize, BorshDeserialize)]
-pub enum VersionedPayout {
-    Current(Payout),
-}
-
-impl From<VersionedPayout> for Payout {
-    fn from(payout: VersionedPayout) -> Self {
-        match payout {
-            VersionedPayout::Current(current) => current,
-        }
-    }
+    /// Memo field for payout notes
+    pub memo: Option<String>,
+    /// E.g. true if a return of funds to sponsors
+    pub is_redistribution: bool,
 }
 
 /// Ephemeral-only; used for setting payouts
@@ -36,7 +27,9 @@ impl From<VersionedPayout> for Payout {
 #[serde(crate = "near_sdk::serde")]
 pub struct PayoutInput {
     pub amount: U128,
-    pub project_id: ProjectId,
+    pub recipient_id: ProjectId,
+    pub is_redistribution: bool, // TODO: Could also determine this based on recipient being an approved project in this round
+    pub memo: Option<String>,
 }
 
 /// Ephemeral-only
@@ -46,20 +39,26 @@ pub struct PayoutExternal {
     /// Unique identifier for the payout
     pub id: PayoutId,
     /// ID of the application receiving the payout
-    pub project_id: ProjectId,
+    pub recipient_id: AccountId,
     /// Amount to be paid out
     pub amount: U128,
     /// Timestamp when the payout was made. None if not yet paid out.
     pub paid_at: Option<TimestampMs>,
+    /// Memo field for payout notes
+    pub memo: Option<String>,
+    /// Used for tracking whether it was a matching pool payout or something else, e.g. a return of funds to sponsors
+    pub is_redistribution: bool,
 }
 
 impl Payout {
     pub fn to_external(&self) -> PayoutExternal {
         PayoutExternal {
             id: self.id.clone(),
-            project_id: self.project_id.clone(),
+            recipient_id: self.recipient_id.clone(),
             amount: U128(self.amount),
             paid_at: self.paid_at,
+            memo: self.memo.clone(),
+            is_redistribution: self.is_redistribution,
         }
     }
 }
@@ -122,7 +121,7 @@ impl PayoutsChallenge {
 impl Contract {
     // set_payouts (callable by chef or admin)
     #[payable]
-    pub fn chef_set_payouts(&mut self, payouts: Vec<PayoutInput>) {
+    pub fn chef_set_payouts(&mut self, payouts: Vec<PayoutInput>, clear_existing: bool) {
         self.assert_chef_or_greater();
         // verify that the round has closed
         self.assert_round_closed();
@@ -131,20 +130,22 @@ impl Contract {
             self.all_paid_out == false,
             "Payouts have already been processed"
         );
-        // clear any existing payouts (in case this is a reset, e.g. fixing an error)
-        for application_id in self.approved_application_ids.iter() {
-            // if there are payouts for the project...
-            if let Some(payout_ids_for_application) =
-                self.payout_ids_by_project_id.get(&application_id)
-            {
-                // ...remove them
-                for payout_id in payout_ids_for_application.iter() {
-                    self.payouts_by_id.remove(&payout_id);
-                }
-                // ...and remove the set of payout IDs for the project
-                let removed = self.payout_ids_by_project_id.remove(&application_id);
-                if let Some(mut removed) = removed {
-                    removed.clear();
+        // clear any existing payouts if requested
+        if clear_existing {
+            for application_id in self.approved_application_ids.iter() {
+                // if there are payouts for the project...
+                if let Some(payout_ids_for_recipient) =
+                    self.payout_ids_by_recipient_id.get(&application_id)
+                {
+                    // ...remove them
+                    for payout_id in payout_ids_for_recipient.iter() {
+                        self.payouts_by_id.remove(&payout_id);
+                    }
+                    // ...and remove the set of payout IDs for the project
+                    let removed = self.payout_ids_by_recipient_id.remove(&application_id);
+                    if let Some(mut removed) = removed {
+                        removed.clear();
+                    }
                 }
             }
         }
@@ -153,42 +154,45 @@ impl Contract {
         // for each payout:
         for payout in payouts.iter() {
             // verify that the project exists and is approved
-            self.assert_approved_application(&payout.project_id);
+            self.assert_approved_application(&payout.recipient_id);
             // TODO: check that the project is not owner, admin or chef
             // add amount to running total
             running_total += payout.amount.0;
-            // set cooldown_end to now + 1 week (?)
+            // set cooldown_end to now + cooldown period ms
             self.cooldown_end_ms
                 .set(&(env::block_timestamp_ms() + &self.cooldown_period_ms));
             // add payout to payouts
-            let mut payout_ids_for_application = self
-                .payout_ids_by_project_id
-                .get(&payout.project_id)
-                .unwrap_or(UnorderedSet::new(StorageKey::PayoutIdsByProjectIdInner {
-                    project_id: payout.project_id.clone(),
+            let mut payout_ids_for_recipient = self
+                .payout_ids_by_recipient_id
+                .get(&payout.recipient_id)
+                .unwrap_or(UnorderedSet::new(StorageKey::PayoutIdsByRecipientIdInner {
+                    recipient_id: payout.recipient_id.clone(),
                 }));
             let payout_id = format!(
                 "{}{}{}",
-                payout.project_id,
+                payout.recipient_id,
                 PAYOUT_ID_DELIMITER,
-                payout_ids_for_application.len() + 1
+                payout_ids_for_recipient.len() + 1
             );
             let payout = Payout {
                 id: payout_id.clone(),
                 amount: payout.amount.0,
-                project_id: payout.project_id.clone(),
+                recipient_id: payout.recipient_id.clone(),
                 paid_at: None,
+                memo: payout.memo.clone(),
+                is_redistribution: payout.is_redistribution,
             };
-            payout_ids_for_application.insert(&payout_id);
-            self.payout_ids_by_project_id
-                .insert(&payout.project_id, &payout_ids_for_application);
-            self.payouts_by_id
-                .insert(&payout_id, &VersionedPayout::Current(payout));
+            payout_ids_for_recipient.insert(&payout_id);
+            self.payout_ids_by_recipient_id
+                .insert(&payout.recipient_id, &payout_ids_for_recipient);
+            self.payouts_by_id.insert(&payout_id, &payout);
         }
-        // error if running total is not equal to matching_pool_balance (NB: this logic will change once milestones are supported)
+        // error if running total is more than matching pool balance
         assert!(
-            running_total == self.matching_pool_balance,
-            "Total payouts must equal matching pool balance"
+            running_total <= self.matching_pool_balance,
+            "Total payouts ({}) must not be greater than matching pool balance ({})",
+            running_total,
+            self.matching_pool_balance
         );
     }
 
@@ -209,15 +213,17 @@ impl Contract {
     }
 
     #[payable]
-    pub fn admin_process_payouts(&mut self) {
+    /// Processes any payouts that have been set but not yet paid out. Takes optional vec of account IDs to process payouts for.
+    pub fn admin_process_payouts(&mut self, project_ids: Option<Vec<ProjectId>>) {
         self.assert_admin_or_greater();
         // verify that the round has closed
         self.assert_round_closed();
-        // verify that payouts have not already been processed
-        assert!(
-            self.all_paid_out == false,
-            "Payouts have already been processed"
-        );
+        // // verify that payouts have not already been processed
+        // TODO: verify that this should be removed
+        // assert!(
+        //     self.all_paid_out == false,
+        //     "Payouts have already been processed"
+        // );
         // verify that the cooldown period has passed
         self.assert_cooldown_period_complete();
         // verify that any challenges have been resolved
@@ -226,6 +232,12 @@ impl Contract {
         // for each approved project...
         // loop through self.approved_application_ids set
         for project_id in self.approved_application_ids.iter() {
+            // if project_ids is Some, skip if project_id is not in project_ids
+            if let Some(ref project_ids) = project_ids {
+                if !project_ids.contains(&project_id) {
+                    continue;
+                }
+            }
             // get application
             let application = Application::from(
                 self.applications_by_id
@@ -237,7 +249,8 @@ impl Contract {
                 log!("Skipping payout for project {} as it is owner, admin or chef and not eligible for payouts.", project_id);
             } else {
                 // ...if there are payouts for the project...
-                if let Some(payout_ids_for_project) = self.payout_ids_by_project_id.get(&project_id)
+                if let Some(payout_ids_for_project) =
+                    self.payout_ids_by_recipient_id.get(&project_id)
                 {
                     // TODO: handle milestones (for now just paying out all payouts)
                     for payout_id in payout_ids_for_project.iter() {
@@ -252,16 +265,72 @@ impl Contract {
                                         .with_static_gas(XCC_GAS)
                                         .transfer_payout_callback(payout.clone()),
                                 );
-                            // update payout to indicate that funds transfer has been initiated
-                            payout.paid_at = Some(env::block_timestamp_ms());
-                            self.payouts_by_id
-                                .insert(&payout_id, &VersionedPayout::Current(payout));
                         }
                     }
                 }
             }
         }
-        self.all_paid_out = true;
+        // self.all_paid_out = true; // TODO: verify that this should be removed
+    }
+
+    #[payable]
+    /// Distribute funds to a list of recipients, without a cooldown period. Does not enforce that recipients are approved projects.
+    pub fn owner_distribute_funds(&mut self, distributions: Vec<PayoutInput>) {
+        self.assert_owner();
+        // verify that the round has closed
+        self.assert_round_closed();
+        // get down to business
+        let mut running_total: u128 = 0;
+        let mut payouts: Vec<Payout> = Vec::new();
+        // for each payout:
+        for payout_input in distributions.iter() {
+            // add amount to running total
+            running_total += payout_input.amount.0;
+            // add payout to payouts
+            let mut payout_ids_for_recipient = self
+                .payout_ids_by_recipient_id
+                .get(&payout_input.recipient_id)
+                .unwrap_or(UnorderedSet::new(StorageKey::PayoutIdsByRecipientIdInner {
+                    recipient_id: payout_input.recipient_id.clone(),
+                }));
+            let payout_id = format!(
+                "{}{}{}",
+                payout_input.recipient_id,
+                PAYOUT_ID_DELIMITER,
+                payout_ids_for_recipient.len() + 1
+            );
+            let payout = Payout {
+                id: payout_id.clone(),
+                amount: payout_input.amount.0,
+                recipient_id: payout_input.recipient_id.clone(),
+                paid_at: None,
+                memo: payout_input.memo.clone(),
+                is_redistribution: payout_input.is_redistribution,
+            };
+            payout_ids_for_recipient.insert(&payout_id);
+            self.payout_ids_by_recipient_id
+                .insert(&payout_input.recipient_id, &payout_ids_for_recipient);
+            self.payouts_by_id.insert(&payout_id, &payout);
+            payouts.push(payout);
+        }
+        // error if running total is more than matching pool balance
+        assert!(
+            running_total <= self.matching_pool_balance,
+            "Total payouts ({}) must not be greater than matching pool balance ({})",
+            running_total,
+            self.matching_pool_balance
+        );
+        // pay out each recipient
+        for payout in payouts.iter() {
+            // ...transfer funds...
+            Promise::new(payout.recipient_id.clone())
+                .transfer(payout.amount)
+                .then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(XCC_GAS)
+                        .transfer_payout_callback(payout.clone()),
+                );
+        }
     }
 
     /// Verifies whether payout transfer completed successfully & updates payout record accordingly
@@ -273,18 +342,22 @@ impl Contract {
     ) {
         if call_result.is_err() {
             log!(format!(
-                "Error paying out amount {:#?} to project {}",
-                payout.amount, payout.project_id
+                "Error paying out amount {:#?} to recipient {}",
+                payout.amount, payout.recipient_id
             ));
             // update payout to indicate error transferring funds
             payout.paid_at = None;
-            self.payouts_by_id
-                .insert(&payout.id.clone(), &VersionedPayout::Current(payout));
+            self.payouts_by_id.insert(&payout.id.clone(), &payout);
         } else {
             log!(format!(
-                "Successfully paid out amount {:#?} to project {}",
-                payout.amount, payout.project_id
+                "Successfully paid out amount {:#?} to recipient {}",
+                payout.amount, payout.recipient_id
             ));
+            // decrement matching pool balance
+            self.matching_pool_balance -= payout.amount;
+            // update payout to indicate that funds transfer has been completed
+            payout.paid_at = Some(env::block_timestamp_ms());
+            self.payouts_by_id.insert(&payout.id.clone(), &payout);
         }
     }
 

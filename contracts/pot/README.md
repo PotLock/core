@@ -110,7 +110,7 @@ pub struct Contract {
     donation_ids_by_donor_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
     // payouts
     payouts_by_id: UnorderedMap<PayoutId, VersionedPayout>, // can iterate over this to get all payouts
-    payout_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<PayoutId>>,
+    payout_ids_by_recipient_id: LookupMap<ProjectId, UnorderedSet<PayoutId>>,
 
     // OTHER
     /// contract ID + method name of protocol config provider that should be queried for protocol fee basis points and protocol fee recipient account.
@@ -536,10 +536,14 @@ pub fn donate(
 // PAYOUTS
 
 #[payable]
-pub fn chef_set_payouts(&mut self, payouts: Vec<PayoutInput>) -> ()
+pub fn chef_set_payouts(&mut self, payouts: Vec<PayoutInput>, clear_existing: bool) -> () // Sets payouts on the contract; clears any existing payouts if `clear_existing` is `true`
 
 #[payable]
-pub fn admin_process_payouts(&mut self) -> ()
+pub fn admin_process_payouts(&mut self, project_ids: Option<Vec<ProjectId>>) -> () // Processes any payouts that have been set on contract but not yet paid out. Takes optional vec of account IDs to process payouts for. Panics if cooldown period not complete.
+
+#[payable]
+pub fn owner_distribute_funds(&mut self, distributions: Vec<PayoutInput>) // Owner-only method to distribute funds to a list of recipients, without a cooldown period. Does not enforce that recipients are approved projects. Use-case examples include returning matching pool funds to sponsors or forwarding to treasury, etc.
+
 
 #[payable]
 pub fn challenge_payouts(&mut self, reason: String)
