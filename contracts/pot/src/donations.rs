@@ -321,11 +321,11 @@ impl Contract {
                 custom_chef_fee_basis_points,
             )
         } else {
-            // donor should not be blacklisted
-            assert!(
-                !self.blacklisted_donors.contains(&caller_id),
-                "Donor is blacklisted and cannot donate"
-            );
+            // // donor should not be blacklisted
+            // assert!(
+            //     !self.blacklisted_donors.contains(&caller_id),
+            //     "Donor is blacklisted and cannot donate"
+            // );
             if let Some(sybil_wrapper_provider) = self.sybil_wrapper_provider.get() {
                 let (contract_id, method_name) = sybil_wrapper_provider.decompose();
                 let args = json!({ "account_id": caller_id.clone() })
