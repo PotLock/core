@@ -590,6 +590,12 @@ pub fn admin_remove_chef(&mut self) -> ()
 pub fn admin_set_chef_fee_basis_points(&mut self, chef_fee_basis_points: u32) -> ()
 
 #[payable]
+pub fn admin_add_blacklisted_donors(&mut self, donor_ids: Vec<AccountId>) -> () // Adds specified accounts to blacklisted donors. Does not clear existing blacklisted donors set. Emits update_blacklisted_donors event (does not contain data as could be too large)
+
+#[payable]
+pub fn admin_set_blacklisted_donors(&mut self, donor_ids: Vec<AccountId>) -> () // Clears existing blacklisted donors set and adds specified accounts to blacklisted donors. Emits update_blacklisted_donors event (does not contain data as could be too large)
+
+#[payable]
 pub fn admin_set_pot_name(&mut self, pot_name: String) -> ()
 
 #[payable]

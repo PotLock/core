@@ -41,3 +41,22 @@ pub(crate) fn log_update_pot_config_event(pot_config: &PotConfig) {
         .as_ref(),
     );
 }
+
+/// Update blacklisted donors
+pub(crate) fn log_update_blacklisted_donors_event() {
+    env::log_str(
+        format!(
+            "{}{}",
+            EVENT_JSON_PREFIX,
+            json!({
+                "standard": "potlock",
+                "version": "1.0.0",
+                "event": "update_blacklisted_donors",
+                "data": [
+                    {}
+                ]
+            })
+        )
+        .as_ref(),
+    );
+}

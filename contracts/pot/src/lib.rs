@@ -196,6 +196,8 @@ pub struct Contract {
     payout_ids_by_recipient_id: LookupMap<ProjectId, UnorderedSet<PayoutId>>,
     /// Challenges to payouts (if any) made during cooldown period
     payouts_challenges: UnorderedMap<AccountId, VersionedPayoutsChallenge>,
+    /// Blacklisted donors
+    blacklisted_donors: UnorderedSet<AccountId>,
 
     // OTHER
     /// contract ID + method name of protocol config provider that should be queried for protocol fee basis points and protocol fee recipient account.
@@ -230,6 +232,7 @@ pub enum StorageKey {
     PayoutIdsByRecipientId,
     PayoutIdsByRecipientIdInner { recipient_id: AccountId },
     PayoutsChallenges,
+    BlacklistedDonors,
 }
 
 #[near_bindgen]
@@ -349,6 +352,7 @@ impl Contract {
             payout_ids_by_recipient_id: LookupMap::new(StorageKey::PayoutIdsByRecipientId),
             payouts_by_id: UnorderedMap::new(StorageKey::PayoutsById),
             payouts_challenges: UnorderedMap::new(StorageKey::PayoutsChallenges),
+            blacklisted_donors: UnorderedSet::new(StorageKey::BlacklistedDonors),
 
             // other
             protocol_config_provider: LazyOption::new(

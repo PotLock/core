@@ -226,6 +226,16 @@ impl Contract {
         referrer_amount
     }
 
+    pub fn get_blacklisted_donors(&self, from_index: Option<u64>, limit: Option<u64>) -> Vec<AccountId> {
+        let start_index = std::cmp::min(from_index.unwrap_or_default(), self.blacklisted_donors.len() - 1 as u64);
+        let limit = limit.unwrap_or(DEFAULT_PAGE_SIZE as u64);
+        self.blacklisted_donors
+            .iter()
+            .skip(start_index as usize)
+            .take(limit as usize)
+            .collect()
+    }
+
     // WRITE METHODS
 
     #[payable]
@@ -311,6 +321,11 @@ impl Contract {
                 custom_chef_fee_basis_points,
             )
         } else {
+            // donor should not be blacklisted
+            assert!(
+                !self.blacklisted_donors.contains(&caller_id),
+                "Donor is blacklisted and cannot donate"
+            );
             if let Some(sybil_wrapper_provider) = self.sybil_wrapper_provider.get() {
                 let (contract_id, method_name) = sybil_wrapper_provider.decompose();
                 let args = json!({ "account_id": caller_id.clone() })

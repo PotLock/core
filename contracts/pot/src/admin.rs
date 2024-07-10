@@ -111,6 +111,29 @@ impl Contract {
         log_update_pot_config_event(&self.get_config());
     }
 
+    #[payable]
+    pub fn admin_add_blacklisted_donors(&mut self, donor_ids: Vec<AccountId>) {
+        self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
+        for donor_id in donor_ids.iter() {
+            self.blacklisted_donors.insert(donor_id);
+        }
+        log_update_blacklisted_donors_event();
+        refund_deposit(initial_storage_usage);
+    }
+
+    #[payable]
+    pub fn admin_set_blacklisted_donors(&mut self, donor_ids: Vec<AccountId>) {
+        self.assert_admin_or_greater();
+        let initial_storage_usage = env::storage_usage();
+        self.blacklisted_donors.clear();
+        for donor_id in donor_ids.iter() {
+            self.blacklisted_donors.insert(donor_id);
+        }
+        log_update_blacklisted_donors_event();
+        refund_deposit(initial_storage_usage);
+    }
+
     // POT CONFIG
     #[payable]
     pub fn admin_set_pot_name(&mut self, pot_name: String) {
