@@ -33,29 +33,6 @@ pub struct Application {
     pub review_notes: Option<String>,
 }
 
-#[derive(BorshSerialize, BorshDeserialize)]
-pub enum VersionedApplication {
-    Current(Application),
-}
-
-// converts VersionedApplication to Application
-impl From<VersionedApplication> for Application {
-    fn from(application: VersionedApplication) -> Self {
-        match application {
-            VersionedApplication::Current(current) => current,
-        }
-    }
-}
-
-// converts &VersionedApplication to Application
-impl From<&VersionedApplication> for Application {
-    fn from(application: &VersionedApplication) -> Self {
-        match application {
-            VersionedApplication::Current(current) => current.to_owned(),
-        }
-    }
-}
-
 #[near_bindgen]
 impl Contract {
     #[payable]
@@ -130,10 +107,8 @@ impl Contract {
         // charge for storage
         let initial_storage_usage = env::storage_usage();
         // update mappings
-        self.applications_by_id.insert(
-            &application.project_id,
-            &VersionedApplication::Current(application.clone()),
-        );
+        self.applications_by_id
+            .insert(&application.project_id, &application);
         // refund excess deposit
         let required_deposit = calculate_required_storage_deposit(initial_storage_usage);
         if deposit > required_deposit {
@@ -189,9 +164,7 @@ impl Contract {
             self.applications_by_id
                 .iter()
                 .skip(start_index as usize)
-                .filter(|(_account_id, application)| {
-                    Application::from(application).status == status
-                })
+                .filter(|(_account_id, application)| application.status == status)
                 .take(limit.try_into().unwrap())
                 .map(|(_account_id, application)| Application::from(application))
                 .collect()
@@ -259,10 +232,7 @@ impl Contract {
         application.updated_at = Some(env::block_timestamp_ms());
         application.review_notes = Some(notes);
         // update mapping
-        self.applications_by_id.insert(
-            &project_id,
-            &VersionedApplication::Current(application.clone()),
-        );
+        self.applications_by_id.insert(&project_id, &application);
         // insert into approved applications mapping if approved
         if application.status == ApplicationStatus::Approved {
             // check that max_projects hasn't been reached

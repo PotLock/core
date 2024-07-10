@@ -1,5 +1,3 @@
-use std::u32::MAX;
-
 use crate::*;
 
 pub type DonationId = u64;
@@ -30,19 +28,6 @@ pub struct Donation {
     pub chef_id: Option<AccountId>,
     /// Chef fee
     pub chef_fee: Option<u128>,
-}
-
-#[derive(BorshSerialize, BorshDeserialize)]
-pub enum VersionedDonation {
-    Current(Donation),
-}
-
-impl From<VersionedDonation> for Donation {
-    fn from(donation: VersionedDonation) -> Self {
-        match donation {
-            VersionedDonation::Current(current) => current,
-        }
-    }
 }
 
 /// Ephemeral-only (used in views)
@@ -611,7 +596,7 @@ impl Contract {
 
         // update donation with net amount
         self.donations_by_id
-            .insert(&donation_id, &VersionedDonation::Current(donation.clone()));
+            .insert(&donation_id, &donation);
 
         // update totals
         if matching_pool {
@@ -673,7 +658,7 @@ impl Contract {
     ) {
         // insert base donation record
         self.donations_by_id
-            .insert(donation_id, &VersionedDonation::Current(donation.clone()));
+            .insert(donation_id, &donation);
 
         // if donation has a project_id, add to relevant mappings
         if let Some(project_id) = donation.project_id.clone() {

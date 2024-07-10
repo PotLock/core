@@ -178,11 +178,11 @@ pub struct Contract {
 
     // MAPPINGS
     /// All application records
-    applications_by_id: UnorderedMap<ApplicationId, VersionedApplication>,
+    applications_by_id: UnorderedMap<ApplicationId, Application>,
     /// Approved application IDs
     approved_application_ids: UnorderedSet<ApplicationId>,
     /// All donation records
-    donations_by_id: UnorderedMap<DonationId, VersionedDonation>,
+    donations_by_id: UnorderedMap<DonationId, Donation>,
     /// IDs of public round donations (made by donors who are not Patrons, during public round)
     public_round_donation_ids: UnorderedSet<DonationId>,
     /// IDs of matching pool donations (made by Patrons)
@@ -195,7 +195,7 @@ pub struct Contract {
     payouts_by_id: UnorderedMap<PayoutId, Payout>, // can iterate over this to get all payouts
     payout_ids_by_recipient_id: LookupMap<ProjectId, UnorderedSet<PayoutId>>,
     /// Challenges to payouts (if any) made during cooldown period
-    payouts_challenges: UnorderedMap<AccountId, VersionedPayoutsChallenge>,
+    payouts_challenges: UnorderedMap<AccountId, PayoutsChallenge>,
     /// Blacklisted donors
     blacklisted_donors: UnorderedSet<AccountId>,
 
@@ -205,7 +205,7 @@ pub struct Contract {
     /// Set by deployer and cannot be changed by Pot owner/admins.
     protocol_config_provider: LazyOption<ProviderId>,
     /// Contract "source" metadata, as specified in NEP 0330 (https://github.com/near/NEPs/blob/master/neps/nep-0330.md), with addition of `commit_hash`
-    contract_source_metadata: LazyOption<VersionedContractSourceMetadata>,
+    contract_source_metadata: LazyOption<ContractSourceMetadata>,
 }
 
 #[derive(BorshSerialize, BorshStorageKey)]
@@ -361,7 +361,7 @@ impl Contract {
             ),
             contract_source_metadata: LazyOption::new(
                 StorageKey::SourceMetadata,
-                Some(&VersionedContractSourceMetadata::Current(source_metadata)),
+                Some(&source_metadata),
             ),
         }
     }

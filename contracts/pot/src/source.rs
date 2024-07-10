@@ -12,21 +12,6 @@ pub struct ContractSourceMetadata {
     pub link: String,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
-#[serde(crate = "near_sdk::serde")]
-pub enum VersionedContractSourceMetadata {
-    Current(ContractSourceMetadata),
-}
-
-// Convert from VersionedContractSourceMetadata to ContractSourceMetadata
-impl From<VersionedContractSourceMetadata> for ContractSourceMetadata {
-    fn from(metadata: VersionedContractSourceMetadata) -> Self {
-        match metadata {
-            VersionedContractSourceMetadata::Current(current) => current,
-        }
-    }
-}
-
 #[near_bindgen]
 impl Contract {
     #[payable]
@@ -36,10 +21,7 @@ impl Contract {
             env::predecessor_account_id() == env::current_account_id(),
             "Only contract account can call this method"
         );
-        self.contract_source_metadata
-            .set(&VersionedContractSourceMetadata::from(
-                VersionedContractSourceMetadata::Current(source_metadata.clone()),
-            ));
+        self.contract_source_metadata.set(&source_metadata);
         // emit event
         log_set_source_metadata_event(&source_metadata);
     }

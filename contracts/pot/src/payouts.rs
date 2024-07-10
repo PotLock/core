@@ -76,19 +76,6 @@ pub struct PayoutsChallenge {
     pub resolved: bool,
 }
 
-#[derive(BorshSerialize, BorshDeserialize)]
-pub enum VersionedPayoutsChallenge {
-    Current(PayoutsChallenge),
-}
-
-impl From<VersionedPayoutsChallenge> for PayoutsChallenge {
-    fn from(payouts_challenge: VersionedPayoutsChallenge) -> Self {
-        match payouts_challenge {
-            VersionedPayoutsChallenge::Current(current) => current,
-        }
-    }
-}
-
 /// Ephemeral-only
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
@@ -380,10 +367,8 @@ impl Contract {
             resolved: false,
         };
         // store challenge (overwriting any existing challenge for this user - only one challenge per user allowed)
-        self.payouts_challenges.insert(
-            &env::predecessor_account_id(),
-            &VersionedPayoutsChallenge::Current(challenge),
-        );
+        self.payouts_challenges
+            .insert(&env::predecessor_account_id(), &challenge);
         refund_deposit(initial_storage_usage);
     }
 

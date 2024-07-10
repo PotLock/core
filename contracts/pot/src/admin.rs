@@ -393,18 +393,14 @@ impl Contract {
         resolve_challenge: Option<bool>,
     ) {
         self.assert_admin_or_greater();
-        let payouts_challenge_versioned = self.payouts_challenges.get(&challenger_id);
-        if let Some(payouts_challenge_versioned) = payouts_challenge_versioned {
+        if let Some(mut payouts_challenge) = self.payouts_challenges.get(&challenger_id) {
             let initial_storage_usage = env::storage_usage();
-            let mut payouts_challenge = PayoutsChallenge::from(payouts_challenge_versioned);
             if let Some(notes) = notes {
                 payouts_challenge.admin_notes = Some(notes);
             }
             payouts_challenge.resolved = resolve_challenge.unwrap_or(payouts_challenge.resolved);
-            self.payouts_challenges.insert(
-                &challenger_id,
-                &VersionedPayoutsChallenge::Current(payouts_challenge),
-            );
+            self.payouts_challenges
+                .insert(&challenger_id, &payouts_challenge);
             refund_deposit(initial_storage_usage);
         }
     }
