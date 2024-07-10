@@ -12,6 +12,7 @@ pub enum ApplicationStatus {
     Approved,
     Rejected,
     InReview,
+    Blacklisted,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
@@ -312,5 +313,14 @@ impl Contract {
         notes: String,
     ) -> Application {
         self.chef_set_application_status(project_id, ApplicationStatus::Pending, notes)
+    }
+
+    #[payable]
+    pub fn chef_mark_application_blacklisted(
+        &mut self,
+        project_id: ProjectId,
+        notes: String,
+    ) -> Application {
+        self.chef_set_application_status(project_id, ApplicationStatus::Blacklisted, notes)
     }
 }

@@ -205,7 +205,7 @@ pub struct Application {
     pub project_id: ProjectId,
     /// Optional message to be included in application
     pub message: Option<String>,
-    /// Status of the project application (Pending, Accepted, Rejected, InReview)
+    /// Status of the project application (Pending, Accepted, Rejected, InReview, Blacklisted)
     pub status: ApplicationStatus,
     /// Timestamp for when the application was submitted
     pub submitted_at: TimestampMs,
@@ -220,6 +220,7 @@ pub enum ApplicationStatus {
     Approved,
     Rejected,
     InReview,
+    Blacklisted,
 }
 ```
 
@@ -525,6 +526,13 @@ pub fn chef_mark_application_in_review(
 
 #[payable]
 pub fn chef_mark_application_pending(
+    &mut self,
+    project_id: ProjectId,
+    notes: String,
+) -> Application
+
+#[payable]
+pub fn chef_mark_application_blacklisted(
     &mut self,
     project_id: ProjectId,
     notes: String,
