@@ -569,7 +569,7 @@ impl Contract {
 
         // insert mappings
         let donation_id = (self.donations_by_id.len() + 1) as DonationId;
-        let donation = Donation {
+        let mut donation = Donation {
             donor_id: donor_id.clone(),
             total_amount: deposit,
             net_amount: 0, // this will be updated in a moment after storage cost is subtracted
@@ -601,11 +601,11 @@ impl Contract {
         ));
 
         // update donation with net amount
+        donation.net_amount = remainder;
+
+        // update donation with net amount
         self.donations_by_id
-            .insert(&donation_id, &VersionedDonation::Current(Donation {
-                net_amount: remainder,
-                ..donation.clone()
-            }));
+            .insert(&donation_id, &VersionedDonation::Current(donation.clone()));
 
         // update totals
         if matching_pool {
