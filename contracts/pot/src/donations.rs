@@ -165,43 +165,49 @@ impl Contract {
         let start_index: u128 = from_index.unwrap_or_default();
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
         assert_ne!(limit, 0, "Cannot provide limit of 0.");
-        let donation_ids_by_project_set = self.donation_ids_by_project_id.get(&project_id).unwrap();
-        assert!(
-            (donation_ids_by_project_set.len() as u128) >= start_index,
-            "Out of bounds, please use a smaller from_index."
-        );
-        donation_ids_by_project_set
-            .iter()
-            .skip(start_index as usize)
-            .take(limit)
-            .map(|id| {
-                self.format_donation(&Donation::from(self.donations_by_id.get(&id).unwrap()), id)
-            })
-            .collect()
+        if let Some(donation_ids_by_project_set) = self.donation_ids_by_project_id.get(&project_id) {
+            assert!(
+                (donation_ids_by_project_set.len() as u128) >= start_index,
+                "Out of bounds, please use a smaller from_index."
+            );
+            donation_ids_by_project_set
+                .iter()
+                .skip(start_index as usize)
+                .take(limit)
+                .map(|id| {
+                    self.format_donation(&Donation::from(self.donations_by_id.get(&id).unwrap()), id)
+                })
+                .collect()
+        } else {
+            vec![]
+        }
     }
 
     pub fn get_donations_for_donor(
         &self,
         donor_id: AccountId,
-        from_index: Option<u128>,
+        from_index: Option<u64>,
         limit: Option<u64>,
     ) -> Vec<DonationExternal> {
-        let start_index: u128 = from_index.unwrap_or_default();
+        let start_index: u64 = from_index.unwrap_or_default();
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
         assert_ne!(limit, 0, "Cannot provide limit of 0.");
-        let donation_ids_by_donor_set = self.donation_ids_by_donor_id.get(&donor_id).unwrap();
-        assert!(
-            (donation_ids_by_donor_set.len() as u128) >= start_index,
-            "Out of bounds, please use a smaller from_index."
-        );
-        donation_ids_by_donor_set
-            .iter()
-            .skip(start_index as usize)
-            .take(limit)
-            .map(|id| {
-                self.format_donation(&Donation::from(self.donations_by_id.get(&id).unwrap()), id)
-            })
-            .collect()
+        if let Some(donation_ids_by_donor_set) = self.donation_ids_by_donor_id.get(&donor_id) {
+            assert!(
+                (donation_ids_by_donor_set.len() as u64) >= start_index,
+                "Out of bounds, please use a smaller from_index."
+            );
+            donation_ids_by_donor_set
+                .iter()
+                .skip(start_index as usize)
+                .take(limit)
+                .map(|id| {
+                    self.format_donation(&Donation::from(self.donations_by_id.get(&id).unwrap()), id)
+                })
+                .collect()
+        } else {
+            vec![]
+        }
     }
 
     pub(crate) fn calculate_fee(&self, amount: u128, basis_points: u32, is_protocol: bool) -> u128 {
