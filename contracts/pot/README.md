@@ -88,8 +88,14 @@ pub struct Contract {
     total_public_donations: u128,
 
     // PAYOUTS
+    /// Length of cooldown period (in ms) after which payouts can be set by Chef
+    cooldown_period_ms: u64,
     /// Cooldown period starts when Chef sets payouts
     cooldown_end_ms: LazyOption<TimestampMs>,
+    /// Length of compliance period (in ms) after which projects forfeit payouts if they have not completed required steps to receive funds (e.g. KYC)
+    compliance_period_ms: LazyOption<u64>,
+    /// Compliance period starts when payouts are set by Chef
+    compliance_end_ms: LazyOption<TimestampMs>,
     /// Indicates whether all projects been paid out (this would be considered the "end-of-lifecycle" for the Pot)
     all_paid_out: bool,
 
@@ -148,7 +154,10 @@ pub struct PotConfig {
     pub total_public_donations: U128,
     pub public_donations_count: u32,
     pub payouts: Vec<PayoutExternal>,
+    pub cooldown_period_ms: u64,
     pub cooldown_end_ms: Option<TimestampMs>,
+    pub compliance_period_ms: Option<u64>,
+    pub compliance_end_ms: Option<TimestampMs>,
     pub all_paid_out: bool,
     pub protocol_config_provider: Option<ProviderId>,
 }
@@ -166,6 +175,7 @@ pub struct UpdatePotArgs {
     pub application_end_ms: Option<TimestampMs>,
     pub public_round_start_ms: Option<TimestampMs>,
     pub public_round_end_ms: Option<TimestampMs>,
+    pub compliance_period_ms: Option<TimestampMs>,
     pub registry_provider: Option<ProviderId>,
     pub min_matching_pool_donation_amount: Option<U128>,
     pub sybil_wrapper_provider: Option<ProviderId>,
@@ -273,7 +283,7 @@ pub struct DonationExternal {
     pub chef_fee: Option<U128>,
 }
 
-pub const DONATION_ID_DELIMETER: &str = ":";
+pub const DONATION_ID_DELIMITER: &str = ":";
 
 ```
 
@@ -446,6 +456,7 @@ pub fn new(
     // pot config
     pot_name: String,
     pot_description: String,
+    tags: Option<Vec<String>>,
     max_projects: u32,
     application_start_ms: TimestampMs,
     application_end_ms: TimestampMs,
@@ -454,6 +465,7 @@ pub fn new(
     registry_provider: Option<ProviderId>,
     min_matching_pool_donation_amount: Option<U128>,
     cooldown_period_ms: Option<u64>,
+    compliance_period_ms: Option<u64>,
 
     // sybil resistance
     sybil_wrapper_provider: Option<ProviderId>,
@@ -600,6 +612,12 @@ pub fn admin_set_round_timestamps(
     public_round_start_ms: Option<TimestampMs>,
     public_round_end_ms: Option<TimestampMs>,
 )
+
+#[payable]
+pub fn admin_set_compliance_period_ms(&mut self, compliance_period_ms: TimestampMs) -> ()
+
+#[payable]
+pub fn admin_set_compliance_end_ms(&mut self, compliance_end_ms: TimestampMs) -> ()
 
 #[payable]
 pub fn admin_set_registry_provider(&mut self, contract_id: AccountId, method_name: String) -> ()

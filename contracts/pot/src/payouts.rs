@@ -161,6 +161,11 @@ impl Contract {
             // set cooldown_end to now + cooldown period ms
             self.cooldown_end_ms
                 .set(&(env::block_timestamp_ms() + &self.cooldown_period_ms));
+            // if compliance_period_ms is set, set compliance_end to now + compliance period ms
+            if let Some(compliance_period_ms) = self.compliance_period_ms.get() {
+                self.compliance_end_ms
+                    .set(&(env::block_timestamp_ms() + compliance_period_ms));
+            }
             // add payout to payouts
             let mut payout_ids_for_recipient = self
                 .payout_ids_by_recipient_id

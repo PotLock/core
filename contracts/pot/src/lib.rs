@@ -169,6 +169,10 @@ pub struct Contract {
     cooldown_period_ms: u64,
     /// Cooldown period starts when Chef sets payouts
     cooldown_end_ms: LazyOption<TimestampMs>,
+    /// Length of compliance period (in ms) after which projects forfeit payouts if they have not completed required steps to receive funds (e.g. KYC)
+    compliance_period_ms: LazyOption<u64>,
+    /// Compliance period starts when payouts are set by Chef
+    compliance_end_ms: LazyOption<TimestampMs>,
     /// Indicates whether all projects been paid out (this would be considered the "end-of-lifecycle" for the Pot)
     all_paid_out: bool, // TODO: consider changing this to pot_closed or similar, and allowing it to be manually set by admin
 
@@ -249,6 +253,7 @@ impl Contract {
         registry_provider: Option<ProviderId>,
         min_matching_pool_donation_amount: Option<U128>,
         cooldown_period_ms: Option<u64>,
+        compliance_period_ms: Option<u64>,
 
         // sybil resistance
         sybil_wrapper_provider: Option<ProviderId>,
@@ -326,6 +331,11 @@ impl Contract {
             // payouts
             cooldown_period_ms: cooldown_period_ms.unwrap_or(DEFAULT_COOLDOWN_PERIOD_MS),
             cooldown_end_ms: LazyOption::new(StorageKey::CooldownEndMs, None),
+            compliance_period_ms: LazyOption::new(
+                StorageKey::CooldownEndMs,
+                compliance_period_ms.as_ref(),
+            ),
+            compliance_end_ms: LazyOption::new(StorageKey::CooldownEndMs, None),
             all_paid_out: false,
 
             // mappings

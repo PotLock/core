@@ -77,7 +77,7 @@ pub struct DonationExternal {
     pub chef_fee: Option<U128>,
 }
 
-pub const DONATION_ID_DELIMETER: &str = ":";
+pub const DONATION_ID_DELIMITER: &str = ":";
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]

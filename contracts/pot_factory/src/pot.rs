@@ -51,6 +51,7 @@ pub struct PotArgs {
     pub public_round_end_ms: TimestampMs,
     pub min_matching_pool_donation_amount: Option<U128>,
     pub cooldown_period_ms: Option<u64>,
+    pub compliance_period_ms: Option<u64>,
     pub registry_provider: Option<ProviderId>,
     pub sybil_wrapper_provider: Option<ProviderId>,
     pub custom_sybil_checks: Option<Vec<CustomSybilCheck>>,

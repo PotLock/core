@@ -29,7 +29,10 @@ pub struct PotConfig {
     pub total_public_donations: U128,
     pub public_donations_count: u32,
     pub payouts: Vec<PayoutExternal>,
+    pub cooldown_period_ms: u64,
     pub cooldown_end_ms: Option<TimestampMs>,
+    pub compliance_period_ms: Option<u64>,
+    pub compliance_end_ms: Option<TimestampMs>,
     pub all_paid_out: bool,
     pub protocol_config_provider: Option<ProviderId>,
 }
@@ -63,7 +66,10 @@ impl Contract {
             total_public_donations: self.total_public_donations.into(),
             public_donations_count: self.public_round_donation_ids.len() as u32,
             payouts: self.get_payouts(None, None),
+            cooldown_period_ms: self.cooldown_period_ms,
             cooldown_end_ms: self.cooldown_end_ms.get(),
+            compliance_period_ms: self.compliance_period_ms.get(),
+            compliance_end_ms: self.compliance_end_ms.get(),
             all_paid_out: self.all_paid_out,
             protocol_config_provider: self.protocol_config_provider.get(),
         }
