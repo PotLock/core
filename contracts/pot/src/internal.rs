@@ -57,6 +57,13 @@ impl Contract {
         self.assert_at_least_one_yocto();
     }
 
+    pub(crate) fn assert_round_not_started(&self) {
+        assert!(
+            env::block_timestamp_ms() < self.public_round_start_ms,
+            "Round has started"
+        );
+    }
+
     pub(crate) fn assert_round_closed(&self) {
         assert!(
             env::block_timestamp_ms() >= self.public_round_end_ms,
@@ -98,6 +105,13 @@ impl Contract {
         } else {
             panic!("Cooldown period is not set");
         }
+    }
+
+    pub(crate) fn assert_compliance_period_complete(&self) {
+        assert!(
+            env::block_timestamp_ms() >= self.compliance_end_ms.get().unwrap_or_default(),
+            "Compliance period is not over"
+        );
     }
 
     pub(crate) fn assert_all_payouts_challenges_resolved(&self) {

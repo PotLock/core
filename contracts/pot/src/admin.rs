@@ -243,6 +243,26 @@ impl Contract {
     }
 
     #[payable]
+    pub fn admin_set_matching_pool_redistribution_recipient(&mut self, account_id: AccountId) {
+        self.assert_admin_or_greater();
+        self.assert_round_not_started(); // can only be before public round starts
+        let initial_storage_usage = env::storage_usage();
+        self.matching_pool_redistribution_recipient.set(&account_id);
+        log_update_pot_config_event(&self.get_config());
+        refund_deposit(initial_storage_usage);
+    }
+
+    #[payable]
+    pub fn admin_remove_matching_pool_redistribution_recipient(&mut self) {
+        self.assert_admin_or_greater();
+        self.assert_round_not_started(); // can only be before public round starts
+        let initial_storage_usage = env::storage_usage();
+        self.matching_pool_redistribution_recipient.remove();
+        log_update_pot_config_event(&self.get_config());
+        refund_deposit(initial_storage_usage);
+    }
+
+    #[payable]
     pub fn admin_set_registry_provider(&mut self, contract_id: AccountId, method_name: String) {
         self.assert_admin_or_greater();
         // TODO: validate contract_id and method_name by calling method

@@ -33,6 +33,9 @@ pub struct PotConfig {
     pub cooldown_end_ms: Option<TimestampMs>,
     pub compliance_period_ms: Option<u64>,
     pub compliance_end_ms: Option<TimestampMs>,
+    pub allow_matching_pool_redistribution: bool,
+    pub matching_pool_redistribution_recipient: Option<AccountId>,
+    pub matching_pool_redistributed_at_ms: Option<TimestampMs>,
     pub all_paid_out: bool,
     pub protocol_config_provider: Option<ProviderId>,
 }
@@ -70,6 +73,11 @@ impl Contract {
             cooldown_end_ms: self.cooldown_end_ms.get(),
             compliance_period_ms: self.compliance_period_ms.get(),
             compliance_end_ms: self.compliance_end_ms.get(),
+            allow_matching_pool_redistribution: self.allow_matching_pool_redistribution,
+            matching_pool_redistribution_recipient: self
+                .matching_pool_redistribution_recipient
+                .get(),
+            matching_pool_redistributed_at_ms: self.matching_pool_redistributed_at_ms.get(),
             all_paid_out: self.all_paid_out,
             protocol_config_provider: self.protocol_config_provider.get(),
         }

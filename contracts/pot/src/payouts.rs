@@ -210,12 +210,6 @@ impl Contract {
         self.assert_admin_or_greater();
         // verify that the round has closed
         self.assert_round_closed();
-        // // verify that payouts have not already been processed
-        // TODO: verify that this should be removed
-        // assert!(
-        //     self.all_paid_out == false,
-        //     "Payouts have already been processed"
-        // );
         // verify that the cooldown period has passed
         self.assert_cooldown_period_complete();
         // verify that any challenges have been resolved
@@ -262,68 +256,72 @@ impl Contract {
                 }
             }
         }
-        // self.all_paid_out = true; // TODO: verify that this should be removed
     }
 
     #[payable]
-    /// Distribute funds to a list of recipients, without a cooldown period. Does not enforce that recipients are approved projects.
-    pub fn owner_distribute_funds(&mut self, distributions: Vec<PayoutInput>) {
-        self.assert_owner();
-        // verify that the round has closed
-        self.assert_round_closed();
-        // get down to business
-        let mut running_total: u128 = 0;
-        let mut payouts: Vec<Payout> = Vec::new();
-        // for each payout:
-        for payout_input in distributions.iter() {
-            // add amount to running total
-            running_total += payout_input.amount.0;
-            // add payout to payouts
-            let mut payout_ids_for_recipient = self
-                .payout_ids_by_recipient_id
-                .get(&payout_input.recipient_id)
-                .unwrap_or(UnorderedSet::new(StorageKey::PayoutIdsByRecipientIdInner {
-                    recipient_id: payout_input.recipient_id.clone(),
-                }));
-            let payout_id = format!(
-                "{}{}{}",
-                payout_input.recipient_id,
-                PAYOUT_ID_DELIMITER,
-                payout_ids_for_recipient.len() + 1
-            );
-            let payout = Payout {
-                id: payout_id.clone(),
-                amount: payout_input.amount.0,
-                recipient_id: payout_input.recipient_id.clone(),
-                paid_at: None,
-                memo: payout_input.memo.clone(),
-                is_redistribution: payout_input.is_redistribution,
-            };
-            payout_ids_for_recipient.insert(&payout_id);
-            self.payout_ids_by_recipient_id
-                .insert(&payout_input.recipient_id, &payout_ids_for_recipient);
-            self.payouts_by_id.insert(&payout_id, &payout);
-            payouts.push(payout);
+    pub fn admin_redistribute_matching_pool(&mut self) {
+        self.assert_admin_or_greater();
+        // verify that the cooldown period has passed
+        self.assert_cooldown_period_complete();
+        // verify that any challenges have been resolved
+        self.assert_all_payouts_challenges_resolved();
+        // verify that compliance period has passed
+        self.assert_compliance_period_complete();
+        // verify that redistribution is allowed
+        if !self.allow_matching_pool_redistribution {
+            panic!("Redistribution of matching pool is not allowed");
         }
-        // error if running total is more than matching pool balance
-        assert!(
-            running_total <= self.matching_pool_balance,
-            "Total payouts ({}) must not be greater than matching pool balance ({})",
-            running_total,
-            self.matching_pool_balance
-        );
-        // pay out each recipient
-        for payout in payouts.iter() {
-            // ...transfer funds...
-            Promise::new(payout.recipient_id.clone())
-                .transfer(payout.amount)
-                .then(
-                    Self::ext(env::current_account_id())
-                        .with_static_gas(XCC_GAS)
-                        .transfer_payout_callback(payout.clone()),
-                );
+        // verify that there is a redistribution recipient set
+        if self.matching_pool_redistribution_recipient.is_none() {
+            panic!("No redistribution recipient set");
+        }
+        let redistribution_recipient = self.matching_pool_redistribution_recipient.get().unwrap();
+        // update matching pool balance (this will be reverted in callback on failure)
+        let amount = self.matching_pool_balance;
+        self.matching_pool_balance = 0;
+        // send matching pool balance to redistribution recipient
+        Promise::new(redistribution_recipient.clone())
+            .transfer(amount)
+            .then(
+                Self::ext(env::current_account_id())
+                    .redistribute_matching_pool_callback(amount, redistribution_recipient.clone()),
+            );
+    }
+
+    /// Verifies whether redistribution was successful; reverts matching pool balance if not
+    #[private]
+    pub fn redistribute_matching_pool_callback(
+        &mut self,
+        amount: u128,
+        redistribution_recipient: AccountId,
+        #[callback_result] call_result: Result<(), PromiseError>,
+    ) {
+        if call_result.is_err() {
+            log!(format!(
+                "Error redistributing matching pool ({:#?} to recipient {}). Reverting matching pool balance...",
+                amount, redistribution_recipient
+            ));
+            // revert matching pool balance
+            self.matching_pool_balance += amount;
+        } else {
+            log!(format!(
+                "Successfully redistributed matching pool ({:#?} to recipient {})",
+                amount, redistribution_recipient
+            ));
+            // set matching_pool_redistributed_at_ms to now
+            self.matching_pool_redistributed_at_ms
+                .set(&env::block_timestamp_ms());
+            // set all_paid_out to true
+            self.all_paid_out = true;
         }
     }
+
+    // have set person who gets refund
+    // refund settings
+    // pre-determined entity
+    // refunds_available
+    // once matching period is over
+    // pays out whatever is left after compliance cooldown
 
     /// Verifies whether payout transfer completed successfully & updates payout record accordingly
     #[private] // Public - but only callable by env::current_account_id()
