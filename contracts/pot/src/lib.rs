@@ -223,6 +223,8 @@ pub enum StorageKey {
     CustomSybilChecks,
     CustomMinThresholdScore,
     CooldownEndMs,
+    CompliancePeriodMs,
+    ComplianceEndMs,
     MatchingPoolRedistributionRecipient,
     MatchingPoolRedistributedAtMs,
     ProtocolConfigProvider,
@@ -345,10 +347,10 @@ impl Contract {
             cooldown_period_ms: cooldown_period_ms.unwrap_or(DEFAULT_COOLDOWN_PERIOD_MS),
             cooldown_end_ms: LazyOption::new(StorageKey::CooldownEndMs, None),
             compliance_period_ms: LazyOption::new(
-                StorageKey::CooldownEndMs,
+                StorageKey::CompliancePeriodMs,
                 compliance_period_ms.as_ref(),
             ),
-            compliance_end_ms: LazyOption::new(StorageKey::CooldownEndMs, None),
+            compliance_end_ms: LazyOption::new(StorageKey::ComplianceEndMs, None),
             allow_matching_pool_redistribution,
             matching_pool_redistribution_recipient: LazyOption::new(
                 StorageKey::MatchingPoolRedistributionRecipient,

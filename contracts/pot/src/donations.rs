@@ -218,6 +218,9 @@ impl Contract {
     }
 
     pub fn get_blacklisted_donors(&self, from_index: Option<u64>, limit: Option<u64>) -> Vec<AccountId> {
+        if self.blacklisted_donors.is_empty() {
+            return vec![];
+        }
         let start_index = std::cmp::min(from_index.unwrap_or_default(), self.blacklisted_donors.len() - 1 as u64);
         let limit = limit.unwrap_or(DEFAULT_PAGE_SIZE as u64);
         self.blacklisted_donors

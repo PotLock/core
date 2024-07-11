@@ -226,23 +226,6 @@ impl Contract {
     }
 
     #[payable]
-    pub fn admin_set_compliance_end_ms(&mut self, compliance_end_ms: TimestampMs) {
-        self.assert_admin_or_greater();
-        // compliance must be in process (self.compliance_period_ms must be Some value)
-        // also, compliance_end_ms must be greater than self.compliance_end_ms (can only extend compliance, not reduce)
-        assert!(
-            self.compliance_period_ms.get().is_some(),
-            "Compliance period not in process"
-        );
-        assert!(
-            compliance_end_ms > self.compliance_period_ms.get().unwrap(),
-            "Compliance period can only be extended"
-        );
-        self.compliance_period_ms.set(&compliance_end_ms);
-        log_update_pot_config_event(&self.get_config());
-    }
-
-    #[payable]
     pub fn admin_set_matching_pool_redistribution_recipient(&mut self, account_id: AccountId) {
         self.assert_admin_or_greater();
         self.assert_round_not_started(); // can only be before public round starts
