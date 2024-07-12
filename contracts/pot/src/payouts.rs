@@ -18,8 +18,6 @@ pub struct Payout {
     pub paid_at: Option<TimestampMs>,
     /// Memo field for payout notes
     pub memo: Option<String>,
-    /// E.g. true if a return of funds to sponsors
-    pub is_redistribution: bool,
 }
 
 /// Ephemeral-only; used for setting payouts
@@ -28,7 +26,6 @@ pub struct Payout {
 pub struct PayoutInput {
     pub amount: U128,
     pub recipient_id: ProjectId,
-    pub is_redistribution: bool, // TODO: Could also determine this based on recipient being an approved project in this round
     pub memo: Option<String>,
 }
 
@@ -46,8 +43,6 @@ pub struct PayoutExternal {
     pub paid_at: Option<TimestampMs>,
     /// Memo field for payout notes
     pub memo: Option<String>,
-    /// Used for tracking whether it was a matching pool payout or something else, e.g. a return of funds to sponsors
-    pub is_redistribution: bool,
 }
 
 impl Payout {
@@ -58,7 +53,6 @@ impl Payout {
             amount: U128(self.amount),
             paid_at: self.paid_at,
             memo: self.memo.clone(),
-            is_redistribution: self.is_redistribution,
         }
     }
 }
@@ -172,7 +166,6 @@ impl Contract {
                 recipient_id: payout.recipient_id.clone(),
                 paid_at: None,
                 memo: payout.memo.clone(),
-                is_redistribution: payout.is_redistribution,
             };
             payout_ids_for_recipient.insert(&payout_id);
             self.payout_ids_by_recipient_id
@@ -268,14 +261,14 @@ impl Contract {
         // verify that compliance period has passed
         self.assert_compliance_period_complete();
         // verify that redistribution is allowed
-        if !self.allow_matching_pool_redistribution {
+        if !self.allow_remaining_funds_redistribution {
             panic!("Redistribution of matching pool is not allowed");
         }
         // verify that there is a redistribution recipient set
-        if self.matching_pool_redistribution_recipient.is_none() {
+        if self.remaining_funds_redistribution_recipient.is_none() {
             panic!("No redistribution recipient set");
         }
-        let redistribution_recipient = self.matching_pool_redistribution_recipient.get().unwrap();
+        let redistribution_recipient = self.remaining_funds_redistribution_recipient.get().unwrap();
         // update matching pool balance (this will be reverted in callback on failure)
         let amount = self.matching_pool_balance;
         self.matching_pool_balance = 0;
@@ -308,8 +301,8 @@ impl Contract {
                 "Successfully redistributed matching pool ({:#?} to recipient {})",
                 amount, redistribution_recipient
             ));
-            // set matching_pool_redistributed_at_ms to now
-            self.matching_pool_redistributed_at_ms
+            // set remaining_funds_redistributed_at_ms to now
+            self.remaining_funds_redistributed_at_ms
                 .set(&env::block_timestamp_ms());
             // set all_paid_out to true
             self.all_paid_out = true;

@@ -173,12 +173,12 @@ pub struct Contract {
     compliance_period_ms: LazyOption<u64>,
     /// Compliance period starts when payouts are set by Chef
     compliance_end_ms: LazyOption<TimestampMs>,
-    /// Indicates whether matching pool can be redistributed to matching_pool_redistribution_recipient after compliance period ends. Must be specified at deployment, and CANNOT be changed afterwards.
-    allow_matching_pool_redistribution: bool,
+    /// Indicates whether matching pool can be redistributed to remaining_funds_redistribution_recipient after compliance period ends. Must be specified at deployment, and CANNOT be changed afterwards.
+    allow_remaining_funds_redistribution: bool,
     /// Recipient of matching pool redistribution (if enabled). CANNOT be changed after public round has started.
-    matching_pool_redistribution_recipient: LazyOption<AccountId>,
+    remaining_funds_redistribution_recipient: LazyOption<AccountId>,
     /// Timestamp when redistribution happened
-    matching_pool_redistributed_at_ms: LazyOption<TimestampMs>,
+    remaining_funds_redistributed_at_ms: LazyOption<TimestampMs>,
     /// Indicates whether all projects been paid out (this would be considered the "end-of-lifecycle" for the Pot)
     all_paid_out: bool, // NB: this doesn't mean much and could probably be removed
 
@@ -267,8 +267,8 @@ impl Contract {
         min_matching_pool_donation_amount: Option<U128>,
         cooldown_period_ms: Option<u64>,
         compliance_period_ms: Option<u64>,
-        allow_matching_pool_redistribution: bool,
-        matching_pool_redistribution_recipient: Option<AccountId>,
+        allow_remaining_funds_redistribution: bool,
+        remaining_funds_redistribution_recipient: Option<AccountId>,
 
         // sybil resistance
         sybil_wrapper_provider: Option<ProviderId>,
@@ -351,12 +351,12 @@ impl Contract {
                 compliance_period_ms.as_ref(),
             ),
             compliance_end_ms: LazyOption::new(StorageKey::ComplianceEndMs, None),
-            allow_matching_pool_redistribution,
-            matching_pool_redistribution_recipient: LazyOption::new(
+            allow_remaining_funds_redistribution,
+            remaining_funds_redistribution_recipient: LazyOption::new(
                 StorageKey::MatchingPoolRedistributionRecipient,
-                matching_pool_redistribution_recipient.as_ref(),
+                remaining_funds_redistribution_recipient.as_ref(),
             ),
-            matching_pool_redistributed_at_ms: LazyOption::new(
+            remaining_funds_redistributed_at_ms: LazyOption::new(
                 StorageKey::MatchingPoolRedistributedAtMs,
                 None,
             ),

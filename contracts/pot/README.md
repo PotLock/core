@@ -96,6 +96,12 @@ pub struct Contract {
     compliance_period_ms: LazyOption<u64>,
     /// Compliance period starts when payouts are set by Chef
     compliance_end_ms: LazyOption<TimestampMs>,
+    /// Indicates whether matching pool can be redistributed to remaining_funds_redistribution_recipient after compliance period ends. Must be specified at deployment, and CANNOT be changed afterwards.
+    allow_remaining_funds_redistribution: bool,
+    /// Recipient of matching pool redistribution (if enabled). CANNOT be changed after public round has started.
+    remaining_funds_redistribution_recipient: LazyOption<AccountId>,
+    /// Timestamp when redistribution happened
+    remaining_funds_redistributed_at_ms: LazyOption<TimestampMs>,
     /// Indicates whether all projects been paid out (this would be considered the "end-of-lifecycle" for the Pot)
     all_paid_out: bool,
 
@@ -158,6 +164,9 @@ pub struct PotConfig {
     pub cooldown_end_ms: Option<TimestampMs>,
     pub compliance_period_ms: Option<u64>,
     pub compliance_end_ms: Option<TimestampMs>,
+    pub allow_remaining_funds_redistribution: bool,
+    pub remaining_funds_redistribution_recipient: Option<AccountId>,
+    pub remaining_funds_redistributed_at_ms: Option<TimestampMs>,
     pub all_paid_out: bool,
     pub protocol_config_provider: Option<ProviderId>,
 }
@@ -298,11 +307,13 @@ pub struct Payout {
     /// Unique identifier for the payout
     pub id: PayoutId,
     /// ID of the application receiving the payout
-    pub project_id: ProjectId,
+    pub recipient_id: AccountId,
     /// Amount to be paid out
-    pub amount: U128,
+    pub amount: u128,
     /// Timestamp when the payout was made. None if not yet paid out.
     pub paid_at: Option<TimestampMs>,
+    /// Memo field for payout notes
+    pub memo: Option<String>,
 }
 
 /// Ephemeral-only
@@ -310,17 +321,20 @@ pub struct PayoutExternal {
     /// Unique identifier for the payout
     pub id: PayoutId,
     /// ID of the application receiving the payout
-    pub project_id: ProjectId,
+    pub recipient_id: AccountId,
     /// Amount to be paid out
     pub amount: U128,
     /// Timestamp when the payout was made. None if not yet paid out.
     pub paid_at: Option<TimestampMs>,
+    /// Memo field for payout notes
+    pub memo: Option<String>,
 }
 
 /// Ephemeral-only; used for setting payouts
 pub struct PayoutInput {
     pub amount: U128,
-    pub project_id: ProjectId,
+    pub recipient_id: ProjectId,
+    pub memo: Option<String>,
 }
 
 pub struct PayoutsChallenge {
@@ -467,6 +481,8 @@ pub fn new(
     min_matching_pool_donation_amount: Option<U128>,
     cooldown_period_ms: Option<u64>,
     compliance_period_ms: Option<u64>,
+    allow_remaining_funds_redistribution: bool,
+    remaining_funds_redistribution_recipient: Option<AccountId>,
 
     // sybil resistance
     sybil_wrapper_provider: Option<ProviderId>,
@@ -562,7 +578,7 @@ pub fn chef_set_payouts(&mut self, payouts: Vec<PayoutInput>, clear_existing: bo
 pub fn admin_process_payouts(&mut self, project_ids: Option<Vec<ProjectId>>) -> () // Processes any payouts that have been set on contract but not yet paid out. Takes optional vec of account IDs to process payouts for. Panics if cooldown period not complete.
 
 #[payable]
-pub fn owner_distribute_funds(&mut self, distributions: Vec<PayoutInput>) // Owner-only method to distribute funds to a list of recipients, without a cooldown period. Does not enforce that recipients are approved projects. Use-case examples include returning matching pool funds to sponsors or forwarding to treasury, etc.
+pub fn admin_redistribute_matching_pool(&mut self) -> () // Distributes remaining matching pool balance to redistribution recipient as specified on contract. Asserts that caller is admin or owner, cooldown period is complete, all payouts challenges are resolved, and compliance period is complete. Does not allow redistribution if !self.allow_remaining_funds_redistribution (set at deployment) or self.remaining_funds_redistribution_recipient.is_none() (can be set up until public round starts)
 
 
 #[payable]
@@ -632,6 +648,12 @@ pub fn admin_set_compliance_period_ms(&mut self, compliance_period_ms: Timestamp
 
 #[payable]
 pub fn admin_set_compliance_end_ms(&mut self, compliance_end_ms: TimestampMs) -> ()
+
+#[payable]
+pub fn admin_set_remaining_funds_redistribution_recipient(&mut self, account_id: AccountId) -> () // panics if public round has already started
+
+#[payable]
+pub fn admin_remove_remaining_funds_redistribution_recipient(&mut self) -> () // panics if public round has already started
 
 #[payable]
 pub fn admin_set_registry_provider(&mut self, contract_id: AccountId, method_name: String) -> ()
