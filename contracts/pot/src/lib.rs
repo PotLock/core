@@ -179,6 +179,8 @@ pub struct Contract {
     remaining_funds_redistribution_recipient: LazyOption<AccountId>,
     /// Timestamp when redistribution happened
     remaining_funds_redistributed_at_ms: LazyOption<TimestampMs>,
+    /// Memo for funds redistribution
+    remaining_funds_redistribution_memo: LazyOption<String>,
     /// Indicates whether all projects been paid out (this would be considered the "end-of-lifecycle" for the Pot)
     all_paid_out: bool, // NB: this doesn't mean much and could probably be removed
 
@@ -227,6 +229,7 @@ pub enum StorageKey {
     ComplianceEndMs,
     MatchingPoolRedistributionRecipient,
     MatchingPoolRedistributedAtMs,
+    MatchingPoolRedistributionMemo,
     ProtocolConfigProvider,
     SourceMetadata,
     ApplicationsById,
@@ -358,6 +361,10 @@ impl Contract {
             ),
             remaining_funds_redistributed_at_ms: LazyOption::new(
                 StorageKey::MatchingPoolRedistributedAtMs,
+                None,
+            ),
+            remaining_funds_redistribution_memo: LazyOption::new(
+                StorageKey::MatchingPoolRedistributionMemo,
                 None,
             ),
             all_paid_out: false,

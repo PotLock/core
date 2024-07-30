@@ -406,6 +406,9 @@ impl Contract {
             self.payouts_challenges
                 .insert(&challenger_id, &payouts_challenge);
             refund_deposit(initial_storage_usage);
+        } else {
+            // panic so that indexer doesn't pick this up as a successful transaction (this was the case in V1)
+            panic!("Payouts challenge not found");
         }
     }
 

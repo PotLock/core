@@ -252,7 +252,7 @@ impl Contract {
     }
 
     #[payable]
-    pub fn admin_redistribute_matching_pool(&mut self) {
+    pub fn admin_redistribute_matching_pool(&mut self, memo: Option<String>) {
         self.assert_admin_or_greater();
         // verify that the cooldown period has passed
         self.assert_cooldown_period_complete();
@@ -276,8 +276,11 @@ impl Contract {
         Promise::new(redistribution_recipient.clone())
             .transfer(amount)
             .then(
-                Self::ext(env::current_account_id())
-                    .redistribute_matching_pool_callback(amount, redistribution_recipient.clone()),
+                Self::ext(env::current_account_id()).redistribute_matching_pool_callback(
+                    amount,
+                    redistribution_recipient.clone(),
+                    memo,
+                ),
             );
     }
 
@@ -287,6 +290,7 @@ impl Contract {
         &mut self,
         amount: u128,
         redistribution_recipient: AccountId,
+        memo: Option<String>,
         #[callback_result] call_result: Result<(), PromiseError>,
     ) {
         if call_result.is_err() {
@@ -304,6 +308,10 @@ impl Contract {
             // set remaining_funds_redistributed_at_ms to now
             self.remaining_funds_redistributed_at_ms
                 .set(&env::block_timestamp_ms());
+            // add memo
+            if let Some(memo) = memo {
+                self.remaining_funds_redistribution_memo.set(&memo);
+            }
             // set all_paid_out to true
             self.all_paid_out = true;
         }
