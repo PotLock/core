@@ -2,8 +2,18 @@
 
 ## Purpose
 
-Provide a way to raise funds, for yourself as an organization, or on behalf of an organization, through donations.
+Provide a way to raise funds, for yourself as an organization, or on behalf of an organization, through donations, raising on behalf of organizations has an approval process to indicate whether the campaign is "official".
+Contract can also function as an escrow with minimum target amounts, refunding donors if the target is not met. Campaigns can be time-based.
 
+The typical flow / lifetime of a camapign is as follows:
+
+- Campaign is **created** via Campaign contract's `create_campaign` function call
+  - Creator (e.g. user that calls `create_campaign` on contract) is, by default, the "owner" of the campaign
+- After creation, some Campaign details can be updated by owner.
+- A **recipient** account will be set during campaign creation, it defines who/what the campaign is for
+- During the **campaign**(between `campaign.start_ms` and `campaign.end_ms`), end users may donate to the campaign. A `campaign_id` must be specified during donations.
+- Donations are either held in escrow(until minimum target is reached) or transfered to the recipient.
+- once rthe campaign is over, donations are processed in batch, sent to recipient and fees sent to the appropriate channels
 
 ## Contract Structure
 
