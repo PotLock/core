@@ -1,16 +1,19 @@
-# PotLock Donation Contract
+# Campaign Contract
 
 ## Purpose
 
-Provide a way to donate NEAR or FTs to any account, with a protocol fee taken out
+Provide a way to raise funds, for yourself as an organization, or on behalf of an organization, through donations.
+
 
 ## Contract Structure
 
 ### General Types
 
 ```rs
+type CampaignId = u64;
 type DonationId = u64;
 type TimestampMs = u64;
+type ReferrerPayouts = HashMap<AccountId, Balance>;
 ```
 
 ### Contract
@@ -19,65 +22,67 @@ type TimestampMs = u64;
 pub struct Contract {
     contract_source_metadata: LazyOption<VersionedContractSourceMetadata>,
     owner: AccountId,
+    admins: UnorderedSet<AccountId>,
     protocol_fee_basis_points: u32,
-    referral_fee_basis_points: u32,
     protocol_fee_recipient_account: AccountId,
+    default_referral_fee_basis_points: u32,
+    default_creator_fee_basis_points: u32,
+    next_campaign_id: CampaignId,
+    campaigns_by_id: UnorderedMap<CampaignId, VersionedCampaign>,
+    campaign_ids_by_owner: UnorderedMap<AccountId, UnorderedSet<CampaignId>>,
+    campaign_ids_by_recipient: UnorderedMap<AccountId, UnorderedSet<CampaignId>>,
+    next_donation_id: DonationId,
     donations_by_id: UnorderedMap<DonationId, VersionedDonation>,
-    donation_ids_by_recipient_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
-    donation_ids_by_donor_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
-    donation_ids_by_ft_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
-    total_donations_amount: Balance, // Added total_donations_amount to track total donations amount without iterating through all donations
-    net_donations_amount: Balance,   // Added net_donations_amount to track net donations amount (after fees) without iterating through all donations
-    total_protocol_fees: Balance,    // Added total_protocol_fees to track total protocol fees without iterating through all donations
-    total_referrer_fees: Balance,    // Added total_referrer_fees to track total referral fees without iterating through all donations
+    escrowed_donation_ids_by_campaign_id: UnorderedMap<CampaignId, UnorderedSet<DonationId>>,
+    unescrowed_donation_ids_by_campaign_id: UnorderedMap<CampaignId, UnorderedSet<DonationId>>,
+    returned_donation_ids_by_campaign_id: UnorderedMap<CampaignId, UnorderedSet<DonationId>>,
+    donation_ids_by_donor_id: UnorderedMap<AccountId, UnorderedSet<DonationId>>,
+    storage_deposits: UnorderedMap<AccountId, Balance>,
 }
 
 /// NOT stored in contract storage; only used for get_config response
 pub struct Config {
     pub owner: AccountId,
+    pub admins: Vec<AccountId>,
     pub protocol_fee_basis_points: u32,
-    pub referral_fee_basis_points: u32,
     pub protocol_fee_recipient_account: AccountId,
-    pub total_donations_amount: U128,
-    pub net_donations_amount: U128,
-    pub total_donations_count: U64,
-    pub total_protocol_fees: U128,
-    pub total_referrer_fees: U128,
+    pub default_referral_fee_basis_points: u32,
+    pub default_creator_fee_basis_points: u32,
+    pub total_campaigns_count: u64,
+    pub total_donations_count: u64,
 }
 ```
 
-### Donations
+### Campaigns
 
-_NB: Projects are automatically approved by default._
+_NB: Campaigns can be created on behalf of others, hence the recipient field.
 
 ```rs
-pub struct Donation {
-    /// Unique identifier for the donation
-    pub id: DonationId,
-    /// ID of the donor
-    pub donor_id: AccountId,
-    /// Amount donated
-    pub total_amount: U128,
-    /// FT id (e.g. "near")
-    pub ft_id: AccountId,
-    /// Optional message from the donor
-    pub message: Option<String>,
-    /// Timestamp when the donation was made
-    pub donated_at_ms: TimestampMs,
-    /// ID of the account receiving the donation
-    pub recipient_id: AccountId,
-    /// Protocol fee
-    pub protocol_fee: U128,
-    /// Referrer ID
-    pub referrer_id: Option<AccountId>,
-    /// Referrer fee
-    pub referrer_fee: Option<U128>,
+pub struct Campaign {
+    pub owner: AccountId,
+    pub name: String,
+    pub description: Option<String>,
+    pub cover_image_url: Option<String>,
+    pub recipient: AccountId,
+    pub start_ms: TimestampMs,
+    pub end_ms: Option<TimestampMs>,
+    pub created_ms: TimestampMs,
+    pub ft_id: Option<AccountId>,
+    pub target_amount: Balance,
+    pub min_amount: Option<Balance>,
+    pub max_amount: Option<Balance>,
+    pub total_raised_amount: Balance,
+    pub net_raised_amount: Balance,
+    pub escrow_balance: Balance,
+    pub referral_fee_basis_points: u32,
+    pub creator_fee_basis_points: u32,
+    pub allow_fee_avoidance: bool,
 }
 ```
 
 ### Storage
 
-The storage-related methods (`storage_deposit`, `storage_withdraw` and `storage_balance_of`) are utilized for fungible token (FT) donations, where the user must prepay storage on this Donation contract - to cover the storage of the Donation data - before calling `ft_transfer_call` on the FT contract.
+The storage-related methods (`storage_deposit`, `storage_withdraw` and `storage_balance_of`) are utilized for fungible token (FT) donations, where the user must prepay storage on this Campaign contract - to cover the storage of the Donation data - before calling `ft_transfer_call` on the FT contract.
 
 This is a simplified version of the [Storage Management standard](https://nomicon.io/Standards/StorageManagement).
 
@@ -106,24 +111,66 @@ pub struct ContractSourceMetadata {
 // INIT
 
 pub fn new(
-    owner: AccountId,
-    protocol_fee_basis_points: u32,
-    referral_fee_basis_points: u32,
-    protocol_fee_recipient_account: AccountId,
-    source_metadata: ContractSourceMetadata,
-) -> Self
+        owner: AccountId,
+        protocol_fee_basis_points: u32,
+        protocol_fee_recipient_account: AccountId,
+        default_referral_fee_basis_points: u32,
+        default_creator_fee_basis_points: u32,
+        source_metadata: ContractSourceMetadata,
+    ) -> Self {
 
 
-// DONATIONS
+// Campaign
 
 #[payable]
+pub fn create_campaign(
+        &mut self,
+        name: String,
+        description: Option<String>,
+        cover_image_url: Option<String>,
+        recipient: AccountId,
+        start_ms: TimestampMs,
+        end_ms: Option<TimestampMs>,
+        ft_id: Option<AccountId>,
+        target_amount: U128,
+        min_amount: Option<U128>,
+        max_amount: Option<U128>,
+        referral_fee_basis_points: Option<u32>,
+        creator_fee_basis_points: Option<u32>,
+        allow_fee_avoidance: Option<bool>,
+    ) -> CampaignExternal
+    
+
+#[payable]
+pub fn update_campaign(
+   &mut self,
+   campaign_id: CampaignId,
+   name: Option<String>,
+   description: Option<String>,
+   cover_image_url: Option<String>,
+   start_ms: Option<TimestampMs>,
+   end_ms: Option<TimestampMs>,
+   ft_id: Option<AccountId>,
+   target_amount: Option<Balance>,
+   max_amount: Option<Balance>,
+   min_amount: Option<U128>, // Can only be provided if campaign has not started yet
+   allow_fee_avoidance: Option<bool>,
+   // NB: recipient cannot be updated. If incorrect recipient is specified, campaign should be deleted and recreated
+) -> CampaignExternal {
+
+
+pub fn delete_campaign(&mut self, campaign_id: CampaignId)
+
+// Donation 
+#[payable]
 pub fn donate(
-    &mut self,
-    recipient_id: AccountId,
-    message: Option<String>,
-    referrer_id: Option<AccountId>,
-    bypass_protocol_fee: Option<bool>, // Allows donor to bypass protocol fee if they wish. Defaults to "false".
-) -> Donation
+        &mut self,
+        campaign_id: CampaignId,
+        message: Option<String>,
+        referrer_id: Option<AccountId>,
+        bypass_protocol_fee: Option<bool>,
+        bypass_creator_fee: Option<bool>,
+    ) -> PromiseOrValue<DonationExternal> {
 
 
 // STORAGE
@@ -138,12 +185,9 @@ pub fn storage_withdraw(&mut self, amount: Option<U128>) -> U128
 #[payable]
 pub fn owner_change_owner(&mut self, owner: AccountId)
 
-pub fn owner_set_protocol_fee_basis_points(&mut self, protocol_fee_basis_points: u32)
-
-pub fn owner_set_referral_fee_basis_points(&mut self, referral_fee_basis_points: u32)
-
-pub fn owner_set_protocol_fee_recipient_account(&mut self, protocol_fee_recipient_account: AccountId)
-
+pub fn owner_add_admins(&mut self, admins: Vec<AccountId>)
+pub fn owner_remove_admins(&mut self, admins: Vec<AccountId>)
+pub fn owner_clear_admins(&mut self)
 
 // SOURCE METADATA
 
@@ -158,32 +202,50 @@ pub fn self_set_source_metadata(&mut self, source_metadata: ContractSourceMetada
 
 pub fn get_config(&self) -> Config
 
+// CAMPAIGNS
+get_campaign(&self, campaign_id: CampaignId) -> CampaignExternal
 
-// DONATIONS
-pub fn get_donations(&self, from_index: Option<u128>, limit: Option<u64>) -> Vec<Donation>
+get_campaigns(
+        &self,
+        from_index: Option<u128>,
+        limit: Option<u128>,
+    ) -> Vec<CampaignExternal>
+    
 
-pub fn get_donation_by_id(&self, donation_id: DonationId) -> Option<Donation>
+pub fn get_campaigns_by_owner(
+        &self,
+        owner_id: AccountId,
+        from_index: Option<u128>,
+        limit: Option<u128>,
+    ) -> Vec<CampaignExternal>
 
-pub fn get_donations_for_recipient(
+pub fn get_campaigns_by_recipient(
         &self,
         recipient_id: AccountId,
         from_index: Option<u128>,
+        limit: Option<u128>,
+    ) -> Vec<CampaignExternal>
+
+
+
+// DONATIONS
+pub fn get_donations(&self, from_index: Option<u128>, limit: Option<u64>) -> Vec<DonationExternal>
+
+pub fn get_donation_by_id(&self, donation_id: DonationId) -> Option<DonationExternal>
+
+pub fn get_donations_for_campaign(
+        &self,
+        campaign_id: CampaignId,
+        from_index: Option<u128>,
         limit: Option<u64>,
-    ) -> Vec<Donation>
+    ) -> Vec<DonationExternal>
 
 pub fn get_donations_for_donor(
-    &self,
-    donor_id: AccountId,
-    from_index: Option<u128>,
-    limit: Option<u64>,
-) -> Vec<Donation>
-
-pub fn get_donations_for_ft(
-    &self,
-    ft_id: AccountId,
-    from_index: Option<u128>,
-    limit: Option<u64>,
-) -> Vec<Donation>
+        &self,
+        donor_id: AccountId,
+        from_index: Option<u128>,
+        limit: Option<u64>,
+    ) -> Vec<DonationExternal>
 
 
 // STORAGE
@@ -203,9 +265,9 @@ pub fn get_contract_source_metadata(&self) -> Option<ContractSourceMetadata>
 
 ## Events
 
-### `donation`
+### `campaign`
 
-Indicates that a `Donation` object has been created.
+Indicates that a `Campaign` object has been created.
 
 **Example:**
 
@@ -213,20 +275,11 @@ Indicates that a `Donation` object has been created.
 {
   "standard": "potlock",
   "version": "1.0.0",
-  "event": "donation",
+  "event": "campaign_create",
   "data": [
     {
-      "donation": {
-        "donated_at_ms": 1698948121940,
-        "donor_id": "lachlan.near",
-        "ft_id": "near",
-        "id": 9,
-        "message": "Go go go!",
-        "protocol_fee": "7000000000000000000000",
-        "recipient_id": "magicbuild.near",
-        "referrer_fee": "2000000000000000000000",
-        "referrer_id": "plugrel.near",
-        "total_amount": "100000000000000000000000"
+      "campaign": {
+        "owner": ""
       }
     }
   ]
