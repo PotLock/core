@@ -1,6 +1,6 @@
 use crate::*;
 
-#[near_bindgen]
+#[near]
 impl Contract {
     // OWNER
     #[payable]
@@ -22,7 +22,7 @@ impl Contract {
         self.assert_contract_owner();
         let initial_storage_usage = env::storage_usage();
         for account_id in admins {
-            self.admins.insert(&account_id);
+            self.admins.insert(account_id);
         }
         refund_deposit(initial_storage_usage);
         log_config_update_event(&self.get_config());
@@ -45,6 +45,7 @@ impl Contract {
         let initial_storage_usage = env::storage_usage();
         self.admins.clear();
         refund_deposit(initial_storage_usage);
-        log_config_update_event(&self.get_config());
+        let config = self.get_config();
+        log_config_update_event(&config);
     }
 }

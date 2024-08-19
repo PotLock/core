@@ -1,8 +1,8 @@
 use crate::*;
 
 /// CONTRACT SOURCE METADATA - as per NEP 0330 (https://github.com/near/NEPs/blob/master/neps/nep-0330.md), with addition of `commit_hash`
-#[derive(Clone, Serialize, Deserialize, BorshDeserialize, BorshSerialize, PanicOnDefault)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers=[borsh, json])]
+#[derive(Clone)]
 pub struct ContractSourceMetadata {
     /// Version of source code, e.g. "v1.0.0", could correspond to Git tag
     pub version: String,
@@ -12,8 +12,8 @@ pub struct ContractSourceMetadata {
     pub link: String,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Serialize, Deserialize)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers=[borsh, json])]
+#[derive(Clone)]
 pub enum VersionedContractSourceMetadata {
     Current(ContractSourceMetadata),
 }
@@ -27,7 +27,7 @@ impl From<VersionedContractSourceMetadata> for ContractSourceMetadata {
     }
 }
 
-#[near_bindgen]
+#[near]
 impl Contract {
     #[payable]
     pub fn self_set_source_metadata(&mut self, source_metadata: ContractSourceMetadata) {
@@ -37,9 +37,9 @@ impl Contract {
             "Only contract account can call this method"
         );
         self.contract_source_metadata
-            .set(&VersionedContractSourceMetadata::from(
+            .set(Some(VersionedContractSourceMetadata::from(
                 VersionedContractSourceMetadata::Current(source_metadata.clone()),
-            ));
+            )));
         // emit event
         log_set_source_metadata_event(&source_metadata);
     }
@@ -47,7 +47,9 @@ impl Contract {
     pub fn get_contract_source_metadata(&self) -> Option<ContractSourceMetadata> {
         let source_metadata = self.contract_source_metadata.get();
         if source_metadata.is_some() {
-            Some(ContractSourceMetadata::from(source_metadata.unwrap()))
+            Some(ContractSourceMetadata::from(
+                source_metadata.clone().unwrap(),
+            ))
         } else {
             None
         }

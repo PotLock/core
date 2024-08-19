@@ -2,8 +2,8 @@ use crate::*;
 
 pub type CampaignId = u64;
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers=[borsh, json])]
+#[derive(Clone)]
 pub struct Campaign {
     // indexed at ID so don't need to include here
     pub owner: AccountId,
@@ -26,7 +26,8 @@ pub struct Campaign {
     pub allow_fee_avoidance: bool,
 }
 
-#[derive(BorshSerialize, BorshDeserialize)]
+#[near(serializers=[borsh])]
+#[derive(Clone)]
 pub enum VersionedCampaign {
     Current(Campaign),
 }
@@ -39,8 +40,8 @@ impl From<VersionedCampaign> for Campaign {
     }
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
-#[serde(crate = "near_sdk::serde")]
+#[near(serializers=[borsh, json])]
+#[derive(Clone)]
 pub struct CampaignExternal {
     pub id: CampaignId,
     pub owner: AccountId,
@@ -74,18 +75,18 @@ pub(crate) fn format_campaign(campaign_id: &CampaignId, campaign: &Campaign) -> 
         end_ms: campaign.end_ms,
         created_ms: campaign.created_ms,
         ft_id: campaign.ft_id.clone(),
-        target_amount: U128::from(campaign.target_amount),
+        target_amount: campaign.target_amount.into(),
         min_amount: campaign.min_amount.map(U128::from),
         max_amount: campaign.max_amount.map(U128::from),
-        total_raised_amount: U128::from(campaign.total_raised_amount),
-        net_raised_amount: U128::from(campaign.net_raised_amount),
-        escrow_balance: U128::from(campaign.escrow_balance),
+        total_raised_amount: campaign.total_raised_amount.into(),
+        net_raised_amount: campaign.net_raised_amount.into(),
+        escrow_balance: campaign.escrow_balance.into(),
         referral_fee_basis_points: campaign.referral_fee_basis_points,
         creator_fee_basis_points: campaign.creator_fee_basis_points,
     }
 }
 
-#[near_bindgen]
+#[near]
 impl Contract {
     #[payable]
     pub fn create_campaign(
@@ -213,11 +214,12 @@ impl Contract {
     ) -> CampaignExternal {
         self.assert_campaign_owner(&campaign_id);
         let initial_storage_usage = env::storage_usage();
-        let mut campaign = Campaign::from(
-            self.campaigns_by_id
-                .get(&campaign_id)
-                .expect("Campaign not found"),
-        );
+        let versioned_campaign = self
+            .campaigns_by_id
+            .get(&campaign_id)
+            .expect("Campaign not found")
+            .clone();
+        let mut campaign = Campaign::from(versioned_campaign);
         // Owner can change name, description, cover_image_url at any time
         if let Some(name) = name {
             campaign.name = name;
@@ -303,7 +305,7 @@ impl Contract {
         }
 
         self.campaigns_by_id
-            .insert(&campaign_id, &VersionedCampaign::Current(campaign.clone()));
+            .insert(campaign_id, VersionedCampaign::Current(campaign.clone()));
         refund_deposit(initial_storage_usage);
         let formatted = format_campaign(&campaign_id, &campaign);
         log_campaign_update_event(&formatted);
@@ -322,11 +324,12 @@ impl Contract {
     // VIEW METHODS
 
     pub fn get_campaign(&self, campaign_id: CampaignId) -> CampaignExternal {
-        let campaign = Campaign::from(
-            self.campaigns_by_id
-                .get(&campaign_id)
-                .expect("Campaign not found"),
-        );
+        let v_campaign = self
+            .campaigns_by_id
+            .get(&campaign_id)
+            .expect("Campaign not found")
+            .clone();
+        let campaign = Campaign::from(v_campaign);
         format_campaign(&campaign_id, &campaign)
     }
 
@@ -346,7 +349,25 @@ impl Contract {
             .iter()
             .skip(start_index as usize)
             .take(limit)
-            .map(|(id, v)| format_campaign(&id, &Campaign::from(v)))
+            .map(|(id, v)| format_campaign(&id, &Campaign::from(v.clone())))
+            .collect()
+    }
+
+    fn take_limit(
+        &self,
+        data: Vec<CampaignId>,
+        start_index: u128,
+        limit: usize,
+    ) -> Vec<CampaignExternal> {
+        data.iter()
+            .skip(start_index as usize)
+            .take(limit)
+            .map(|campaign_id| {
+                format_campaign(
+                    &campaign_id,
+                    &Campaign::from(self.campaigns_by_id.get(&campaign_id).unwrap().clone()),
+                )
+            })
             .collect()
     }
 
@@ -358,10 +379,9 @@ impl Contract {
     ) -> Vec<CampaignExternal> {
         let start_index: u128 = from_index.unwrap_or_default();
         let campaigns_for_owner_set = self.campaign_ids_by_owner.get(&owner_id);
-        let campaigns_for_owner = if campaigns_for_owner_set.is_none() {
-            vec![]
-        } else {
-            campaigns_for_owner_set.unwrap().to_vec()
+        let campaigns_for_owner = match campaigns_for_owner_set {
+            Some(set) => set.iter().cloned().collect(),
+            None => vec![],
         };
         assert!(
             (campaigns_for_owner.len() as u128) >= start_index,
@@ -369,17 +389,7 @@ impl Contract {
         );
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
         assert_ne!(limit, 0, "Cannot provide limit of 0.");
-        campaigns_for_owner
-            .iter()
-            .skip(start_index as usize)
-            .take(limit)
-            .map(|campaign_id| {
-                format_campaign(
-                    &campaign_id,
-                    &Campaign::from(self.campaigns_by_id.get(&campaign_id).unwrap()),
-                )
-            })
-            .collect()
+        self.take_limit(campaigns_for_owner, start_index, limit)
     }
 
     pub fn get_campaigns_by_recipient(
@@ -390,27 +400,17 @@ impl Contract {
     ) -> Vec<CampaignExternal> {
         let start_index: u128 = from_index.unwrap_or_default();
         let campaigns_for_recipient_set = self.campaign_ids_by_recipient.get(&recipient_id);
-        let campaigns_for_recipient = if campaigns_for_recipient_set.is_none() {
-            vec![]
-        } else {
-            campaigns_for_recipient_set.unwrap().to_vec()
+        let campaigns_for_recipient = match campaigns_for_recipient_set {
+            Some(set) => set.iter().cloned().collect(),
+            None => vec![],
         };
+
         assert!(
             (campaigns_for_recipient.len() as u128) >= start_index,
             "Out of bounds, please use a smaller from_index."
         );
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
         assert_ne!(limit, 0, "Cannot provide limit of 0.");
-        campaigns_for_recipient
-            .iter()
-            .skip(start_index as usize)
-            .take(limit)
-            .map(|campaign_id| {
-                format_campaign(
-                    &campaign_id,
-                    &Campaign::from(self.campaigns_by_id.get(&campaign_id).unwrap()),
-                )
-            })
-            .collect()
+        self.take_limit(campaigns_for_recipient, start_index, limit)
     }
 }
