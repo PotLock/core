@@ -445,7 +445,7 @@ impl Contract {
                 .insert(campaign_id, VersionedCampaign::Current(campaign));
             // NB: keeping Campaign.total_raised_amount and Campaign.net_raised_amount the same (use these as record of total donations to campaign)
             // log event
-            log_escrow_refund_event(&temp_refund_record);
+            // log_escrow_refund_event(&temp_refund_record);
         }
     }
 }

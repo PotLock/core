@@ -323,15 +323,35 @@ impl Contract {
                 .map(|v| v.remove(&donation.id));
         }
 
+        // self.donation_ids_by_donor_id
+        //     .get_mut(&donation.donor_id)
+        //     .unwrap_or(&mut IterableSet::new(
+        //         StorageKey::DonationIdsByDonorIdInner {
+        //             donor_id: donation.donor_id.clone(),
+        //         },
+        //     ))
+        //     .insert(donation.id);
+
         // insert into donations-by-donor mapping
-        self.donation_ids_by_donor_id
-            .get_mut(&donation.donor_id)
-            .unwrap_or(&mut IterableSet::new(
-                StorageKey::DonationIdsByDonorIdInner {
-                    donor_id: donation.donor_id.clone(),
-                },
-            ))
-            .insert(donation.id);
+        if let Some(donation_ids) = self.donation_ids_by_donor_id.get_mut(&donation.donor_id) {
+            donation_ids.insert(donation.id);
+        } else {
+            let mut new_set = IterableSet::new(StorageKey::DonationIdsByDonorIdInner {
+                donor_id: donation.donor_id.clone(),
+            });
+            new_set.insert(donation.id);
+            self.donation_ids_by_donor_id.insert(donation.donor_id.clone(), new_set);
+        }
+
+        let gettot = self.donation_ids_by_donor_id.get(&donation.donor_id).unwrap();
+        log!(
+                "{}",
+                format!(
+                    "ECHO THE DONOR {} to {}",
+                    gettot.len(),
+                    donation.donor_id
+                )
+            );
     }
 
     pub(crate) fn internal_remove_donation_record(&mut self, donation: &Donation) {
@@ -464,7 +484,7 @@ impl Contract {
         donor_id: AccountId,
         from_index: Option<u128>,
         limit: Option<u64>,
-    ) -> Vec<DonationExternal> {
+    ) -> u32 {
         let start_index: u128 = from_index.unwrap_or_default();
         // TODO: ADD BELOW BACK IN
         // assert!(
@@ -474,20 +494,21 @@ impl Contract {
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
         assert_ne!(limit, 0, "Cannot provide limit of 0.");
         let donation_ids_by_donor_set = self.donation_ids_by_donor_id.get(&donor_id);
-        if let Some(donation_ids_by_donor_set) = donation_ids_by_donor_set {
-            donation_ids_by_donor_set
-                .iter()
-                .skip(start_index as usize)
-                .take(limit)
-                .map(|donation_id| {
-                    self.format_donation(&Donation::from(
-                        self.donations_by_id.get(&donation_id).unwrap().clone(),
-                    ))
-                })
-                .collect()
-        } else {
-            vec![]
-        }
+        donation_ids_by_donor_set.unwrap().len()
+        // if let Some(donation_ids_by_donor_set) = donation_ids_by_donor_set {
+        //     donation_ids_by_donor_set
+        //         .iter()
+        //         .skip(start_index as usize)
+        //         .take(limit)
+        //         .map(|donation_id| {
+        //             self.format_donation(&Donation::from(
+        //                 self.donations_by_id.get(&donation_id).unwrap().clone(),
+        //             ))
+        //         })
+        //         .collect()
+        // } else {
+        //     vec![]
+        // }
     }
 
     pub(crate) fn format_donation(&self, donation: &Donation) -> DonationExternal {
@@ -526,7 +547,7 @@ impl Contract {
             campaign_id: donation.campaign_id.clone(),
             donor_id: donation.donor_id.clone(),
             total_amount: donation.total_amount.0,
-            net_amount: 0,
+            net_amount: donation.net_amount.into(),
             message: donation.message.clone(),
             donated_at_ms: donation.donated_at_ms,
             protocol_fee: donation.protocol_fee.0,

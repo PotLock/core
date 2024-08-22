@@ -140,7 +140,16 @@ pub(crate) fn log_escrow_refund_event(temp_refund_record: &TempRefundRecord) {
                 "data": [
                     {
                         "amount": temp_refund_record.amount,
-                        "donations": temp_refund_record.donations,
+                //         "donations": temp_refund_record.donations.iter().map(|donation| {
+                //     json!({
+                //         "id": donation.id,
+                //         "total_amount": donation.total_amount,
+                //         "net_amount": donation.net_amount,
+                //         "protocol_fee": donation.protocol_fee,
+                //         "creator_fee": donation.creator_fee,
+                //         "referrer_fee": donation.referrer_fee,
+                //     })
+                // }).collect::<Vec<_>>(),
                     }
                 ]
             })
