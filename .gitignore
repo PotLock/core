@@ -1,3 +1,6 @@
 #contracts
 **/target/
 **/neardev/
+contracts/pot_factory/args.json
+.idea/
+contracts/.idea/

@@ -118,6 +118,34 @@ impl Contract {
     }
 
     #[payable]
+    pub fn create_list_with_registrations(
+        &mut self,
+        name: String,
+        description: Option<String>,
+        cover_image_url: Option<String>,
+        admins: Option<Vec<AccountId>>,
+        default_registration_status: RegistrationStatus,
+        admin_only_registrations: Option<bool>,
+        notes: Option<String>,
+        registrations: Option<Vec<RegistrationInput>>,
+    ) -> (ListExternal, Vec<RegistrationExternal>) {
+        let lst = self.create_list(
+            name,
+            description, cover_image_url,
+            admins,
+            default_registration_status,
+            admin_only_registrations
+        );
+        let registrations = if let Some(regs) = registrations {
+            self.register_batch(lst.id, notes, Some(regs))
+        } else {
+            Vec::new()
+        };
+
+        (lst, registrations)
+    }
+
+    #[payable]
     pub fn update_list(
         &mut self,
         list_id: ListId,
@@ -177,51 +205,54 @@ impl Contract {
             panic!("Cannot delete list with more than {} registrations using attached gas of {}; please delete registrations first", max_deletions, attached_gas.0);
         }
         let initial_storage_usage = env::storage_usage();
-        self.lists_by_id.remove(&list_id);
-        self.list_ids_by_owner
-            .get(&env::predecessor_account_id())
-            .expect("List IDs by owner do not exist")
-            .remove(&list_id);
-        self.list_admins_by_list_id.remove(&list_id);
-        let list_registrations = self.registration_ids_by_list_id.remove(&list_id);
-        // remove all registrations for this list
-        let mut refunds: HashMap<AccountId, Balance> = HashMap::new();
-        if let Some(list_registrations) = list_registrations {
-            for registration_id in list_registrations.iter() {
-                // track storage freed per registration removal & refund account that registered
-                let storage_usage: u64 = env::storage_usage();
-                self.registrations_by_id.remove(&registration_id);
-                let registration = RegistrationInternal::from(
-                    self.registrations_by_id
-                        .get(&registration_id)
-                        .expect("No registration found"),
-                );
-                self.registration_ids_by_registrant_id
-                    .get(&registration.registrant_id)
-                    .expect("Registrant IDs by registrant do not exist")
-                    .remove(&registration_id);
-                let storage_freed = storage_usage - env::storage_usage();
-                let cost_freed = env::storage_byte_cost() * Balance::from(storage_freed);
-                let refund_to = registration
-                    .registered_by
-                    .unwrap_or_else(|| registration.registrant_id.clone());
-                if refunds.contains_key(&refund_to) {
-                    refunds.insert(
-                        refund_to.clone(),
-                        refunds.get(&refund_to).unwrap() + cost_freed,
-                    );
-                } else {
-                    refunds.insert(refund_to.clone(), cost_freed);
-                }
-            }
-        }
-        for (account_id, amount) in refunds.iter() {
-            Promise::new(account_id.clone()).transfer(*amount);
-        }
-        self.registration_ids_by_list_id.remove(&list_id);
-        self.upvotes_by_list_id.remove(&list_id);
-        refund_deposit(initial_storage_usage, None);
-        log_delete_list_event(list_id);
+         if let Some(_) = self.lists_by_id.remove(&list_id) {
+             if let Some(mut owner_lists) = self.list_ids_by_owner.get(&env::predecessor_account_id()) {
+                 owner_lists.remove(&list_id);
+                 if owner_lists.is_empty() {
+                     self.list_ids_by_owner.remove(&env::predecessor_account_id());
+                 } else {
+                     self.list_ids_by_owner.insert(&env::predecessor_account_id(), &owner_lists);
+                 }
+             }
+             self.list_admins_by_list_id.remove(&list_id);
+             if let Some(list_registrations) = self.registration_ids_by_list_id.remove(&list_id) {
+                 let mut refunds: HashMap<AccountId, Balance> = HashMap::new();
+                 for registration_id in list_registrations.iter() {
+                     let storage_usage: u64 = env::storage_usage();
+                     if let Some(removed_registration) = self.registrations_by_id.remove(&registration_id) {
+                         let registration = RegistrationInternal::from(removed_registration);
+                         if let Some(mut registrant_ids) = self.registration_ids_by_registrant_id.get(&registration.registrant_id) {
+                             registrant_ids.remove(&registration_id);
+                             if registrant_ids.is_empty() {
+                                 self.registration_ids_by_registrant_id.remove(&registration.registrant_id);
+                             } else {
+                                 self.registration_ids_by_registrant_id.insert(&registration.registrant_id, &registrant_ids);
+                             }
+                         }
+                         let storage_freed = storage_usage - env::storage_usage();
+                         let cost_freed = env::storage_byte_cost() * Balance::from(storage_freed);
+                         let refund_to = registration
+                             .registered_by
+                             .unwrap_or_else(|| registration.registrant_id.clone());
+                         *refunds.entry(refund_to).or_insert(0) += cost_freed;
+                         // if refunds.contains_key(&refund_to) {
+                         //     refunds.insert(
+                         //         refund_to.clone(),
+                         //         refunds.get(&refund_to).unwrap() + cost_freed,
+                         //     );
+                         // } else {
+                         //     refunds.insert(refund_to.clone(), cost_freed);
+                         // }
+                     }
+                 }
+                 for (account_id, amount) in refunds.iter() {
+                     Promise::new(account_id.clone()).transfer(*amount);
+                 }
+             }
+             self.upvotes_by_list_id.remove(&list_id);
+             refund_deposit(initial_storage_usage, None);
+             log_delete_list_event(list_id);
+         }
     }
 
     #[payable]
@@ -272,6 +303,42 @@ impl Contract {
         }
     }
 
+
+    // pub fn recover_inconsistent_state(&mut self) {
+    //     let mut total_ids_removed = 0;
+    //
+    //     for (_, mut owner_lists) in self.list_ids_by_owner.iter() {
+    //         let initial_count = owner_lists.len();
+    //         let mut ids_to_remove = Vec::new();
+    //         let real_lists: Vec<ListId> = self.lists_by_id.keys().collect();
+    //
+    //         // Identify list IDs that don't exist in lists_by_id
+    //         for list_id in owner_lists.iter() {
+    //             if !real_lists.contains(&list_id) {
+    //                 ids_to_remove.push(list_id);
+    //             }
+    //         }
+    //
+    //         // Remove the invalid list IDs
+    //         for id in ids_to_remove.iter() {
+    //             owner_lists.remove(id);
+    //         }
+    //
+    //         total_ids_removed += ids_to_remove.len();
+    //     }
+    //
+    //     // Log recovery information
+    //     env::log_str(&format!(
+    //         "Recovery completed. Removed {} invalid list IDs",
+    //         total_ids_removed
+    //     ));
+    // }
+
+    // pub fn remove_ebube_test(&mut self, ebube: AccountId) {
+    //     self.list_ids_by_owner.remove(&ebube);
+    // }
+
+
     pub fn get_list(&self, list_id: ListId) -> ListExternal {
         self.format_list(
             list_id,
@@ -289,22 +356,54 @@ impl Contract {
     }
 
     pub fn get_lists_for_owner(&self, owner_id: AccountId) -> Vec<ListExternal> {
-        let list_ids_by_owner = self.list_ids_by_owner.get(&owner_id);
-        if let Some(list_ids_by_owner) = list_ids_by_owner {
-            list_ids_by_owner
-                .iter()
-                .map(|list_id| {
-                    self.format_list(
-                        list_id,
-                        ListInternal::from(
-                            self.lists_by_id.get(&list_id).expect("List does not exist"),
-                        ),
-                    )
-                })
-                .collect()
-        } else {
-            vec![]
+        self.list_ids_by_owner
+            .get(&owner_id)
+            .map(|list_ids| {
+                list_ids
+                    .iter()
+                    .filter_map(|list_id| {
+                        self.lists_by_id.get(&list_id).map(|list| {
+                            self.format_list(list_id, ListInternal::from(list))
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_else(Vec::new)
+    }
+
+    // pub fn get_left_overs(&self) -> (Vec<AccountId>, Vec<ListId>) {
+    //     // let mut lists_to_remove = Vec::new();
+    //     let mut accts = Vec::new();
+    //     let real_lists: Vec<ListId> = self.lists_by_id.keys().collect();
+    //
+    //     for (acct, owner_lists) in self.list_ids_by_owner.iter() {
+    //         accts.push(acct);
+    //         // for list_d in owner_lists.iter() {
+    //         //     if !real_lists.contains(&list_d) {
+    //         //         lists_to_remove.push(list_d);
+    //         //     }
+    //         // }
+    //     }
+    //     (accts, real_lists)
+    // }
+
+    pub fn get_left_overs2(&self) -> (Vec<AccountId>, Vec<ListId>) {
+        // let mut lists_to_remove = Vec::new();
+        let mut accts = Vec::new();
+        let real_lists: Vec<ListId> = self.lists_by_id.keys().collect();
+        let mut haller = Vec::new();
+
+        for (acct, owner_lists) in self.list_ids_by_owner.iter() {
+            accts.push(acct);
+            // let owner_vec = owner_lists.to_vec();
+            haller.extend(owner_lists.iter());
+            // for list_d in owner_lists.iter() {
+            //     if !real_lists.contains(&list_d) {
+            //         lists_to_remove.push(list_d);
+            //     }
+            // }
         }
+        (accts, haller)
     }
 
     pub fn get_lists_for_registrant(&self, registrant_id: AccountId) -> Vec<ListExternal> {
