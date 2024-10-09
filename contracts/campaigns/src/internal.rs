@@ -1,10 +1,10 @@
 use crate::*;
 
-#[near_bindgen]
+#[near]
 impl Contract {
     pub(crate) fn assert_at_least_one_yocto(&self) {
         assert!(
-            env::attached_deposit() >= 1,
+            env::attached_deposit().as_yoctonear() >= 1,
             "At least one yoctoNEAR must be attached"
         );
     }
@@ -29,11 +29,11 @@ impl Contract {
     }
 
     pub(crate) fn assert_campaign_owner(&self, campaign_id: &CampaignId) {
-        let campaign = Campaign::from(
-            self.campaigns_by_id
-                .get(campaign_id)
-                .expect("Campaign not found"),
-        );
+        let bc = self
+            .campaigns_by_id
+            .get(campaign_id)
+            .expect("campaign notfound");
+        let campaign = Campaign::from(bc.clone());
         assert_eq!(
             env::predecessor_account_id(),
             campaign.owner,
@@ -46,7 +46,8 @@ impl Contract {
         let campaign = Campaign::from(
             self.campaigns_by_id
                 .get(campaign_id)
-                .expect("Campaign not found"),
+                .expect("Campaign not found")
+                .clone(),
         );
         assert!(
             campaign.start_ms <= env::block_timestamp_ms(),
@@ -82,11 +83,11 @@ impl Contract {
             Promise::new(ft_id).function_call(
                 "ft_transfer".to_string(),
                 ft_transfer_args,
-                ONE_YOCTO,
-                Gas(XCC_GAS_DEFAULT),
+                NearToken::from_yoctonear(ONE_YOCTO),
+                Gas::from_tgas(XCC_GAS_DEFAULT),
             )
         } else {
-            Promise::new(recipient).transfer(amount)
+            Promise::new(recipient).transfer(NearToken::from_yoctonear(amount))
         }
     }
 
@@ -97,44 +98,40 @@ impl Contract {
     ) {
         // Insert campaign record
         self.campaigns_by_id
-            .insert(&campaign_id, &VersionedCampaign::Current(campaign.clone()));
+            .insert(*campaign_id, VersionedCampaign::Current(campaign.clone()));
 
         // Insert campaign ID into owner's and recipient's lists
-        let mut campaign_ids_for_owner =
-            self.campaign_ids_by_owner
-                .get(&campaign.owner)
-                .unwrap_or(UnorderedSet::new(StorageKey::CampaignIdsByOwnerInner {
-                    owner_id: campaign.owner.clone(),
-                }));
-        campaign_ids_for_owner.insert(&campaign_id);
         self.campaign_ids_by_owner
-            .insert(&campaign.owner, &campaign_ids_for_owner);
-        let mut campaign_ids_for_recipient = self
-            .campaign_ids_by_recipient
-            .get(&campaign.recipient)
-            .unwrap_or(UnorderedSet::new(StorageKey::CampaignIdsByRecipientInner {
-                recipient_id: campaign.recipient.clone(),
-            }));
-        campaign_ids_for_recipient.insert(&campaign_id);
+            .get_mut(&campaign.owner)
+            .unwrap_or(&mut IterableSet::new(StorageKey::CampaignIdsByOwnerInner {
+                owner_id: campaign.owner.clone(),
+            }))
+            .insert(*campaign_id);
         self.campaign_ids_by_recipient
-            .insert(&campaign.recipient, &campaign_ids_for_recipient);
+            .get_mut(&campaign.recipient)
+            .unwrap_or(&mut IterableSet::new(
+                StorageKey::CampaignIdsByRecipientInner {
+                    recipient_id: campaign.recipient.clone(),
+                },
+            ))
+            .insert(*campaign_id);
 
         // Insert empty donation ID lists for campaign
         self.escrowed_donation_ids_by_campaign_id.insert(
-            &campaign_id,
-            &UnorderedSet::new(StorageKey::EscrowedDonationIdsByCampaignIdInner {
+            *campaign_id,
+            IterableSet::new(StorageKey::EscrowedDonationIdsByCampaignIdInner {
                 campaign_id: campaign_id.clone(),
             }),
         );
         self.unescrowed_donation_ids_by_campaign_id.insert(
-            &campaign_id,
-            &UnorderedSet::new(StorageKey::UnescrowedDonationIdsByCampaignIdInner {
+            *campaign_id,
+            IterableSet::new(StorageKey::UnescrowedDonationIdsByCampaignIdInner {
                 campaign_id: campaign_id.clone(),
             }),
         );
         self.returned_donation_ids_by_campaign_id.insert(
-            &campaign_id,
-            &UnorderedSet::new(StorageKey::ReturnedDonationIdsByCampaignIdInner {
+            *campaign_id,
+            IterableSet::new(StorageKey::ReturnedDonationIdsByCampaignIdInner {
                 campaign_id: campaign_id.clone(),
             }),
         );
@@ -146,7 +143,8 @@ impl Contract {
         let campaign = Campaign::from(
             self.campaigns_by_id
                 .get(&campaign_id)
-                .expect("Campaign not found"),
+                .expect("Campaign not found")
+                .clone(),
         );
         // Cannot delete campaign if it has started
         assert!(
@@ -164,22 +162,17 @@ impl Contract {
         self.campaigns_by_id.remove(&campaign_id);
 
         // Remove campaign ID from owner's and recipient's lists
-        let mut campaign_ids_for_owner = self
-            .campaign_ids_by_owner
-            .get(&campaign.owner)
-            .expect("Campaign owner not found");
-        campaign_ids_for_owner.remove(&campaign_id);
         self.campaign_ids_by_owner
-            .insert(&campaign.owner, &campaign_ids_for_owner);
-        let mut campaign_ids_for_recipient = self
-            .campaign_ids_by_recipient
-            .get(&campaign.recipient)
-            .expect("Campaign recipient not found");
-        campaign_ids_for_recipient.remove(&campaign_id);
+            .get_mut(&campaign.owner)
+            .expect("Campaign owner not found")
+            .remove(&campaign_id);
+        self.campaign_ids_by_recipient
+            .get_mut(&campaign.recipient)
+            .expect("Campaign recipient not found")
+            .remove(&campaign_id);
 
         // Remove donation ID lists for campaign
-        self.campaign_ids_by_recipient
-            .insert(&campaign.recipient, &campaign_ids_for_recipient);
+
         self.escrowed_donation_ids_by_campaign_id
             .remove(&campaign_id);
         self.unescrowed_donation_ids_by_campaign_id

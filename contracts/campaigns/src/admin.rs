@@ -1,6 +1,6 @@
 use crate::*;
 
-#[near_bindgen]
+#[near]
 impl Contract {
     // FEES CONFIG
     #[payable]

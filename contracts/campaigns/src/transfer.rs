@@ -1,66 +1,49 @@
 use crate::*;
 
-#[near_bindgen]
+#[near]
 impl Contract {
-    pub(crate) fn handle_transfer_recipient_amount(
-        &self,
-        donation: DonationExternal,
-    ) -> PromiseOrValue<DonationExternal> {
-        self.handle_transfer(donation, FundsReceiver::Recipient)
-    }
+    // pub(crate) fn handle_transfer_recipient_amount(
+    //     &self,
+    //     donation: DonationExternal,
+    // ) -> PromiseOrValue<DonationExternal> {
+    //     self.handle_transfer(donation, FundsReceiver::Recipient, donation.net_amount, )
+    // }
 
-    pub(crate) fn handle_transfer_protocol_fee(
-        &self,
-        donation: DonationExternal,
-    ) -> PromiseOrValue<DonationExternal> {
-        self.handle_transfer(donation, FundsReceiver::Protocol)
-    }
+    // pub(crate) fn handle_transfer_protocol_fee(
+    //     &self,
+    //     donation: DonationExternal,
+    // ) -> PromiseOrValue<DonationExternal> {
+    //     self.handle_transfer(donation, FundsReceiver::Protocol)
+    // }
 
-    pub(crate) fn handle_transfer_referrer_fee(
-        &self,
-        donation: DonationExternal,
-    ) -> PromiseOrValue<DonationExternal> {
-        self.handle_transfer(donation, FundsReceiver::Referrer)
-    }
+    // pub(crate) fn handle_transfer_referrer_fee(
+    //     &self,
+    //     donation: DonationExternal,
+    // ) -> PromiseOrValue<DonationExternal> {
+    //     self.handle_transfer(donation, FundsReceiver::Referrer)
+    // }
 
-    pub(crate) fn handle_transfer_creator_fee(
-        &self,
-        donation: DonationExternal,
-    ) -> PromiseOrValue<DonationExternal> {
-        self.handle_transfer(donation, FundsReceiver::Creator)
-    }
+    // pub(crate) fn handle_transfer_creator_fee(
+    //     &self,
+    //     donation: DonationExternal,
+    // ) -> PromiseOrValue<DonationExternal> {
+    //     self.handle_transfer(donation, FundsReceiver::Creator)
+    // }
 
     /// Handles transfer of one component (e.g. recipient amount, protocol fee, referrer fee or creator fee) of a single donation
     pub(crate) fn handle_transfer(
         &self,
         donation: DonationExternal,
         receiver_type: FundsReceiver,
+        amount: U128,
+        recipient_id: AccountId,
     ) -> PromiseOrValue<DonationExternal> {
-        let recipient_id = match receiver_type {
-            FundsReceiver::Recipient => donation.recipient_id.clone(),
-            FundsReceiver::Protocol => self.protocol_fee_recipient_account.clone(),
-            FundsReceiver::Referrer => donation.referrer_id.clone().unwrap(),
-            FundsReceiver::Creator => {
-                let campaign = Campaign::from(
-                    self.campaigns_by_id
-                        .get(&donation.campaign_id)
-                        .expect("Campaign not found"),
-                );
-                campaign.owner.clone()
-            }
-        };
-        let amount = match receiver_type {
-            FundsReceiver::Recipient => donation.net_amount.0,
-            FundsReceiver::Protocol => donation.protocol_fee.0,
-            FundsReceiver::Referrer => donation.referrer_fee.unwrap_or(U128(0)).0,
-            FundsReceiver::Creator => donation.creator_fee.0,
-        };
         PromiseOrValue::Promise(
-            self.internal_transfer_amount(amount, recipient_id, donation.ft_id.clone())
+            self.internal_transfer_amount(amount.into(), recipient_id, donation.ft_id.clone())
                 .then(
                     Self::ext(env::current_account_id())
-                        .with_static_gas(Gas(XCC_GAS_DEFAULT))
-                        .transfer_funds_callback(amount, donation.clone(), receiver_type),
+                        .with_static_gas(Gas::from_tgas(XCC_GAS_DEFAULT))
+                        .transfer_funds_callback(amount.into(), donation.clone(), receiver_type),
                 ),
         )
     }
@@ -80,10 +63,13 @@ impl Contract {
                 FundsReceiver::Recipient => {
                     // Campain recipient transfer failed
                     // Remove donation record & transfer full donation amount back to donor
-                    log!(format!(
-                        "Error transferring donation {:?} to {}. Returning funds to donor.",
-                        donation.total_amount, donation.recipient_id
-                    ));
+                    log!(
+                        "{}",
+                        format!(
+                            "Error transferring donation {:?} to {}. Returning funds to donor.",
+                            donation.total_amount, donation.recipient_id
+                        )
+                    );
                     // return funds to donor
                     self.internal_transfer_amount(
                         donation.total_amount.0,
@@ -95,17 +81,21 @@ impl Contract {
                     self.internal_remove_donation_record(&self.unformat_donation(&donation));
                     // Refund cost of storage freed directly to donor. (No need to keep it in user's storage_deposit balance, this just creates an extra step for them to withdraw it.)
                     let storage_freed = initial_storage_usage - env::storage_usage();
-                    let cost_freed = env::storage_byte_cost() * Balance::from(storage_freed);
+                    let cost_freed =
+                        env::storage_byte_cost().as_yoctonear() * Balance::from(storage_freed);
                     self.internal_transfer_amount(cost_freed, donation.donor_id.clone(), None);
                     None
                 }
                 FundsReceiver::Protocol => {
                     // Protocol fee transfer failed
                     // Return protocol fee to donor & update donation record to indicate protocol fee of 0
-                    log!(format!(
-                        "Error transferring protocol fee {:?} to {}. Returning funds to donor.",
-                        donation.protocol_fee, self.protocol_fee_recipient_account
-                    ));
+                    log!(
+                        "{}",
+                        format!(
+                            "Error transferring protocol fee {:?} to {}. Returning funds to donor.",
+                            donation.protocol_fee, self.protocol_fee_recipient_account
+                        )
+                    );
                     // return funds to donor
                     self.internal_transfer_amount(
                         donation.protocol_fee.0,
@@ -115,16 +105,19 @@ impl Contract {
                     // update protocol fee on Donation record to indicate error transferring funds
                     donation.protocol_fee = U128(0);
                     self.donations_by_id.insert(
-                        &donation.id.clone(),
-                        &VersionedDonation::Current(self.unformat_donation(&donation)),
+                        donation.id.clone(),
+                        VersionedDonation::Current(self.unformat_donation(&donation)),
                     );
                     Some(donation)
                 }
                 FundsReceiver::Referrer => {
-                    log!(format!(
+                    log!(
+                        "{}",
+                        format!(
                         "Error transferring referrer fee {:?} to {:?}. Returning funds to donor.",
                         donation.referrer_fee, donation.referrer_id
-                    ));
+                    )
+                    );
                     // return funds to donor
                     self.internal_transfer_amount(
                         donation.referrer_fee.unwrap().0,
@@ -134,16 +127,19 @@ impl Contract {
                     // update referrer fee on Donation record to indicate error transferring funds
                     donation.referrer_fee = Some(U128(0));
                     self.donations_by_id.insert(
-                        &donation.id.clone(),
-                        &VersionedDonation::Current(self.unformat_donation(&donation)),
+                        donation.id.clone(),
+                        VersionedDonation::Current(self.unformat_donation(&donation)),
                     );
                     Some(donation)
                 }
                 FundsReceiver::Creator => {
-                    log!(format!(
-                        "Error transferring creator fee {:?} to {}. Returning funds to donor.",
-                        donation.creator_fee, donation.recipient_id
-                    ));
+                    log!(
+                        "{}",
+                        format!(
+                            "Error transferring creator fee {:?} to {}. Returning funds to donor.",
+                            donation.creator_fee, donation.recipient_id
+                        )
+                    );
                     // return funds to donor
                     self.internal_transfer_amount(
                         donation.creator_fee.0,
@@ -153,8 +149,8 @@ impl Contract {
                     // update fee on Donation record to indicate error transferring funds
                     donation.creator_fee = U128(0);
                     self.donations_by_id.insert(
-                        &donation.id.clone(),
-                        &VersionedDonation::Current(self.unformat_donation(&donation)),
+                        donation.id.clone(),
+                        VersionedDonation::Current(self.unformat_donation(&donation)),
                     );
                     Some(donation)
                 }
@@ -163,18 +159,29 @@ impl Contract {
             // * SUCCESS CASE HANDLING
             // NB: escrow transfers are handled in transfer_escrowed_donations_callback, which is written to handle multiple donations
             if receiver_type == FundsReceiver::Recipient {
-                log!(format!(
-                    "Successfully transferred donation {} to {}!",
-                    amount, donation.recipient_id
-                ));
+                log!(
+                    "{}",
+                    format!(
+                        "Successfully transferred donation {} to {}!",
+                        amount, donation.recipient_id
+                    )
+                );
 
                 // transfer protocol fee
                 if donation.protocol_fee.0 > 0 {
-                    log!(format!(
-                        "Transferring protocol fee {:?} to {}",
-                        donation.protocol_fee, self.protocol_fee_recipient_account
-                    ));
-                    self.handle_transfer_protocol_fee(donation.clone());
+                    log!(
+                        "{}",
+                        format!(
+                            "Transferring protocol fee {:?} to {}",
+                            donation.protocol_fee, self.protocol_fee_recipient_account
+                        )
+                    );
+                    self.handle_transfer(
+                        donation.clone(),
+                        FundsReceiver::Protocol,
+                        donation.protocol_fee,
+                        self.protocol_fee_recipient_account.clone(),
+                    );
                 }
 
                 // transfer referrer fee
@@ -182,21 +189,44 @@ impl Contract {
                     (donation.referrer_fee.clone(), donation.referrer_id.clone())
                 {
                     if referrer_fee.0 > 0 {
-                        log!(format!(
-                            "Transferring referrer fee {:?} to {}",
-                            referrer_fee, referrer_id
-                        ));
-                        self.handle_transfer_referrer_fee(donation.clone());
+                        log!(
+                            "{}",
+                            format!(
+                                "Transferring referrer fee {:?} to {}",
+                                referrer_fee, referrer_id
+                            )
+                        );
+                        self.handle_transfer(
+                            donation.clone(),
+                            FundsReceiver::Referrer,
+                            referrer_fee,
+                            referrer_id,
+                        );
                     }
                 }
 
                 // transfer creator fee
                 if donation.creator_fee.0 > 0 {
-                    log!(format!(
-                        "Transferring creator fee {:?} to {}",
-                        donation.creator_fee, donation.recipient_id
-                    ));
-                    self.handle_transfer_creator_fee(donation.clone());
+                    let campaign = Campaign::from(
+                        self.campaigns_by_id
+                            .get(&donation.campaign_id)
+                            .expect("Campaign not found")
+                            .clone(),
+                    );
+                    let recipient_id = campaign.owner;
+                    log!(
+                        "{}",
+                        format!(
+                            "Transferring creator fee {:?} to {}",
+                            donation.creator_fee, recipient_id
+                        )
+                    );
+                    self.handle_transfer(
+                        donation.clone(),
+                        FundsReceiver::Creator,
+                        donation.creator_fee,
+                        recipient_id,
+                    );
                 }
 
                 // log event indicating successful donation/transfer!
