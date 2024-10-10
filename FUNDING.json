@@ -1,0 +1,12 @@
+{
+  "drips": {
+    "ethereum": {
+      "ownedBy": "0x88B93d4D440155448fbB3Cf260208b75FC0117C0"
+    }
+  },
+    "potlock": {
+    "near": {
+      "ownedBy": "potlock.near"
+    }
+  }
+}
