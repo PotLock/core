@@ -134,7 +134,7 @@ async fn test_create_campaign() -> Result<()> {
         recipient.clone(),
         start_ms,
         end_ms,
-        ft_id,
+        ft_id.clone(),
         target_amount,
         min_amount,
         max_amount,
@@ -145,6 +145,28 @@ async fn test_create_campaign() -> Result<()> {
     .await?;
     // Ensure the transaction succeeded
     assert!(res.is_success());
+
+    let res2 = create_campaign(
+        &contract,
+        alice.clone(),
+        name.clone(),
+        description.clone(),
+        cover_image_url.clone(),
+        recipient.clone(),
+        start_ms,
+        end_ms,
+        ft_id,
+        target_amount,
+        min_amount,
+        max_amount,
+        referral_fee_basis_points,
+        creator_fee_basis_points,
+        allow_fee_avoidance,
+    )
+        .await?;
+    // Ensure the transaction succeeded
+    assert!(res2.is_success());
+
 
     // Extract the execution outcome
     let logs = res.logs();
@@ -224,6 +246,13 @@ async fn test_create_campaign() -> Result<()> {
         }
         None => assert!(campaign_data.get("creator_fee_basis_points").is_none()),
     }
+
+    let vcp = alice.view(contract.id(), "get_campaigns_by_recipient").args_json(
+        json!({
+            "recipient_id": recipient.clone(),
+        })
+    ).await?;
+    println!("campaign viewed: {:?}", vcp.json::<serde_json::Value>()?);
 
     // test update_campaign name and dexcription
 
@@ -470,6 +499,7 @@ async fn test_campaign_refunds_when_target_not_met() -> Result<()> {
 
     // Verify campaign state after refunds
     let campaign_after_refund: serde_json::Value = get_campaign(&contract, campaign_id).await?;
+    println!("unescroed baalnce campaign..... {:?}",campaign_after_refund);
     assert_eq!(campaign_after_refund["escrow_balance"], "0");
 
     // Check if donations are marked as refunded

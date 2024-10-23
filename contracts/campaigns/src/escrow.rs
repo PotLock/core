@@ -5,6 +5,7 @@ use crate::*;
 #[derive(Clone)]
 pub struct TempRefundRecord {
     pub amount: Balance,
+    pub escrow_balance: Balance,
     pub donations: Vec<Donation>,
 }
 
@@ -381,9 +382,11 @@ impl Contract {
                     .entry(donation.donor_id.clone())
                     .or_insert(TempRefundRecord {
                         amount: 0,
+                        escrow_balance: 0,
                         donations: vec![],
                     });
             temp_refund_record.amount += refund_amount;
+            temp_refund_record.escrow_balance += donation.net_amount;
             temp_refund_record.donations.push(donation);
             // TODO: also remove donation from escrowed_donation_ids? (or just leave it there and update Donation.returned_at_ms)
         }
@@ -440,7 +443,7 @@ impl Contract {
                     .expect("Campaign not found")
                     .clone(),
             );
-            campaign.escrow_balance -= temp_refund_record.amount;
+            campaign.escrow_balance -= temp_refund_record.escrow_balance;
             self.campaigns_by_id
                 .insert(campaign_id, VersionedCampaign::Current(campaign));
             // NB: keeping Campaign.total_raised_amount and Campaign.net_raised_amount the same (use these as record of total donations to campaign)

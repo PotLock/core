@@ -101,15 +101,14 @@ impl Contract {
             .insert(*campaign_id, VersionedCampaign::Current(campaign.clone()));
 
         // Insert campaign ID into owner's and recipient's lists
-        self.campaign_ids_by_owner
-            .get_mut(&campaign.owner)
-            .unwrap_or(&mut IterableSet::new(StorageKey::CampaignIdsByOwnerInner {
+        self.campaign_ids_by_owner.entry(campaign.owner.clone()).or_insert_with(|| IterableSet::new(StorageKey::CampaignIdsByOwnerInner {
                 owner_id: campaign.owner.clone(),
             }))
             .insert(*campaign_id);
+
         self.campaign_ids_by_recipient
-            .get_mut(&campaign.recipient)
-            .unwrap_or(&mut IterableSet::new(
+            .entry(campaign.recipient.clone())
+            .or_insert_with(|| IterableSet::new(
                 StorageKey::CampaignIdsByRecipientInner {
                     recipient_id: campaign.recipient.clone(),
                 },

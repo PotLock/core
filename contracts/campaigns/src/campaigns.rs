@@ -134,6 +134,7 @@ impl Contract {
             allow_fee_avoidance: allow_fee_avoidance.unwrap_or(false),
         };
         self.internal_insert_new_campaign_record(&campaign_id, &campaign);
+        self.next_campaign_id += 1;
         refund_deposit(initial_storage_usage);
         let formatted = format_campaign(&campaign_id, &campaign);
         log_campaign_create_event(&formatted);
