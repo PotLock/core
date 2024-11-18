@@ -42,7 +42,7 @@ impl Contract {
             self.internal_transfer_amount(amount.into(), recipient_id, donation.ft_id.clone())
                 .then(
                     Self::ext(env::current_account_id())
-                        .with_static_gas(Gas::from_tgas(XCC_GAS_DEFAULT))
+                        .with_static_gas(Gas::from_tgas(20))
                         .transfer_funds_callback(amount.into(), donation.clone(), receiver_type),
                 ),
         )
@@ -166,7 +166,18 @@ impl Contract {
                         amount, donation.recipient_id
                     )
                 );
-
+                let mut campaign = Campaign::from(
+                    self.campaigns_by_id
+                        .get_mut(&donation.campaign_id)
+                        .expect("Campaign not found")
+                        .clone(),
+                );
+                campaign.total_raised_amount += donation.total_amount.0;
+                campaign.net_raised_amount += donation.net_amount.0;
+                self.campaigns_by_id.insert(
+                    donation.campaign_id.clone(),
+                    VersionedCampaign::Current(campaign),
+                );
                 // transfer protocol fee
                 if donation.protocol_fee.0 > 0 {
                     log!(

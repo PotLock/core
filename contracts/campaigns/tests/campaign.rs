@@ -104,6 +104,96 @@ async fn update_campaign(
     return res;
 }
 
+
+#[tokio::test]
+async fn test_create_campaigns() -> Result<()> {
+    init_logger();
+    let worker = sandbox().await?;
+    let (contract, alice, bob) = init(&worker).await?;
+
+    // Create first campaign
+    let name1 = "Test Campaign 1".to_string();
+    let description1 = Some("Test Description 1".to_string());
+    let cover_image_url1 = Some("https://example.com/image1.jpg".to_string());
+    let recipient = bob.id().clone();
+    let start_ms = near_sdk::env::block_timestamp() + 1000;
+    let end_ms = Some(start_ms + 10_000);
+    let target_amount1 = U128::from(100);
+
+    // Create second campaign
+    let name2 = "Test Campaign 2".to_string();
+    let description2 = Some("Test Description 2".to_string());
+    let cover_image_url2 = Some("https://example.com/image2.jpg".to_string());
+    let target_amount2 = U128::from(200);
+
+    // Create third campaign
+    let name3 = "Test Campaign 3".to_string();
+    let description3 = Some("Test Description 3".to_string());
+    let cover_image_url3 = Some("https://example.com/image3.jpg".to_string());
+    let target_amount3 = U128::from(300);
+
+    // Create all three campaigns
+    let campaigns = vec![
+        (name1, description1, cover_image_url1, target_amount1),
+        (name2, description2, cover_image_url2, target_amount2),
+        (name3, description3, cover_image_url3, target_amount3),
+    ];
+
+    for (name, description, cover_image_url, target_amount) in campaigns {
+        let res = create_campaign(
+            &contract,
+            alice.clone(),
+            name,
+            description,
+            cover_image_url,
+            recipient.clone(),
+            start_ms,
+            end_ms,
+            None, // ft_id
+            target_amount,
+            Some(U128::from(10)),
+            Some(U128::from(1000)),
+            Some(100),
+            Some(100),
+            Some(true),
+        )
+        .await?;
+        assert!(res.is_success());
+    }
+
+    // Get all campaigns for alice
+    let owner_campaigns: serde_json::Value = alice
+.view(
+            contract.id(),
+            "get_campaigns_by_owner",
+        ).args_json(json!({
+            "owner_id": alice.id(),
+            "from_index": 0,
+            "limit": 10
+        }))
+        .await?
+        .json()?;
+
+    println!("Owner campaigns: {:?}", owner_campaigns);
+    
+    // Assert we got all three campaigns
+    assert_eq!(
+        owner_campaigns.as_array().unwrap().len(),
+        3,
+        "Expected 3 campaigns, got {}",
+        owner_campaigns.as_array().unwrap().len()
+    );
+
+    // Verify each campaign has unique details
+    let campaigns = owner_campaigns.as_array().unwrap();
+    assert!(campaigns.iter().any(|c| c["name"].as_str().unwrap().contains("1")));
+    assert!(campaigns.iter().any(|c| c["name"].as_str().unwrap().contains("2")));
+    assert!(campaigns.iter().any(|c| c["name"].as_str().unwrap().contains("3")));
+
+    Ok(())
+}
+
+
 #[tokio::test]
 async fn test_create_campaign() -> Result<()> {
     init_logger();
@@ -275,16 +365,13 @@ async fn test_create_campaign() -> Result<()> {
     // Update campaign
     let update_result = alice
         .call(contract.id(), "update_campaign")
-        .args_json(json!({
-            "campaign_id": campaign_id,
-            "name": "Updated Test Campaign",
-            "description": "Updated Test Description",
-        }))
+        .args_json(json!({"campaign_id": 1,"name": "Updated Test Campaign","description": "Updated Test Description", "cover_image_url": "https://fifi.png", "min_amount": "500000", "max_amount": "100000000000", "target_amount": "1000000000"}))
         .max_gas()
         .deposit(ONE_NEAR)
         .transact()
         .await?;
     // Ensure the transaction succeeded
+    println!("Update.. sucess >>> {:?}", update_result);
     assert!(update_result.is_success());
     println!("Update.. sucess >>>");
 

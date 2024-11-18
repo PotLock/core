@@ -207,8 +207,8 @@ impl Contract {
         start_ms: Option<TimestampMs>,
         end_ms: Option<TimestampMs>,
         ft_id: Option<AccountId>,
-        target_amount: Option<Balance>,
-        max_amount: Option<Balance>,
+        target_amount: Option<U128>,
+        max_amount: Option<U128>,
         min_amount: Option<U128>, // Can only be provided if campaign has not started yet
         allow_fee_avoidance: Option<bool>,
         // NB: recipient cannot be updated. If incorrect recipient is specified, campaign should be deleted and recreated
@@ -277,7 +277,7 @@ impl Contract {
                 campaign.end_ms.unwrap_or(u64::MAX) > env::block_timestamp_ms(),
                 "Cannot edit target_amount after end_ms has been reached"
             );
-            campaign.target_amount = target_amount;
+            campaign.target_amount = target_amount.into();
         }
         // Owner can change max_amount until it is reached, or until end_ms is reached (whichever comes first)
         if let Some(max_amount) = max_amount {
@@ -289,7 +289,7 @@ impl Contract {
                 campaign.end_ms.unwrap_or(u64::MAX) > env::block_timestamp_ms(),
                 "Cannot edit max_amount after end_ms has been reached"
             );
-            campaign.max_amount = Some(max_amount);
+            campaign.max_amount = Some(max_amount.into());
         }
         // Owner can change min_amount before campaign starts
         if let Some(min_amount) = min_amount {
