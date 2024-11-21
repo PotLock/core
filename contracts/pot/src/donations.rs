@@ -302,6 +302,7 @@ impl Contract {
             );
             // matching pool donations not subject to sybil checks, so move on to protocol fee handler
             self.handle_protocol_fee(
+                caller_id.clone(),
                 deposit,
                 project_id.clone(),
                 message.clone(),
@@ -322,7 +323,7 @@ impl Contract {
                         Self::ext(env::current_account_id())
                             .with_static_gas(XCC_GAS)
                             .sybil_callback(
-                                caller_id,
+                                caller_id.clone(),
                                 deposit,
                                 project_id.clone(),
                                 message.clone(),
@@ -335,6 +336,7 @@ impl Contract {
             } else {
                 // no sybil wrapper provider, so move on to protocol fee handler
                 self.handle_protocol_fee(
+                    caller_id.clone(),
                     deposit,
                     project_id.clone(),
                     message.clone(),
@@ -382,6 +384,7 @@ impl Contract {
             );
         } else {
             self.handle_protocol_fee(
+                caller_id,
                 deposit,
                 project_id,
                 message,
@@ -396,6 +399,7 @@ impl Contract {
     #[private]
     pub fn handle_protocol_fee(
         &mut self,
+        donor_id: AccountId,
         deposit: Balance,
         project_id: Option<ProjectId>,
         message: Option<String>,
@@ -407,6 +411,7 @@ impl Contract {
         if bypass_protocol_fee.unwrap_or(false) {
             // bypass protocol fee
             PromiseOrValue::Value(self.process_donation(
+                    donor_id,
                     deposit,
                     0,
                     None,
@@ -425,6 +430,7 @@ impl Contract {
                     Self::ext(env::current_account_id())
                         .with_static_gas(XCC_GAS)
                         .handle_protocol_fee_callback(
+                            donor_id,
                             deposit,
                             project_id,
                             message,
@@ -436,6 +442,7 @@ impl Contract {
         } else {
             // bypass protocol fee
             PromiseOrValue::Value(self.process_donation(
+                donor_id,
                 deposit,
                 0,
                 None,
@@ -452,6 +459,7 @@ impl Contract {
     #[private]
     pub fn handle_protocol_fee_callback(
         &mut self,
+        donor_id: AccountId,
         deposit: Balance,
         project_id: Option<ProjectId>,
         message: Option<String>,
@@ -465,6 +473,7 @@ impl Contract {
                 "Error getting protocol fee; continuing with donation",
             ));
             self.process_donation(
+                donor_id,
                 deposit,
                 0,
                 None,
@@ -481,6 +490,7 @@ impl Contract {
             // calculate protocol fee (don't transfer yet)
             let protocol_fee = self.calculate_fee(deposit, protocol_fee_basis_points, true);
             self.process_donation(
+                donor_id,
                 deposit,
                 protocol_fee,
                 Some(protocol_fee_recipient_account),
@@ -496,6 +506,7 @@ impl Contract {
     #[private]
     pub fn process_donation(
         &mut self,
+        donor_id: AccountId,
         deposit: Balance,
         protocol_fee: u128,
         protocol_fee_recipient_account: Option<AccountId>,
@@ -544,7 +555,7 @@ impl Contract {
         // insert mappings
         let donation_id = (self.donations_by_id.len() + 1) as DonationId;
         let donation = Donation {
-            donor_id: env::signer_account_id(),
+            donor_id: donor_id.clone(),
             total_amount: deposit,
             net_amount: 0, // this will be updated in a moment after storage cost is subtracted
             message,
