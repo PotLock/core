@@ -6,7 +6,8 @@ members = [
     "pot_factory",
     "registry",
     "sybil",
-    "sybil_provider_simulator"
+    "sybil_provider_simulator",
+    "voting"
 ]
 
 [profile.release]
