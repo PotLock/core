@@ -145,6 +145,12 @@ impl Contract {
 
     }
 
+    // increase votes_per_voter
+    pub fn increase_votes_per_voter(&mut self, election_id: &ElectionId, amount: u32) {
+        let election = self.elections.get_mut(election_id).expect("Election not found");
+        election.votes_per_voter += amount;
+    }
+
     /// Returns all votes cast by a specific voter in a given election
     pub fn get_voter_votes(&self, election_id: &ElectionId, voter: &AccountId) -> Option<Vec<Vote>> {
         self.votes
