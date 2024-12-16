@@ -1,6 +1,5 @@
-use near_sdk::json_types::U128;
 use crate::*;
-
+use near_sdk::json_types::U128;
 
 #[near(serializers=[borsh, json])]
 #[derive(Clone, PartialEq)]
@@ -10,8 +9,6 @@ pub enum ElectionType {
     Pot(AccountId),
     Custom(String, Option<AccountId>),
 }
-
-
 
 #[near(serializers=[borsh, json])]
 #[derive(Clone, PartialEq)]
@@ -25,9 +22,8 @@ pub enum ElectionPhase {
     Pending,
     Nomination,
     Voting,
-    Ended
+    Ended,
 }
-
 
 #[near(serializers=[borsh, json])]
 #[derive(Clone, PartialEq)]
@@ -38,14 +34,13 @@ pub struct Candidate {
     pub application_date: U64,
 }
 
-
 #[near(serializers=[borsh, json])]
 #[derive(Clone, PartialEq)]
 pub enum EligibilityType {
     Open,
-    ListBased(AccountId, U128), // list contract and id
+    ListBased(AccountId, U128),  // list contract and id
     TokenBased(AccountId, U128), // Token contract and minimum balance
-    Custom(String), // Custom eligibility contract address
+    Custom(String),              // Custom eligibility contract address
 }
 
 #[near(serializers=[borsh, json])]
@@ -58,7 +53,6 @@ pub enum ElectionStatus {
     Completed,
     Cancelled,
 }
-
 
 #[near(serializers=[borsh, json])]
 #[derive(Clone, PartialEq)]
@@ -93,11 +87,14 @@ impl Contract {
         voter_eligibility: EligibilityType,
         voting_type: VotingType,
         election_type: ElectionType,
-        candidates: Vec<AccountId>
+        candidates: Vec<AccountId>,
     ) -> ElectionId {
         self.assert_not_paused();
         self.assert_admin_or_owner();
-        assert!(start_date.0 < end_date.0, "Start date must be before end date");
+        assert!(
+            start_date.0 < end_date.0,
+            "Start date must be before end date"
+        );
         let initial_storage_usage = env::storage_usage();
 
         let election_id = self.election_counter;
@@ -124,12 +121,15 @@ impl Contract {
         let mut candidates_map: IterableMap<AccountId, Candidate> =
             IterableMap::new(StorageKey::Candidates { election_id });
         for candidate in candidates.clone() {
-            candidates_map.insert(candidate.clone(), Candidate {
-                account_id: candidate,
-                status: ApplicationStatus::Approved,
-                votes_received: 0,
-                application_date: U64(env::block_timestamp()),
-            });
+            candidates_map.insert(
+                candidate.clone(),
+                Candidate {
+                    account_id: candidate,
+                    status: ApplicationStatus::Approved,
+                    votes_received: 0,
+                    application_date: U64(env::block_timestamp_ms()),
+                },
+            );
         }
         self.candidates.insert(election_id, candidates_map);
 
@@ -148,8 +148,8 @@ impl Contract {
     #[payable]
     pub fn apply(&mut self, election_id: ElectionId) {
         // let election = self.elections.get(&election_id).expect("Election not found");
-        // println!("Nomination end date: {:?}", env::block_timestamp());
-        
+        // println!("Nomination end date: {:?}", env::block_timestamp_ms());
+
 
         // let applicant = env::predecessor_account_id();
         // // assert!(self.is_eligible_candidate(&election, &applicant), "Not eligible to be a candidate");
@@ -162,9 +162,9 @@ impl Contract {
         //         ApplicationStatus::Pending
         //     },
         //     votes_received: 0,
-        //     application_date: U64(env::block_timestamp()),
+        //     application_date: U64(env::block_timestamp_ms()),
         //     approval_date: if election.auto_approval {
-        //         Some(U64(env::block_timestamp()))
+        //         Some(U64(env::block_timestamp_ms()))
         //     } else {
         //         None
         //     },
@@ -184,7 +184,7 @@ impl Contract {
     // ) {
     //     // self.assert_not_paused();
     //     self.assert_admin_or_owner();
-        
+
     //     let election = self.elections.get(&election_id).expect("Election not found");
     //     let mut candidates_map = self.candidates
     //         .get_mut(&election_id)
@@ -205,9 +205,9 @@ impl Contract {
     //             account_id: candidate,
     //             status: ApplicationStatus::Approved,
     //             votes_received: 0,
-    //             application_date: U64(env::block_timestamp()),
+    //             application_date: U64(env::block_timestamp_ms()),
     //         };
-            
+
     //         candidates_map.insert(candidate.account_id.clone(), candidate);
 
     //     }
@@ -215,7 +215,6 @@ impl Contract {
     //     // let candidates_map = self.candidates.get_mut(&election_id).expect("Candidates map not found");
     //     // candidates_map.insert(applicant, candidate);
     //     // // self.candidates.insert(election_id, &candidates_map);
-
 
     //     self.candidates.insert(election_id, candidates_map);
 
@@ -235,16 +234,24 @@ impl Contract {
 
     //     candidate.status = status;
     //     if matches!(candidate.status, ApplicationStatus::Approved) {
-    //         candidate.approval_date = Some(U64(env::block_timestamp()));
+    //         candidate.approval_date = Some(U64(env::block_timestamp_ms()));
     //     }
     // }
 
-    pub fn get_elections(&self, from_index: Option<u128>, limit: Option<u128>,) -> Vec<Election> {
+    pub fn get_elections(&self, from_index: Option<u128>, limit: Option<u128>) -> Vec<Election> {
         let start_index = from_index.unwrap_or_default();
-        assert!(start_index < self.election_counter as u128, "Invalid start index");
+        assert!(
+            start_index < self.election_counter as u128,
+            "Invalid start index"
+        );
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
 
-        self.elections.iter().map(|(_, election)| election.clone()).skip(start_index as usize).take(limit).collect()
+        self.elections
+            .iter()
+            .map(|(_, election)| election.clone())
+            .skip(start_index as usize)
+            .take(limit)
+            .collect()
     }
 
     pub fn get_election(&self, election_id: &ElectionId) -> Option<Election> {
@@ -254,7 +261,7 @@ impl Contract {
     /// Returns whether an election is currently in the voting period
     pub fn is_voting_period(&self, election_id: &ElectionId) -> bool {
         self.elections.get(election_id).map_or(false, |election| {
-            let now = env::block_timestamp();
+            let now = env::block_timestamp_ms();
             now >= election.start_date.0 && now < election.end_date.0
         })
     }
@@ -262,7 +269,7 @@ impl Contract {
     /// Returns whether an election has ended
     pub fn is_election_ended(&self, election_id: &ElectionId) -> bool {
         self.elections.get(election_id).map_or(false, |election| {
-            env::block_timestamp() >= election.end_date.0
+            env::block_timestamp_ms() >= election.end_date.0
         })
     }
 
@@ -277,12 +284,10 @@ impl Contract {
 
     /// Returns all active elections (in nomination or voting period)
     pub fn get_active_elections(&self) -> Vec<(ElectionId, Election)> {
-        let now = env::block_timestamp();
+        let now = env::block_timestamp_ms();
         self.elections
             .iter()
-            .filter(|(_, election)| {
-                now >= election.start_date.0 && now < election.end_date.0
-            })
+            .filter(|(_, election)| now >= election.start_date.0 && now < election.end_date.0)
             .map(|(id, election)| (*id, election.clone()))
             .collect()
     }
@@ -290,12 +295,10 @@ impl Contract {
     /// Returns the current phase of an election
     pub fn get_election_phase(&self, election_id: &ElectionId) -> Option<ElectionPhase> {
         self.elections.get(election_id).map(|election| {
-            let now = env::block_timestamp();
+            let now = env::block_timestamp_ms();
             if now < election.start_date.0 {
                 ElectionPhase::Pending
-            } else if now < election.end_date.0 {
-                ElectionPhase::Nomination
-            } else if now < election.end_date.0 {
+            } else if now >= election.start_date.0 && now < election.end_date.0 {
                 ElectionPhase::Voting
             } else {
                 ElectionPhase::Ended
@@ -304,19 +307,19 @@ impl Contract {
     }
 
     pub fn get_election_candidates(&self, election_id: ElectionId) -> Vec<Candidate> {
-        let candidates_map = self.candidates
+        let candidates_map = self
+            .candidates
             .get(&election_id)
             .expect("Election not found");
-        
+
         candidates_map.values().cloned().collect()
     }
 
     pub fn get_election_votes(&self, election_id: ElectionId) -> Vec<Vote> {
-        let votes_map = self.votes
-            .get(&election_id)
-            .expect("Election not found");
-        
-        votes_map.values()
+        let votes_map = self.votes.get(&election_id).expect("Election not found");
+
+        votes_map
+            .values()
             .flat_map(|votes| votes.iter().cloned())
             .collect()
     }
@@ -324,7 +327,7 @@ impl Contract {
     /// Returns time remaining (in nanoseconds) in the current phase
     pub fn get_time_remaining(&self, election_id: &ElectionId) -> Option<u64> {
         self.elections.get(election_id).map(|election| {
-            let now = env::block_timestamp();
+            let now = env::block_timestamp_ms();
             if now < election.start_date.0 {
                 election.start_date.0 - now
             } else if now < election.end_date.0 {

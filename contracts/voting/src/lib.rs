@@ -1,28 +1,29 @@
-use near_sdk::{env, near_bindgen, AccountId, BorshStorageKey, PanicOnDefault, near, NearToken, log, require, serde_json::json, Promise};
 use near_sdk::borsh::{BorshDeserialize, BorshSerialize};
-use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::store::{IterableSet, LookupMap, IterableMap};
 use near_sdk::json_types::U64;
+use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::store::{IterableMap, IterableSet, LookupMap};
+use near_sdk::{
+    env, log, near, near_bindgen, require, serde_json::json, AccountId, BorshStorageKey, NearToken,
+    PanicOnDefault, Promise,
+};
 
-
-
-pub mod vote;
 pub mod elections;
 pub mod events;
 mod ext;
-pub mod util;
 mod internal;
+pub mod util;
+pub mod vote;
 
-pub use crate::vote::*;
 pub use crate::elections::*;
-pub use crate::util::*;
 pub use crate::events::*;
+pub use crate::util::*;
+pub use crate::vote::*;
 
 #[near(serializers=[borsh, json])]
 #[derive(Debug, PartialEq, Clone)]
 pub enum VotingType {
     Simple,
-    Weighted(u32),  // Maximum weight a voter vote can carry
+    Weighted(u32), // Maximum weight a voter can distribute
 }
 #[near(serializers = [borsh])]
 #[derive(BorshStorageKey)]
@@ -50,7 +51,6 @@ pub struct Contract {
     paused: bool,
 }
 
-
 #[near]
 impl Contract {
     #[init]
@@ -61,7 +61,7 @@ impl Contract {
             elections: IterableMap::new(StorageKey::Elections),
             candidates: LookupMap::new(b"c"),
             votes: LookupMap::new(b"v"),
-            election_counter: 0,
+            election_counter: 1,
             paused: false,
         };
         contract
