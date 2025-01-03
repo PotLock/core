@@ -17,7 +17,9 @@ pub fn init_logger() {
 
 pub async fn init(worker: &Worker<impl DevNetwork>) -> Result<(Contract, Account, Account)> {
     let campaigns_contract = worker
-        .dev_deploy(include_bytes!("../out/main.wasm"))
+        .dev_deploy(include_bytes!(
+            "../../target/near/potlock_campaigns/potlock_campaigns.wasm"
+        ))
         .await?;
 
     let res = campaigns_contract
@@ -26,6 +28,7 @@ pub async fn init(worker: &Worker<impl DevNetwork>) -> Result<(Contract, Account
         .max_gas()
         .transact()
         .await?;
+    println!("dep jon.. {:?}", res);
     assert!(res.is_success());
 
     let alice = worker.dev_create_account().await?;

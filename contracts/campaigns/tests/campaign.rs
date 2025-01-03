@@ -104,7 +104,6 @@ async fn update_campaign(
     return res;
 }
 
-
 #[tokio::test]
 async fn test_create_campaigns() -> Result<()> {
     init_logger();
@@ -158,15 +157,14 @@ async fn test_create_campaigns() -> Result<()> {
             Some(true),
         )
         .await?;
+        println!("multui creator.. {:?}", res);
         assert!(res.is_success());
     }
 
     // Get all campaigns for alice
     let owner_campaigns: serde_json::Value = alice
-.view(
-            contract.id(),
-            "get_campaigns_by_owner",
-        ).args_json(json!({
+        .view(contract.id(), "get_campaigns_by_owner")
+        .args_json(json!({
             "owner_id": alice.id(),
             "from_index": 0,
             "limit": 10
@@ -175,7 +173,7 @@ async fn test_create_campaigns() -> Result<()> {
         .json()?;
 
     println!("Owner campaigns: {:?}", owner_campaigns);
-    
+
     // Assert we got all three campaigns
     assert_eq!(
         owner_campaigns.as_array().unwrap().len(),
@@ -186,13 +184,18 @@ async fn test_create_campaigns() -> Result<()> {
 
     // Verify each campaign has unique details
     let campaigns = owner_campaigns.as_array().unwrap();
-    assert!(campaigns.iter().any(|c| c["name"].as_str().unwrap().contains("1")));
-    assert!(campaigns.iter().any(|c| c["name"].as_str().unwrap().contains("2")));
-    assert!(campaigns.iter().any(|c| c["name"].as_str().unwrap().contains("3")));
+    assert!(campaigns
+        .iter()
+        .any(|c| c["name"].as_str().unwrap().contains("1")));
+    assert!(campaigns
+        .iter()
+        .any(|c| c["name"].as_str().unwrap().contains("2")));
+    assert!(campaigns
+        .iter()
+        .any(|c| c["name"].as_str().unwrap().contains("3")));
 
     Ok(())
 }
-
 
 #[tokio::test]
 async fn test_create_campaign() -> Result<()> {
@@ -253,10 +256,9 @@ async fn test_create_campaign() -> Result<()> {
         creator_fee_basis_points,
         allow_fee_avoidance,
     )
-        .await?;
+    .await?;
     // Ensure the transaction succeeded
     assert!(res2.is_success());
-
 
     // Extract the execution outcome
     let logs = res.logs();
@@ -337,11 +339,12 @@ async fn test_create_campaign() -> Result<()> {
         None => assert!(campaign_data.get("creator_fee_basis_points").is_none()),
     }
 
-    let vcp = alice.view(contract.id(), "get_campaigns_by_recipient").args_json(
-        json!({
+    let vcp = alice
+        .view(contract.id(), "get_campaigns_by_recipient")
+        .args_json(json!({
             "recipient_id": recipient.clone(),
-        })
-    ).await?;
+        }))
+        .await?;
     println!("campaign viewed: {:?}", vcp.json::<serde_json::Value>()?);
 
     // test update_campaign name and dexcription
@@ -400,7 +403,7 @@ async fn test_donate_to_campaign_with_target() -> Result<()> {
     println!(
         "check bob bal.... {:?}, >> {:?}",
         bob.view_account().await?.balance,
-        bob.id()
+        now
     );
     let name = "Test Campaign".to_string();
     let description = Some("Test Description".to_string());
@@ -434,7 +437,10 @@ async fn test_donate_to_campaign_with_target() -> Result<()> {
     )
     .await?;
 
+    println!("get whole res {:?}", res);
+
     let logs = res.logs();
+    println!("get logs {:?}", logs);
     let campaign_create_log = logs
         .iter()
         .find(|log| log.contains("campaign_create"))
@@ -460,7 +466,6 @@ async fn test_donate_to_campaign_with_target() -> Result<()> {
         .view()
         .await?
         .json()?;
-
 
     assert_eq!(
         campaign["total_raised_amount"],
@@ -491,8 +496,7 @@ async fn test_donate_to_campaign_with_target() -> Result<()> {
 
     println!(
         "campaign campana: {:?}, {}",
-        campaign2["min_amount"],
-        campaign2["total_raised_amount"]
+        campaign2["min_amount"], campaign2["total_raised_amount"]
     );
 
     assert_eq!(
@@ -516,13 +520,16 @@ async fn test_donate_to_campaign_with_target() -> Result<()> {
     // processescrowed donations by calling the `process_escrowed_donations_batch` function
 
     let process_escrowed_donations_batch_result = contract
-        .call("process_escrowed_donations_batch")// call with campaign id
+        .call("process_escrowed_donations_batch") // call with campaign id
         .args_json(json!({ "campaign_id": campaign_id }))
         .max_gas()
         .transact()
         .await?;
 
-    println!("Go berserk.... {:?}", process_escrowed_donations_batch_result);
+    println!(
+        "Go berserk.... {:?}",
+        process_escrowed_donations_batch_result
+    );
     assert!(process_escrowed_donations_batch_result.is_success());
 
     let campaign_donations2: serde_json::Value = contract
@@ -537,10 +544,8 @@ async fn test_donate_to_campaign_with_target() -> Result<()> {
         campaign_donations2, campaign_id
     );
 
-
     Ok(())
 }
-
 
 #[tokio::test]
 async fn test_campaign_refunds_when_target_not_met() -> Result<()> {
@@ -549,9 +554,16 @@ async fn test_campaign_refunds_when_target_not_met() -> Result<()> {
 
     // Create a campaign with a target that won't be met
     let now = Utc::now().timestamp_millis() as u64;
-    println!("SHOYUT PLSSS... {}",now);
+    println!("SHOYUT PLSSS... {}", now);
     let campaign_duration = 10_000; // 10 seconds
-    let campaign_id = create_test_campaign(&contract, &alice, now, campaign_duration, U128::from(10_000_000_000_000_000_000_000_000)).await?;
+    let campaign_id = create_test_campaign(
+        &contract,
+        &alice,
+        now,
+        campaign_duration,
+        U128::from(10_000_000_000_000_000_000_000_000),
+    )
+    .await?;
 
     // Make donations from Alice and Bob
     let alice_donation = NearToken::from_near(1);
@@ -567,7 +579,9 @@ async fn test_campaign_refunds_when_target_not_met() -> Result<()> {
     let campaign: serde_json::Value = get_campaign(&contract, campaign_id).await?;
     assert_eq!(
         campaign["total_raised_amount"],
-        (alice_donation.saturating_add(bob_donation)).as_yoctonear().to_string()
+        (alice_donation.saturating_add(bob_donation))
+            .as_yoctonear()
+            .to_string()
     );
 
     // Wait for the campaign to end
@@ -586,11 +600,15 @@ async fn test_campaign_refunds_when_target_not_met() -> Result<()> {
 
     // Verify campaign state after refunds
     let campaign_after_refund: serde_json::Value = get_campaign(&contract, campaign_id).await?;
-    println!("unescroed baalnce campaign..... {:?}",campaign_after_refund);
+    println!(
+        "unescroed baalnce campaign..... {:?}",
+        campaign_after_refund
+    );
     assert_eq!(campaign_after_refund["escrow_balance"], "0");
 
     // Check if donations are marked as refunded
-    let campaign_donations: Vec<serde_json::Value> = get_campaign_donations(&contract, campaign_id).await?;
+    let campaign_donations: Vec<serde_json::Value> =
+        get_campaign_donations(&contract, campaign_id).await?;
     // for donation in campaign_donations {
     //     assert!(donation["returned_at_ms"].is_string());
     // }
@@ -622,7 +640,7 @@ async fn create_test_campaign(
         Some(100),
         Some(true),
     )
-        .await?;
+    .await?;
 
     let campaign_id = extract_campaign_id_from_logs(&res)?;
     Ok(campaign_id)
@@ -670,7 +688,10 @@ async fn get_campaign(contract: &Contract, campaign_id: u64) -> Result<serde_jso
     Ok(campaign)
 }
 
-async fn get_campaign_donations(contract: &Contract, campaign_id: u64) -> Result<Vec<serde_json::Value>> {
+async fn get_campaign_donations(
+    contract: &Contract,
+    campaign_id: u64,
+) -> Result<Vec<serde_json::Value>> {
     let campaign_donations: Vec<serde_json::Value> = contract
         .call("get_donations_for_campaign")
         .args_json(json!({ "campaign_id": campaign_id }))
@@ -694,4 +715,3 @@ fn extract_campaign_id_from_logs(res: &ExecutionFinalResult) -> Result<u64> {
         .expect("Failed to extract campaign ID");
     Ok(campaign_id)
 }
-

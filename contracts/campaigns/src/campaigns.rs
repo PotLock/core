@@ -106,7 +106,8 @@ impl Contract {
         allow_fee_avoidance: Option<bool>,
     ) -> CampaignExternal {
         // check that start_ms is in the future and that end_ms is after start_ms
-        assert!(start_ms > env::block_timestamp_ms(), "start_ms must be in the future");
+        assert!(start_ms >= env::block_timestamp_ms(), "start_ms must be in the future");
+        env::log_str(format!("mesage the timer, {} : {}", start_ms, env::block_timestamp_ms()).as_str());
         assert!(end_ms.unwrap_or(u64::MAX) > start_ms, "end_ms must be after start_ms");
         let initial_storage_usage = env::storage_usage();
         let campaign_id = self.next_campaign_id;
