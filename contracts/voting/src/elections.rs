@@ -131,11 +131,18 @@ impl Contract {
                 },
             );
         }
+
+        candidates_map.flush();
         self.candidates.insert(election_id, candidates_map);
 
         let election_votes: IterableMap<AccountId, Vec<Vote>> =
             IterableMap::new(StorageKey::ElectionVotes { election_id });
+        
         self.votes.insert(election_id, election_votes);
+
+        self.elections.flush();
+        self.candidates.flush();
+        self.votes.flush();
 
         refund_deposit(initial_storage_usage);
 

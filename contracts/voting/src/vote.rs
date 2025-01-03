@@ -43,6 +43,7 @@ impl Contract {
         weight: u32,
         election_id: &ElectionId,
     ) {
+        let initial_storage_usage = env::storage_usage();
         let vote = Vote {
             voter: voter.clone(),
             candidate_id: candidate_id.clone(),
@@ -56,6 +57,7 @@ impl Contract {
 
         let voter_votes = election_votes.entry(voter.clone()).or_insert_with(Vec::new);
         voter_votes.push(vote);
+        election_votes.flush();
 
         let candidates_map = self
             .candidates
@@ -65,6 +67,11 @@ impl Contract {
             .get_mut(candidate_id)
             .expect("Candidate not found");
         candidate.votes_received += weight as u64;
+
+        candidates_map.flush();
+        self.votes.flush();
+        self.candidates.flush();
+        refund_deposit(initial_storage_usage);
     }
 
     pub(crate) fn assert_voter_eligible(
