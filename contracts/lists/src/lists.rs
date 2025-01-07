@@ -113,7 +113,7 @@ impl Contract {
         );
         self.next_list_id += 1;
         let formatted_list = self.format_list(list_id, list_internal);
-        let is_internal = internal_call.unwrap_or(false);
+        let is_internal = internal_call.unwrap_or(false); // make this function into private function,
         if !is_internal {
             refund_deposit(initial_storage_usage, None);
         }
@@ -133,6 +133,7 @@ impl Contract {
         notes: Option<String>,
         registrations: Option<Vec<RegistrationInput>>,
     ) -> (ListExternal, Vec<RegistrationExternal>) {
+        let initial_storage_usage = env::storage_usage();
         let lst = self.create_list(
             name,
             description, cover_image_url,
@@ -142,10 +143,11 @@ impl Contract {
             Some(registrations.is_some())
         );
         let registrations = if let Some(regs) = registrations {
-            self.register_batch(lst.id, notes, Some(regs))
+            self.register_batch(lst.id, notes, Some(regs), Some(true))
         } else {
             Vec::new()
         };
+        refund_deposit(initial_storage_usage, None);
 
         (lst, registrations)
     }

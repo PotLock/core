@@ -219,6 +219,7 @@ impl Contract {
         list_id: ListId,
         notes: Option<String>, // provided by non-admin registrants
         registrations: Option<Vec<RegistrationInput>>, // provided by admin registrants
+        internal_call: Option<bool>,
     ) -> Vec<RegistrationExternal> {
         let list = ListInternal::from(self.lists_by_id.get(&list_id).expect("List does not exist"));
         let caller_is_admin_or_greater = self.is_caller_list_admin_or_greater(&list_id);
@@ -257,8 +258,10 @@ impl Contract {
         }
 
         // refund any unused deposit
-        refund_deposit(initial_storage_usage, None);
-
+        let is_internal = internal_call.unwrap_or(false);
+        if !is_internal {
+            refund_deposit(initial_storage_usage, None);
+        }
         // log events
         for formatted_registration in completed_registrations.iter() {
             log_create_registration_event(formatted_registration);
