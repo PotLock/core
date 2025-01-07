@@ -59,6 +59,7 @@ impl Contract {
         admins: Option<Vec<AccountId>>,
         default_registration_status: RegistrationStatus,
         admin_only_registrations: Option<bool>,
+        internal_call: Option<bool>,
     ) -> ListExternal {
         let initial_storage_usage = env::storage_usage();
         assert_valid_list_name(&name);
@@ -112,7 +113,10 @@ impl Contract {
         );
         self.next_list_id += 1;
         let formatted_list = self.format_list(list_id, list_internal);
-        refund_deposit(initial_storage_usage, None);
+        let is_internal = internal_call.unwrap_or(false);
+        if !is_internal {
+            refund_deposit(initial_storage_usage, None);
+        }
         log_create_list_event(&formatted_list);
         formatted_list
     }
@@ -134,7 +138,8 @@ impl Contract {
             description, cover_image_url,
             admins,
             default_registration_status,
-            admin_only_registrations
+            admin_only_registrations,
+            Some(registrations.is_some())
         );
         let registrations = if let Some(regs) = registrations {
             self.register_batch(lst.id, notes, Some(regs))
@@ -369,41 +374,6 @@ impl Contract {
                     .collect()
             })
             .unwrap_or_else(Vec::new)
-    }
-
-    // pub fn get_left_overs(&self) -> (Vec<AccountId>, Vec<ListId>) {
-    //     // let mut lists_to_remove = Vec::new();
-    //     let mut accts = Vec::new();
-    //     let real_lists: Vec<ListId> = self.lists_by_id.keys().collect();
-    //
-    //     for (acct, owner_lists) in self.list_ids_by_owner.iter() {
-    //         accts.push(acct);
-    //         // for list_d in owner_lists.iter() {
-    //         //     if !real_lists.contains(&list_d) {
-    //         //         lists_to_remove.push(list_d);
-    //         //     }
-    //         // }
-    //     }
-    //     (accts, real_lists)
-    // }
-
-    pub fn get_left_overs2(&self) -> (Vec<AccountId>, Vec<ListId>) {
-        // let mut lists_to_remove = Vec::new();
-        let mut accts = Vec::new();
-        let real_lists: Vec<ListId> = self.lists_by_id.keys().collect();
-        let mut haller = Vec::new();
-
-        for (acct, owner_lists) in self.list_ids_by_owner.iter() {
-            accts.push(acct);
-            // let owner_vec = owner_lists.to_vec();
-            haller.extend(owner_lists.iter());
-            // for list_d in owner_lists.iter() {
-            //     if !real_lists.contains(&list_d) {
-            //         lists_to_remove.push(list_d);
-            //     }
-            // }
-        }
-        (accts, haller)
     }
 
     pub fn get_lists_for_registrant(&self, registrant_id: AccountId) -> Vec<ListExternal> {
