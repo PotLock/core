@@ -208,7 +208,8 @@ async fn test_create_campaign() -> Result<()> {
     let description = Some("Test Description".to_string());
     let cover_image_url = Some("https://example.com/image.jpg".to_string());
     let recipient = bob.id().clone();
-    let start_ms = near_sdk::env::block_timestamp() + 1000;
+    let now = Utc::now().timestamp_millis();
+    let start_ms = now as u64;
     let end_ms = Some(start_ms + 10_000);
     let ft_id = None;
     let target_amount = U128::from(100);
@@ -236,6 +237,8 @@ async fn test_create_campaign() -> Result<()> {
         allow_fee_avoidance,
     )
     .await?;
+
+    println!("created camoaing... {:?}", res);
     // Ensure the transaction succeeded
     assert!(res.is_success());
 
