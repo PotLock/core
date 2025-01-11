@@ -322,11 +322,17 @@ impl Contract {
         candidates_map.values().cloned().collect()
     }
 
-    pub fn get_election_votes(&self, election_id: ElectionId) -> Vec<Vote> {
+    pub fn get_election_votes(&self, election_id: ElectionId, from_index: Option<u128>, limit: Option<u128>) -> Vec<Vote> {
+        let start_index = from_index.unwrap_or_default();
+        let votes_map = self.votes.get(&election_id).expect("Election not found");
+        assert!(start_index < votes_map.len() as u128, "Invalid start index");
+        let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
         let votes_map = self.votes.get(&election_id).expect("Election not found");
 
         votes_map
             .values()
+            .skip(start_index as usize)
+            .take(limit)
             .flat_map(|votes| votes.iter().cloned())
             .collect()
     }
