@@ -1,5 +1,6 @@
-use crate::*;
 use near_sdk::json_types::U128;
+use crate::*;
+
 
 #[near(serializers=[borsh, json])]
 #[derive(Clone, PartialEq)]
@@ -9,6 +10,8 @@ pub enum ElectionType {
     Pot(AccountId),
     Custom(String, Option<AccountId>),
 }
+
+
 
 #[near(serializers=[borsh, json])]
 #[derive(Clone, PartialEq)]
@@ -22,8 +25,9 @@ pub enum ElectionPhase {
     Pending,
     Nomination,
     Voting,
-    Ended,
+    Ended
 }
+
 
 #[near(serializers=[borsh, json])]
 #[derive(Clone, PartialEq)]
@@ -34,13 +38,14 @@ pub struct Candidate {
     pub application_date: U64,
 }
 
+
 #[near(serializers=[borsh, json])]
 #[derive(Clone, PartialEq)]
 pub enum EligibilityType {
     Open,
-    ListBased(AccountId, U128),  // list contract and id
+    ListBased(AccountId, U128), // list contract and id
     TokenBased(AccountId, U128), // Token contract and minimum balance
-    Custom(String),              // Custom eligibility contract address
+    Custom(String), // Custom eligibility contract address
 }
 
 #[near(serializers=[borsh, json])]
@@ -53,6 +58,7 @@ pub enum ElectionStatus {
     Completed,
     Cancelled,
 }
+
 
 #[near(serializers=[borsh, json])]
 #[derive(Clone, PartialEq)]
@@ -87,14 +93,11 @@ impl Contract {
         voter_eligibility: EligibilityType,
         voting_type: VotingType,
         election_type: ElectionType,
-        candidates: Vec<AccountId>,
+        candidates: Vec<AccountId>
     ) -> ElectionId {
         self.assert_not_paused();
         self.assert_admin_or_owner();
-        assert!(
-            start_date.0 < end_date.0,
-            "Start date must be before end date"
-        );
+        assert!(start_date.0 < end_date.0, "Start date must be before end date");
         let initial_storage_usage = env::storage_usage();
 
         let election_id = self.election_counter;
@@ -121,15 +124,12 @@ impl Contract {
         let mut candidates_map: IterableMap<AccountId, Candidate> =
             IterableMap::new(StorageKey::Candidates { election_id });
         for candidate in candidates.clone() {
-            candidates_map.insert(
-                candidate.clone(),
-                Candidate {
-                    account_id: candidate,
-                    status: ApplicationStatus::Approved,
-                    votes_received: 0,
-                    application_date: U64(env::block_timestamp_ms()),
-                },
-            );
+            candidates_map.insert(candidate.clone(), Candidate {
+                account_id: candidate,
+                status: ApplicationStatus::Approved,
+                votes_received: 0,
+                application_date: U64(env::block_timestamp_ms()),
+            });
         }
 
         candidates_map.flush();
@@ -138,8 +138,10 @@ impl Contract {
         let election_votes: IterableMap<AccountId, Vec<Vote>> =
             IterableMap::new(StorageKey::ElectionVotes { election_id });
         
+        
         self.votes.insert(election_id, election_votes);
 
+        // hit flush to save the state to storage
         self.elections.flush();
         self.candidates.flush();
         self.votes.flush();
@@ -156,7 +158,7 @@ impl Contract {
     pub fn apply(&mut self, election_id: ElectionId) {
         // let election = self.elections.get(&election_id).expect("Election not found");
         // println!("Nomination end date: {:?}", env::block_timestamp_ms());
-
+        
 
         // let applicant = env::predecessor_account_id();
         // // assert!(self.is_eligible_candidate(&election, &applicant), "Not eligible to be a candidate");
@@ -183,51 +185,47 @@ impl Contract {
     }
     */
 
-    // #[payable]
-    // pub fn add_candidates(
-    //     &mut self,
-    //     election_id: ElectionId,
-    //     candidates: Vec<AccountId>
-    // ) {
-    //     // self.assert_not_paused();
-    //     self.assert_admin_or_owner();
+    #[payable]
+    pub fn add_candidates(
+        &mut self,
+        election_id: ElectionId,
+        candidates: Vec<AccountId>
+    ) {
+        // self.assert_not_paused();
+        self.assert_admin_or_owner();
+        
+        // let election = self.elections.get(&election_id).expect("Election not found");
+        let candidates_map = self.candidates
+            .get_mut(&election_id)
+            .expect("Candidates map not found");
 
-    //     let election = self.elections.get(&election_id).expect("Election not found");
-    //     let mut candidates_map = self.candidates
-    //         .get_mut(&election_id)
-    //         .and_then(|map| Some(map.clone()))
-    //         .expect("Candidates map not found");
+        // Track initial storage for refund calculation
+        let initial_storage = env::storage_usage();
 
-    //     // Track initial storage for refund calculation
-    //     let initial_storage = env::storage_usage();
+        for candidate in &candidates {
+            // Check if the candidate already exists
+            assert!(
+                !candidates_map.contains_key(candidate),
+                "Candidate {} already exists",
+                candidate
+            );
 
-    //     for candidate in candidates {
-    //         assert!(
-    //             !candidates_map.contains_key(&candidate),
-    //             "Candidate {} already exists",
-    //             candidate
-    //         );
-
-    //         let candidate = Candidate {
-    //             account_id: candidate,
-    //             status: ApplicationStatus::Approved,
-    //             votes_received: 0,
-    //             application_date: U64(env::block_timestamp_ms()),
-    //         };
-
-    //         candidates_map.insert(candidate.account_id.clone(), candidate);
-
-    //     }
-
-    //     // let candidates_map = self.candidates.get_mut(&election_id).expect("Candidates map not found");
-    //     // candidates_map.insert(applicant, candidate);
-    //     // // self.candidates.insert(election_id, &candidates_map);
-
-    //     self.candidates.insert(election_id, candidates_map);
-
-    //     // Refund excess deposit
-    //     refund_deposit(initial_storage);
-    // }
+            // Create a new candidate instance
+            let new_candidate = Candidate {
+                account_id: candidate.clone(), // Use candidate.clone() for clarity
+                status: ApplicationStatus::Approved,
+                votes_received: 0,
+                application_date: U64(env::block_timestamp_ms()),
+            };
+            
+            // Insert the new candidate into the candidates map
+            candidates_map.insert(candidate.clone(), new_candidate); // Use candidate.clone() for clarity
+            candidates_map.flush();
+        }
+        // Refund excess deposit
+        refund_deposit(initial_storage);
+        log_add_candidate_event(election_id, &candidates);
+    }
 
     // pub fn review_application(
     //     &mut self,
@@ -245,20 +243,12 @@ impl Contract {
     //     }
     // }
 
-    pub fn get_elections(&self, from_index: Option<u128>, limit: Option<u128>) -> Vec<Election> {
+    pub fn get_elections(&self, from_index: Option<u128>, limit: Option<u128>,) -> Vec<Election> {
         let start_index = from_index.unwrap_or_default();
-        assert!(
-            start_index < self.election_counter as u128,
-            "Invalid start index"
-        );
+        assert!(start_index < self.election_counter as u128, "Invalid start index");
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
 
-        self.elections
-            .iter()
-            .map(|(_, election)| election.clone())
-            .skip(start_index as usize)
-            .take(limit)
-            .collect()
+        self.elections.iter().map(|(_, election)| election.clone()).skip(start_index as usize).take(limit).collect()
     }
 
     pub fn get_election(&self, election_id: &ElectionId) -> Option<Election> {
@@ -294,7 +284,9 @@ impl Contract {
         let now = env::block_timestamp_ms();
         self.elections
             .iter()
-            .filter(|(_, election)| now >= election.start_date.0 && now < election.end_date.0)
+            .filter(|(_, election)| {
+                now >= election.start_date.0 && now < election.end_date.0
+            })
             .map(|(id, election)| (*id, election.clone()))
             .collect()
     }
@@ -314,11 +306,10 @@ impl Contract {
     }
 
     pub fn get_election_candidates(&self, election_id: ElectionId) -> Vec<Candidate> {
-        let candidates_map = self
-            .candidates
+        let candidates_map = self.candidates
             .get(&election_id)
             .expect("Election not found");
-
+        
         candidates_map.values().cloned().collect()
     }
 

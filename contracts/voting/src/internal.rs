@@ -3,6 +3,7 @@ use near_sdk::NearToken;
 use crate::*;
 
 impl Contract {
+
     pub(crate) fn assert_at_least_one_yocto(&self) {
         assert!(
             env::attached_deposit() >= NearToken::from_yoctonear(1),
@@ -34,4 +35,5 @@ impl Contract {
     pub(crate) fn assert_not_paused(&self) {
         assert!(!self.paused, "Contract is paused");
     }
+
 }
