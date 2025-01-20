@@ -189,7 +189,7 @@ async fn test_full_election_flow() -> anyhow::Result<()> {
 
     println!("state before moving funds.... : {:?}", state_before);
 
-    let _ = env.contract.as_account().transfer_near(env.admin.id(), NearToken::from_yoctonear(96970730818763262600000000)).await?;
+    // let _ = env.contract.as_account().transfer_near(env.admin.id(), NearToken::from_yoctonear(96970730818763262600000000)).await?;
 
 
     let state_p_funds = env.contract.view_account().await?;

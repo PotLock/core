@@ -227,6 +227,46 @@ impl Contract {
         log_add_candidate_event(election_id, &candidates);
     }
 
+    #[payable]
+    pub fn update_election_dates(
+        &mut self,
+        election_id: ElectionId,
+        new_start_date: U64,
+        new_end_date: U64,
+    ) {
+        self.assert_admin_or_owner();
+        
+        let election = self.elections
+            .get_mut(&election_id)
+            .expect("Election not found");
+            
+        // Ensure new dates are valid
+        assert!(new_start_date.0 < new_end_date.0, "Start date must be before end date");
+        
+        // Don't allow changing dates if election has ended
+        assert!(
+            env::block_timestamp_ms() < election.end_date.0,
+            "Cannot modify dates of ended election"
+        );
+
+        let initial_storage = env::storage_usage();
+        
+        election.start_date = new_start_date;
+        election.end_date = new_end_date;
+        
+        // Save changes
+        self.elections.flush();
+
+        refund_deposit(initial_storage);
+        
+        // Log the update using the new event
+        log_election_dates_updated_event(
+            election_id,
+            new_start_date,
+            new_end_date
+        );
+    }
+
     // pub fn review_application(
     //     &mut self,
     //     election_id: ElectionId,
@@ -341,4 +381,6 @@ impl Contract {
             }
         })
     }
+
+    
 }

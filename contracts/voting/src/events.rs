@@ -66,3 +66,29 @@ pub(crate) fn log_add_candidate_event(election_id: ElectionId, candidates: &Vec<
         .as_ref(),
     );
 }
+
+pub(crate) fn log_election_dates_updated_event(
+    election_id: ElectionId,
+    new_start_date: U64,
+    new_end_date: U64
+) {
+    env::log_str(
+        format!(
+            "{}{}",
+            EVENT_JSON_PREFIX,
+            json!({
+                "standard": "potlock",
+                "version": "1.0.0",
+                "event": "election_dates_updated",
+                "data": [
+                    {
+                        "election_id": election_id,
+                        "new_start_date": new_start_date,
+                        "new_end_date": new_end_date,
+                    }
+                ]
+            })
+        )
+        .as_ref(),
+    );
+}
