@@ -269,6 +269,7 @@ impl Contract {
                 donation.campaign_id,
                 VersionedCampaign::Current(campaign.clone()),
             );
+            self.campaigns_by_id.flush();
             // log event
             log_escrow_insert_event(&self.format_donation(&donation));
         } else {
@@ -296,85 +297,80 @@ impl Contract {
         self.donations_by_id
             .insert(donation.id, VersionedDonation::Current(donation.clone()));
 
+        self.donations_by_id.flush();
+
         // insert into appropriate donations-by-campaign mapping, according to whether donation is escrowed or not
         if escrow {
             // insert into escrowed set
-            self.escrowed_donation_ids_by_campaign_id
-                .get_mut(&donation.campaign_id)
-                .map(|v| v.insert(donation.id));
-            // ensure that donation is not in unescrowed or returned sets
-            self.unescrowed_donation_ids_by_campaign_id
-                .get_mut(&donation.campaign_id)
-                .map(|v| v.remove(&donation.id));
-            self.returned_donation_ids_by_campaign_id
-                .get_mut(&donation.campaign_id)
-                .map(|v| v.remove(&donation.id));
-        } else {
-            // insert into unescrowed set
-            self.unescrowed_donation_ids_by_campaign_id
-                .get_mut(&donation.campaign_id)
-                .map(|v| v.insert(donation.id));
-            // ensure that donation is not in escrowed or returned sets
-            self.escrowed_donation_ids_by_campaign_id
-                .get_mut(&donation.campaign_id)
-                .map(|v| v.remove(&donation.id));
-            self.returned_donation_ids_by_campaign_id
-                .get_mut(&donation.campaign_id)
-                .map(|v| v.remove(&donation.id));
-        }
 
-        // self.donation_ids_by_donor_id
-        //     .get_mut(&donation.donor_id)
-        //     .unwrap_or(&mut IterableSet::new(
-        //         StorageKey::DonationIdsByDonorIdInner {
-        //             donor_id: donation.donor_id.clone(),
-        //         },
-        //     ))
-        //     .insert(donation.id);
+            if let Some(escrowed_set) = self.escrowed_donation_ids_by_campaign_id.get_mut(&donation.campaign_id) {
+                escrowed_set.insert(donation.id);
+                escrowed_set.flush();
+            }
+                
+            // ensure that donation is not in unescrowed or returned sets
+            if let Some(unescrowed_set) = self.unescrowed_donation_ids_by_campaign_id.get_mut(&donation.campaign_id) {
+                unescrowed_set.remove(&donation.id);
+                unescrowed_set.flush();                
+            }
+
+            if let Some(returned_donations) = self.returned_donation_ids_by_campaign_id.get_mut(&donation.campaign_id) {
+                returned_donations.insert(donation.id);
+                returned_donations.flush();
+            }
+        } else {
+            if let Some(unescrowed_set) = self.unescrowed_donation_ids_by_campaign_id.get_mut(&donation.campaign_id) {
+                unescrowed_set.insert(donation.id);
+                unescrowed_set.flush(); // Flush the unescrowed set
+            }
+            if let Some(escrowed_set) = self.escrowed_donation_ids_by_campaign_id.get_mut(&donation.campaign_id) {
+                escrowed_set.remove(&donation.id);
+                escrowed_set.flush(); 
+            }
+            if let Some(returned_set) = self.returned_donation_ids_by_campaign_id.get_mut(&donation.campaign_id) {
+                returned_set.remove(&donation.id);
+                returned_set.flush();
+            }
+        }
 
         // insert into donations-by-donor mapping
         if let Some(donation_ids) = self.donation_ids_by_donor_id.get_mut(&donation.donor_id) {
             donation_ids.insert(donation.id);
+            donation_ids.flush();
         } else {
             let mut new_set = IterableSet::new(StorageKey::DonationIdsByDonorIdInner {
                 donor_id: donation.donor_id.clone(),
             });
             new_set.insert(donation.id);
+            new_set.flush();
             self.donation_ids_by_donor_id.insert(donation.donor_id.clone(), new_set);
+            self.donation_ids_by_donor_id.flush();
         }
-
-        let gettot = self.donation_ids_by_donor_id.get(&donation.donor_id).unwrap();
-        log!(
-                "{}",
-                format!(
-                    "ECHO THE DONOR {} to {}",
-                    gettot.len(),
-                    donation.donor_id
-                )
-            );
     }
 
     pub(crate) fn internal_remove_donation_record(&mut self, donation: &Donation) {
-        // remove from donations-by-id mapping
+        // Remove from donations-by-id mapping
         self.donations_by_id.remove(&donation.id);
-
-        // remove from donations-by-campaign mappings
-        self.escrowed_donation_ids_by_campaign_id
-            .get_mut(&donation.campaign_id)
-            .expect("Campaign not found")
-            .remove(&donation.id);
-
-        self.unescrowed_donation_ids_by_campaign_id
-            .get_mut(&donation.campaign_id)
-            .expect("Campaign not found")
-            .remove(&donation.id);
-
-        // remove from donations-by-donor mapping
-        self.donation_ids_by_donor_id
-            .get_mut(&donation.donor_id)
-            .expect("Donor not found")
-            .remove(&donation.id);
+        self.donations_by_id.flush();
+    
+        // Remove from donations-by-campaign mappings
+        if let Some(escrowed_set) = self.escrowed_donation_ids_by_campaign_id.get_mut(&donation.campaign_id) {
+            escrowed_set.remove(&donation.id);
+            escrowed_set.flush(); // Flush the escrowed set
+        }
+    
+        if let Some(unescrowed_set) = self.unescrowed_donation_ids_by_campaign_id.get_mut(&donation.campaign_id) {
+            unescrowed_set.remove(&donation.id);
+            unescrowed_set.flush(); // Flush the unescrowed set
+        }
+    
+        // Remove from donations-by-donor mapping
+        if let Some(donor_set) = self.donation_ids_by_donor_id.get_mut(&donation.donor_id) {
+            donor_set.remove(&donation.id);
+            donor_set.flush(); // Flush the donor set
+        }
     }
+    
 
     // GETTERS
 

@@ -18,7 +18,7 @@ pub fn init_logger() {
 pub async fn init(worker: &Worker<impl DevNetwork>) -> Result<(Contract, Account, Account)> {
     let campaigns_contract = worker
         .dev_deploy(include_bytes!(
-            "../../target/near/potlock_campaigns/potlock_campaigns.wasm"
+            "../out/main.wasm"
         ))
         .await?;
 

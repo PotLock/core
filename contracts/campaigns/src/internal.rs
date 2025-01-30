@@ -100,40 +100,63 @@ impl Contract {
         self.campaigns_by_id
             .insert(*campaign_id, VersionedCampaign::Current(campaign.clone()));
 
-        // Insert campaign ID into owner's and recipient's lists
-        self.campaign_ids_by_owner.entry(campaign.owner.clone()).or_insert_with(|| IterableSet::new(StorageKey::CampaignIdsByOwnerInner {
-                owner_id: campaign.owner.clone(),
-            }))
-            .insert(*campaign_id);
+        // flush keys
+        self.campaigns_by_id.flush();
 
+        let campaign_by_owner_set: &mut IterableSet<u64> =
+        self.campaign_ids_by_owner
+            .entry(campaign.owner.clone())
+            .or_insert_with(|| IterableSet::new(StorageKey::CampaignIdsByOwnerInner {
+                owner_id: campaign.owner.clone(),
+            }));
+        campaign_by_owner_set.insert(*campaign_id);
+        campaign_by_owner_set.flush(); // Flush the inner IterableSet
+        self.campaign_ids_by_owner.flush(); // Flush the outer mapping
+
+        let campaign_by_recipient_set: &mut IterableSet<u64> =
         self.campaign_ids_by_recipient
             .entry(campaign.recipient.clone())
-            .or_insert_with(|| IterableSet::new(
-                StorageKey::CampaignIdsByRecipientInner {
-                    recipient_id: campaign.recipient.clone(),
-                },
-            ))
-            .insert(*campaign_id);
+            .or_insert_with(|| IterableSet::new(StorageKey::CampaignIdsByRecipientInner {
+                recipient_id: campaign.recipient.clone(),
+            }));
+        campaign_by_recipient_set.insert(*campaign_id);
+        campaign_by_recipient_set.flush(); // Flush the inner IterableSet
+        self.campaign_ids_by_recipient.flush(); // Flush the outer mapping
 
-        // Insert empty donation ID lists for campaign
-        self.escrowed_donation_ids_by_campaign_id.insert(
-            *campaign_id,
-            IterableSet::new(StorageKey::EscrowedDonationIdsByCampaignIdInner {
-                campaign_id: campaign_id.clone(),
-            }),
-        );
+
+        let mut escrowed_by_camp_id = IterableSet::new(StorageKey::EscrowedDonationIdsByCampaignIdInner {
+            campaign_id: campaign_id.clone(),
+        });
+        escrowed_by_camp_id.flush();
+        self.escrowed_donation_ids_by_campaign_id
+            .insert(*campaign_id, escrowed_by_camp_id);
+        self.escrowed_donation_ids_by_campaign_id.flush();
+
+        let mut unescrowed_camp_id = IterableSet::new(StorageKey::UnescrowedDonationIdsByCampaignIdInner {
+            campaign_id: campaign_id.clone(),
+        });
+
+        unescrowed_camp_id.flush();
+
         self.unescrowed_donation_ids_by_campaign_id.insert(
             *campaign_id,
-            IterableSet::new(StorageKey::UnescrowedDonationIdsByCampaignIdInner {
-                campaign_id: campaign_id.clone(),
-            }),
+            unescrowed_camp_id,
         );
+
+        self.unescrowed_donation_ids_by_campaign_id.flush();
+
+        let mut returned_dona_id_set = IterableSet::new(StorageKey::ReturnedDonationIdsByCampaignIdInner {
+            campaign_id: campaign_id.clone(),
+        });
+
+        returned_dona_id_set.flush();
+
         self.returned_donation_ids_by_campaign_id.insert(
             *campaign_id,
-            IterableSet::new(StorageKey::ReturnedDonationIdsByCampaignIdInner {
-                campaign_id: campaign_id.clone(),
-            }),
+            returned_dona_id_set,
         );
+
+        self.returned_donation_ids_by_campaign_id.flush();
     }
 
     /// * Removes a campaign and all records of its ID from storage
@@ -145,38 +168,44 @@ impl Contract {
                 .expect("Campaign not found")
                 .clone(),
         );
+    
         // Cannot delete campaign if it has started
         assert!(
             campaign.start_ms > env::block_timestamp_ms(),
             "Cannot delete campaign once it has started"
         );
+    
         // Cannot delete campaign if it has donations
         let donations_for_campaign = self.get_donations_for_campaign(campaign_id, None, None);
         assert!(
             donations_for_campaign.is_empty(),
             "Cannot delete campaign with donations"
         );
-
+    
         // Remove campaign record
         self.campaigns_by_id.remove(&campaign_id);
-
+        self.campaigns_by_id.flush(); // Flush after removing campaign
+    
         // Remove campaign ID from owner's and recipient's lists
-        self.campaign_ids_by_owner
-            .get_mut(&campaign.owner)
-            .expect("Campaign owner not found")
-            .remove(&campaign_id);
-        self.campaign_ids_by_recipient
-            .get_mut(&campaign.recipient)
-            .expect("Campaign recipient not found")
-            .remove(&campaign_id);
-
+        if let Some(owner_campaigns) = self.campaign_ids_by_owner.get_mut(&campaign.owner) {
+            owner_campaigns.remove(&campaign_id);
+            owner_campaigns.flush(); // Flush owner's campaigns list
+        }
+    
+        if let Some(recipient_campaigns) = self.campaign_ids_by_recipient.get_mut(&campaign.recipient) {
+            recipient_campaigns.remove(&campaign_id);
+            recipient_campaigns.flush(); // Flush recipient's campaigns list
+        }
+    
         // Remove donation ID lists for campaign
-
-        self.escrowed_donation_ids_by_campaign_id
-            .remove(&campaign_id);
-        self.unescrowed_donation_ids_by_campaign_id
-            .remove(&campaign_id);
-        self.returned_donation_ids_by_campaign_id
-            .remove(&campaign_id);
+        self.escrowed_donation_ids_by_campaign_id.remove(&campaign_id);
+        self.escrowed_donation_ids_by_campaign_id.flush(); // Flush escrowed donations list
+    
+        self.unescrowed_donation_ids_by_campaign_id.remove(&campaign_id);
+        self.unescrowed_donation_ids_by_campaign_id.flush(); // Flush unescrowed donations list
+    
+        self.returned_donation_ids_by_campaign_id.remove(&campaign_id);
+        self.returned_donation_ids_by_campaign_id.flush(); // Flush returned donations list
     }
+    
 }

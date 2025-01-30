@@ -10,6 +10,7 @@ pub fn calculate_required_storage_deposit(initial_storage_usage: u64) -> Balance
 pub fn refund_deposit(initial_storage_usage: u64) {
     let attached_deposit = env::attached_deposit().as_yoctonear();
     let mut refund = attached_deposit;
+    log!("Guaging used stuffs: {} in bytes", refund);
     if env::storage_usage() > initial_storage_usage {
         // caller should pay for the extra storage they used and be refunded for the rest
         // let storage_used = env::storage_usage() - initial_storage_usage;

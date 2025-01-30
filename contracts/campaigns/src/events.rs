@@ -128,7 +128,7 @@ pub(crate) fn log_escrow_insert_event(donation: &DonationExternal) {
 }
 
 /// escrowed donation refund
-pub(crate) fn log_escrow_refund_event(temp_refund_record: &TempRefundRecord) {
+pub(crate) fn log_escrow_refund_event(temp_refund_record: &TempRefundRecord, campaign_id: &CampaignId) {
     env::log_str(
         format!(
             "{}{}",
@@ -139,17 +139,10 @@ pub(crate) fn log_escrow_refund_event(temp_refund_record: &TempRefundRecord) {
                 "event": "escrow_refund",
                 "data": [
                     {
-                        "amount": temp_refund_record.amount,
-                //         "donations": temp_refund_record.donations.iter().map(|donation| {
-                //     json!({
-                //         "id": donation.id,
-                //         "total_amount": donation.total_amount,
-                //         "net_amount": donation.net_amount,
-                //         "protocol_fee": donation.protocol_fee,
-                //         "creator_fee": donation.creator_fee,
-                //         "referrer_fee": donation.referrer_fee,
-                //     })
-                // }).collect::<Vec<_>>(),
+                        "campaign_id": campaign_id,
+                        "amount": temp_refund_record.amount.to_string(), // total amount refunded
+                        "escrow_balance": temp_refund_record.escrow_balance.to_string(), // escrow balance after refund
+                        "donations": temp_refund_record.donations.iter().map(|d| d.id).collect::<Vec<u64>>()
                     }
                 ]
             })

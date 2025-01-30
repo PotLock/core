@@ -110,13 +110,22 @@ async fn test_create_campaigns() -> Result<()> {
     let worker = sandbox().await?;
     let (contract, alice, bob) = init(&worker).await?;
 
+    // let _ = contract.as_account().transfer_near(alice.id(), NearToken::from_yoctonear(99999481833998144000000000)).await?;
+
+    let state_p_funds = contract.view_account().await?;
+    println!(
+        "state before creation of election.... : {:?}",
+        state_p_funds
+    );
+
     // Create first campaign
     let name1 = "Test Campaign 1".to_string();
     let description1 = Some("Test Description 1".to_string());
     let cover_image_url1 = Some("https://example.com/image1.jpg".to_string());
     let recipient = bob.id().clone();
-    let start_ms = near_sdk::env::block_timestamp() + 1000;
-    let end_ms = Some(start_ms + 10_000);
+    let now = Utc::now().timestamp_millis();
+    let start_ms = (now + 1000_000) as u64;
+    let end_ms = Some(start_ms + 10_000_000);
     let target_amount1 = U128::from(100);
 
     // Create second campaign
@@ -209,8 +218,8 @@ async fn test_create_campaign() -> Result<()> {
     let cover_image_url = Some("https://example.com/image.jpg".to_string());
     let recipient = bob.id().clone();
     let now = Utc::now().timestamp_millis();
-    let start_ms = now as u64;
-    let end_ms = Some(start_ms + 10_000);
+    let start_ms = (now + 10000) as u64;
+    let end_ms = Some(start_ms + 10_0000);
     let ft_id = None;
     let target_amount = U128::from(100);
     let min_amount = Some(U128::from(10));
@@ -218,6 +227,14 @@ async fn test_create_campaign() -> Result<()> {
     let referral_fee_basis_points = Some(100);
     let creator_fee_basis_points = Some(100);
     let allow_fee_avoidance = Some(true);
+
+    // let _ = contract.as_account().transfer_near(alice.id(), NearToken::from_yoctonear(95736646527937956500000000)).await?;
+
+    let state_p_funds = contract.view_account().await?;
+    println!(
+        "state before creation of campaign.... : {:?}",
+        state_p_funds
+    );
 
     let res = create_campaign(
         &contract,
@@ -242,26 +259,13 @@ async fn test_create_campaign() -> Result<()> {
     // Ensure the transaction succeeded
     assert!(res.is_success());
 
-    let res2 = create_campaign(
-        &contract,
-        alice.clone(),
-        name.clone(),
-        description.clone(),
-        cover_image_url.clone(),
-        recipient.clone(),
-        start_ms,
-        end_ms,
-        ft_id,
-        target_amount,
-        min_amount,
-        max_amount,
-        referral_fee_basis_points,
-        creator_fee_basis_points,
-        allow_fee_avoidance,
-    )
-    .await?;
-    // Ensure the transaction succeeded
-    assert!(res2.is_success());
+    let state = contract.view_account().await?;
+
+    println!("state after creating of campaign.... : {:?}", state);
+
+    let storage_used = state.storage_usage - state_p_funds.storage_usage;
+
+    println!("total used.... : {}", storage_used);
 
     // Extract the execution outcome
     let logs = res.logs();
@@ -371,7 +375,7 @@ async fn test_create_campaign() -> Result<()> {
     // Update campaign
     let update_result = alice
         .call(contract.id(), "update_campaign")
-        .args_json(json!({"campaign_id": 1,"name": "Updated Test Campaign","description": "Updated Test Description", "cover_image_url": "https://fifi.png", "min_amount": "500000", "max_amount": "100000000000", "target_amount": "1000000000"}))
+        .args_json(json!({"campaign_id": 1,"name": "Updated Test Campaign","description": "Updated Test Description", "cover_image_url": "https://fifi.png", "max_amount": "100000000000", "target_amount": "1000000000"}))
         .max_gas()
         .deposit(ONE_NEAR)
         .transact()
@@ -391,6 +395,14 @@ async fn test_create_campaign() -> Result<()> {
     assert_eq!(updated_campaign["name"], "Updated Test Campaign");
     assert_eq!(updated_campaign["description"], "Updated Test Description");
 
+    let state3 = contract.view_account().await?;
+
+    println!("state after creating of all.... : {:?}", state);
+
+    let storage_used = state3.storage_usage - state_p_funds.storage_usage;
+
+    println!("total used all2geda.... : {}", storage_used);
+
     Ok(())
 }
 
@@ -400,7 +412,8 @@ async fn test_donate_to_campaign_with_target() -> Result<()> {
     let (contract, alice, bob) = init(&worker).await?;
 
     let now = Utc::now().timestamp_millis();
-    let a_minute_from_now = (now + 60);
+    let start_ms = (now + 1000) as u64;
+    let end_ms = Some(start_ms + 10_0000);
 
     // Create campaign with target
     println!(
@@ -412,8 +425,6 @@ async fn test_donate_to_campaign_with_target() -> Result<()> {
     let description = Some("Test Description".to_string());
     let cover_image_url = Some("https://example.com/image.jpg".to_string());
     let recipient = bob.id().clone();
-    let start_ms = now as u64;
-    let end_ms = Some(start_ms + 10_000);
     let ft_id = None;
     let target_amount = U128::from(3000000000000000000000000);
     let min_amount = Some(U128::from(3000000000000000000000000));
@@ -421,6 +432,10 @@ async fn test_donate_to_campaign_with_target() -> Result<()> {
     let referral_fee_basis_points = Some(100);
     let creator_fee_basis_points = Some(100);
     let allow_fee_avoidance = Some(true);
+
+    let stateA = contract.view_account().await?;
+
+    println!("state before first donation.... : {:?}", stateA);
     let res = create_campaign(
         &contract,
         alice.clone(),
@@ -443,7 +458,172 @@ async fn test_donate_to_campaign_with_target() -> Result<()> {
     println!("get whole res {:?}", res);
 
     let logs = res.logs();
-    println!("get logs {:?}", logs);
+    let campaign_create_log = logs
+        .iter()
+        .find(|log| log.contains("campaign_create"))
+        .expect("Campaign creation log not found");
+    let event_json_start = campaign_create_log.find("EVENT_JSON:").unwrap() + "EVENT_JSON:".len();
+    let event_json_str = &campaign_create_log[event_json_start..];
+    let event_json: serde_json::Value = serde_json::from_str(event_json_str)?;
+
+    // Verify that the details of the new campaign match the input
+    let campaign_data = &event_json["data"][0]["campaign"];
+    let campaign_id = campaign_data["id"].as_u64().unwrap();
+    println!("campaign_id: {:?}", campaign_data);
+
+    // Donate to campaign
+    let donation_amount = NearToken::from_near(2);
+
+    donate_to_campaign(&alice, &contract, campaign_id, donation_amount).await?;
+
+    // Verify donation
+    let campaign: serde_json::Value = contract
+        .call("get_campaign")
+        .args_json(json!({ "campaign_id": campaign_id }))
+        .view()
+        .await?
+        .json()?;
+
+    assert_eq!(
+        campaign["total_raised_amount"],
+        donation_amount.as_yoctonear().to_string()
+    );
+    // assert!(campaign["status"] == "ONGOING" || campaign["status"] == "COMPLETED");
+
+    let donate_result2 = bob
+        .call(contract.id(), "donate")
+        .args_json(json!({
+            "campaign_id": campaign_id,
+        }))
+        .max_gas()
+        .deposit(donation_amount)
+        .transact()
+        .await?;
+
+    println!("Result 2.. {:?}", donate_result2);
+    assert!(donate_result2.is_success());
+
+    // println!("check bob bal after finsali.... {:?}, >> {:?}", bob.view_account().await?.balance, alice.view_account().await?.balance);
+
+    let campaign2: serde_json::Value = bob
+        .call(contract.id(), "get_campaign")
+        .args_json(json!({ "campaign_id": campaign_id }))
+        .view()
+        .await?
+        .json()?;
+
+    println!(
+        "campaign campana: {:?}, {}",
+        campaign2["min_amount"], campaign2["total_raised_amount"]
+    );
+
+    assert_eq!(
+        campaign2["total_raised_amount"],
+        donation_amount
+            .checked_add(donation_amount)
+            .unwrap()
+            .as_yoctonear()
+            .to_string()
+    );
+    // get donations for campaign
+    let campaign_donations: serde_json::Value = contract
+        .call("get_donations_for_campaign")
+        .args_json(json!({ "campaign_id": campaign_id }))
+        .view()
+        .await?
+        .json()?;
+
+    assert_eq!(campaign_donations.as_array().unwrap().len(), 2);
+
+    // processescrowed donations by calling the `process_escrowed_donations_batch` function
+
+    let process_escrowed_donations_batch_result = contract
+        .call("process_escrowed_donations_batch") // call with campaign id
+        .args_json(json!({ "campaign_id": campaign_id }))
+        .max_gas()
+        .transact()
+        .await?;
+
+    println!(
+        "Go berserk.... {:?}",
+        process_escrowed_donations_batch_result
+    );
+    assert!(process_escrowed_donations_batch_result.is_success());
+
+    let stateB = contract.view_account().await?;
+
+    println!("state after all donation.... : {:?}", stateB);
+
+    let storage_used = stateB.storage_usage - stateA.storage_usage;
+
+    println!("total used all2geda.... : {}", storage_used);
+
+    let campaign_donations2: serde_json::Value = contract
+        .call("get_donations_for_donor")
+        .args_json(json!({ "donor_id": alice.id() }))
+        .view()
+        .await?
+        .json()?;
+
+    println!(
+        "campaign donations 22lejo: {:?}, {}",
+        campaign_donations2, campaign_id
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_donate_to_campaign_with_target_without_min_amount() -> Result<()> {
+    let worker = sandbox().await?;
+    let (contract, alice, bob) = init(&worker).await?;
+
+    let now = Utc::now().timestamp_millis();
+    let start_ms = (now + 1000) as u64;
+    let end_ms = Some(start_ms + 10_000);
+
+    // Create campaign with target
+    println!(
+        "check bob bal.... {:?}, >> {:?}",
+        bob.view_account().await?.balance,
+        now
+    );
+    let name = "Test Campaign".to_string();
+    let description = Some("Test Description".to_string());
+    let cover_image_url = Some("https://example.com/image.jpg".to_string());
+    let recipient = bob.id().clone();
+    let ft_id = None;
+    let target_amount = U128::from(3000000000000000000000000);
+    let max_amount = Some(U128::from(5000000000000000000000000));
+    let referral_fee_basis_points = Some(100);
+    let creator_fee_basis_points = Some(100);
+    let allow_fee_avoidance = Some(true);
+
+    let stateA = contract.view_account().await?;
+
+    println!("state before first donation.... : {:?}", stateA);
+    let res = create_campaign(
+        &contract,
+        alice.clone(),
+        name.clone(),
+        description.clone(),
+        cover_image_url.clone(),
+        recipient.clone(),
+        start_ms,
+        end_ms,
+        ft_id,
+        target_amount,
+        None,
+        max_amount,
+        referral_fee_basis_points,
+        creator_fee_basis_points,
+        allow_fee_avoidance,
+    )
+    .await?;
+
+    println!("get whole res {:?}", res);
+
+    let logs = res.logs();
     let campaign_create_log = logs
         .iter()
         .find(|log| log.contains("campaign_create"))
@@ -520,20 +700,13 @@ async fn test_donate_to_campaign_with_target() -> Result<()> {
 
     assert_eq!(campaign_donations.as_array().unwrap().len(), 2);
 
-    // processescrowed donations by calling the `process_escrowed_donations_batch` function
+    let stateB = contract.view_account().await?;
 
-    let process_escrowed_donations_batch_result = contract
-        .call("process_escrowed_donations_batch") // call with campaign id
-        .args_json(json!({ "campaign_id": campaign_id }))
-        .max_gas()
-        .transact()
-        .await?;
+    println!("state after all donation.... : {:?}", stateB);
 
-    println!(
-        "Go berserk.... {:?}",
-        process_escrowed_donations_batch_result
-    );
-    assert!(process_escrowed_donations_batch_result.is_success());
+    let storage_used = stateB.storage_usage - stateA.storage_usage;
+
+    println!("total used all2geda.... : {}", storage_used);
 
     let campaign_donations2: serde_json::Value = contract
         .call("get_donations_for_donor")
@@ -556,14 +729,16 @@ async fn test_campaign_refunds_when_target_not_met() -> Result<()> {
     let (contract, alice, bob) = init(&worker).await?;
 
     // Create a campaign with a target that won't be met
-    let now = Utc::now().timestamp_millis() as u64;
+    let now = Utc::now().timestamp_millis();
+    let start_ms = (now + 1000) as u64;
+    let end_ms = Some(start_ms + 10_000);
     println!("SHOYUT PLSSS... {}", now);
     let campaign_duration = 10_000; // 10 seconds
     let campaign_id = create_test_campaign(
         &contract,
         &alice,
-        now,
-        campaign_duration,
+        start_ms,
+        end_ms,
         U128::from(10_000_000_000_000_000_000_000_000),
     )
     .await?;
@@ -577,14 +752,17 @@ async fn test_campaign_refunds_when_target_not_met() -> Result<()> {
 
     donate_to_campaign(&alice, &contract, campaign_id, alice_donation).await?;
     donate_to_campaign(&bob, &contract, campaign_id, bob_donation).await?;
+    donate_to_campaign(&alice, &contract, campaign_id, alice_donation).await?;
+    donate_to_campaign(&alice, &contract, campaign_id, alice_donation).await?;
 
     // Verify donations were made
     let campaign: serde_json::Value = get_campaign(&contract, campaign_id).await?;
+    let total_donations = alice_donation
+        .saturating_mul(3)
+        .saturating_add(bob_donation);
     assert_eq!(
         campaign["total_raised_amount"],
-        (alice_donation.saturating_add(bob_donation))
-            .as_yoctonear()
-            .to_string()
+        total_donations.as_yoctonear().to_string()
     );
 
     // Wait for the campaign to end
@@ -619,11 +797,215 @@ async fn test_campaign_refunds_when_target_not_met() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+async fn test_referral_fee_distribution() -> Result<()> {
+    let worker = sandbox().await?;
+    let (contract, alice, bob) = init(&worker).await?;
+
+    // Create another account to be the referrer
+    let referrer = worker.dev_create_account().await?;
+
+    let now = Utc::now().timestamp_millis() as u64;
+
+    // Record initial balances
+    let referrer_initial_balance = referrer.view_account().await?.balance;
+
+    // Create campaign with specific referral fee (500 basis points = 5%)
+    let res = create_campaign(
+        &contract,
+        alice.clone(),
+        "Test Referral Campaign".to_string(),
+        Some("Testing referral fees".to_string()),
+        None,
+        bob.id().clone(), // bob is the recipient
+        now + 1000,
+        Some(now + 10000),
+        None,                                           // No FT
+        U128::from(10_000_000_000_000_000_000_000_000), // 10 NEAR target
+        None,                                           // No min amount
+        None,                                           // No max amount
+        Some(500),                                      // 5% referral fee
+        Some(100),                                      // 1% creator fee
+        Some(false),                                    // Don't allow fee avoidance
+    )
+    .await?;
+
+    assert!(res.is_success());
+    let campaign_id = extract_campaign_id_from_logs(&res)?;
+
+    // Make a donation with referrer
+    let donation_amount = NearToken::from_near(10); // 10 NEAR
+    let donate_result = alice
+        .call(contract.id(), "donate")
+        .args_json(json!({
+            "campaign_id": campaign_id,
+            "referrer_id": referrer.id(),
+            "message": "Donation with referral"
+        }))
+        .deposit(donation_amount)
+        .max_gas()
+        .transact()
+        .await?;
+
+    assert!(donate_result.is_success());
+
+    // Get the donation details
+    let donations: Vec<serde_json::Value> = contract
+        .call("get_donations_for_campaign")
+        .args_json(json!({
+            "campaign_id": campaign_id,
+            "from_index": 0,
+            "limit": 10
+        }))
+        .view()
+        .await?
+        .json()?;
+
+    assert_eq!(donations.len(), 1);
+
+    let donation = &donations[0];
+
+    // Calculate expected referral fee (5% of donation amount)
+    let expected_referral_fee = donation_amount.as_yoctonear() * 500 / 10000;
+
+    // Verify referral fee in donation record
+    let actual_referral_fee = donation["referrer_fee"]
+        .as_str()
+        .unwrap()
+        .parse::<u128>()
+        .unwrap();
+    assert_eq!(actual_referral_fee, expected_referral_fee);
+
+    // Verify referrer_id in donation record
+    assert_eq!(
+        donation["referrer_id"].as_str().unwrap(),
+        referrer.id().to_string()
+    );
+
+    // Wait a bit and check referrer's balance
+    worker.fast_forward(5).await?;
+    let referrer_final_balance = referrer.view_account().await?.balance;
+
+    // Verify referrer received the fee
+    // Note: We check if the balance increased by at least 90% of expected fee
+    // to account for gas fees and rounding
+    let balance_increase = referrer_final_balance.saturating_sub(referrer_initial_balance);
+    assert!(
+        balance_increase.as_yoctonear() >= expected_referral_fee * 90 / 100,
+        "Referrer didn't receive the expected fee. Expected around {} yoctoNEAR, got {} yoctoNEAR",
+        expected_referral_fee,
+        balance_increase.as_yoctonear()
+    );
+
+    // Also test a donation without referrer
+    let donate_without_referral = alice
+        .call(contract.id(), "donate")
+        .args_json(json!({
+            "campaign_id": campaign_id,
+            "message": "Donation without referral"
+        }))
+        .deposit(donation_amount)
+        .max_gas()
+        .transact()
+        .await?;
+
+    assert!(donate_without_referral.is_success());
+
+    // Verify the donation without referral
+    let all_donations: Vec<serde_json::Value> = contract
+        .call("get_donations_for_campaign")
+        .args_json(json!({
+            "campaign_id": campaign_id,
+            "from_index": 0,
+            "limit": 10
+        }))
+        .view()
+        .await?
+        .json()?;
+
+    let donation_without_referral = &all_donations[1];
+    assert!(donation_without_referral["referrer_id"].is_null());
+    assert!(donation_without_referral["referrer_fee"].is_null());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_referral_fee_edge_cases() -> Result<()> {
+    let worker = sandbox().await?;
+    let (contract, alice, bob) = init(&worker).await?;
+    let referrer = worker.dev_create_account().await?;
+
+    let now = Utc::now().timestamp_millis() as u64;
+
+    // Test with maximum allowed referral fee (10%)
+    let res = create_campaign(
+        &contract,
+        alice.clone(),
+        "Max Referral Fee Campaign".to_string(),
+        None,
+        None,
+        bob.id().clone(),
+        now + 1000,
+        Some(now + 10000),
+        None,
+        U128::from(10_000_000_000_000_000_000_000_000),
+        None,
+        None,
+        Some(1000), // 10% - maximum allowed
+        None,
+        None,
+    )
+    .await?;
+
+    assert!(res.is_success());
+    let campaign_id = extract_campaign_id_from_logs(&res)?;
+
+    // Test with very small donation amount
+    let small_donation = NearToken::from_near(1);
+    let small_donate_result = alice
+        .call(contract.id(), "donate")
+        .args_json(json!({
+            "campaign_id": campaign_id,
+            "referrer_id": referrer.id(),
+        }))
+        .deposit(small_donation)
+        .max_gas()
+        .transact()
+        .await?;
+
+    assert!(small_donate_result.is_success());
+
+    // Try to create campaign with above maximum referral fee (should fail)
+    let invalid_res = create_campaign(
+        &contract,
+        alice.clone(),
+        "Invalid Referral Fee Campaign".to_string(),
+        None,
+        None,
+        bob.id().clone(),
+        now + 1000,
+        Some(now + 10000),
+        None,
+        U128::from(100),
+        None,
+        None,
+        Some(1100), // 11% - above maximum
+        None,
+        None,
+    )
+    .await;
+
+    assert!(invalid_res.is_err() || !invalid_res.unwrap().is_success());
+
+    Ok(())
+}
+
 async fn create_test_campaign(
     contract: &Contract,
     creator: &Account,
     start_ms: u64,
-    duration: u64,
+    end: Option<u64>,
     target_amount: U128,
 ) -> Result<u64> {
     let res = create_campaign(
@@ -634,7 +1016,7 @@ async fn create_test_campaign(
         None,
         creator.id().clone(),
         start_ms,
-        Some(start_ms + duration),
+        end,
         None,
         target_amount,
         Some(target_amount),

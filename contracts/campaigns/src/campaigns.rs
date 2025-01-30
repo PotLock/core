@@ -106,9 +106,22 @@ impl Contract {
         allow_fee_avoidance: Option<bool>,
     ) -> CampaignExternal {
         // check that start_ms is in the future and that end_ms is after start_ms
-        assert!(start_ms >= env::block_timestamp_ms(), "start_ms must be in the future");
-        env::log_str(format!("mesage the timer, {} : {}", start_ms, env::block_timestamp_ms()).as_str());
-        assert!(end_ms.unwrap_or(u64::MAX) > start_ms, "end_ms must be after start_ms");
+        assert!(
+            start_ms >= env::block_timestamp_ms(),
+            "start_ms must be in the future"
+        );
+        env::log_str(
+            format!(
+                "mesage the timer, {} : {}",
+                start_ms,
+                env::block_timestamp_ms()
+            )
+            .as_str(),
+        );
+        assert!(
+            end_ms.unwrap_or(u64::MAX) > start_ms,
+            "end_ms must be after start_ms"
+        );
         let initial_storage_usage = env::storage_usage();
         let campaign_id = self.next_campaign_id;
         let campaign = Campaign {
@@ -266,7 +279,7 @@ impl Contract {
             );
             assert!(
                 campaign.min_amount.is_none()
-                    || campaign.net_raised_amount >= campaign.min_amount.unwrap(),
+                    || campaign.net_raised_amount <= campaign.min_amount.unwrap(),
                 "Cannot edit end_ms after min_amount has been reached"
             );
             campaign.end_ms = Some(end_ms);
@@ -311,6 +324,7 @@ impl Contract {
 
         self.campaigns_by_id
             .insert(campaign_id, VersionedCampaign::Current(campaign.clone()));
+        self.campaigns_by_id.flush();
         refund_deposit(initial_storage_usage);
         let formatted = format_campaign(&campaign_id, &campaign);
         log_campaign_update_event(&formatted);

@@ -92,6 +92,8 @@ impl Contract {
             escrowed_donation_ids.remove(&donation.id);
             // add to unescrowed_donation_ids
             unescrowed_donation_ids.insert(donation.id); // TODO: revert if transfer fails
+            escrowed_donation_ids.flush();
+            unescrowed_donation_ids.flush();
         }
         // transfer payouts to recipients
         if recipient_total > 0 {
@@ -155,6 +157,8 @@ impl Contract {
                 escrowed_donation_ids.insert(*donation_id);
                 // remove donations from unescrowed_donation_ids
                 unescrowed_donation_ids.remove(donation_id);
+                escrowed_donation_ids.flush();
+                unescrowed_donation_ids.flush();
                 // revert Donation.returned_at_ms
                 let v_donation = self
                     .donations_by_id
@@ -165,6 +169,7 @@ impl Contract {
                 donation.returned_at_ms = None;
                 self.donations_by_id
                     .insert(donation_id.clone(), VersionedDonation::Current(donation));
+                self.donations_by_id.flush();
             }
         } else {
             // * SUCCESS HANDLING
@@ -270,6 +275,7 @@ impl Contract {
             // * Fee transfer failed
             // * Based on receiver_type, set relevant field on Donation (protocol_fee/referrer_fee/creator_fee) to 0
             // * NB: recipient amount has already been transferred and cannot be reverted
+            // why set to 0?
             log!("{}", format!(
                 "Error transferring fee {:#?} to {:#?} ({:#?}) for donations {:#?} in campaign {:#?}",
                 amount, recipient, receiver_type, donation_ids, campaign_id
@@ -298,28 +304,13 @@ impl Contract {
             }
         } else {
             // * SUCCESS HANDLING
-            if receiver_type == FundsReceiver::Protocol {
-                log!(
-                    "{}",
-                    format!(
-                    "Successfully transferred amount {:#?} to recipient {:#?} for campaign {:#?}",
-                    amount, recipient, campaign_id
-                )
-                );
-            } else if receiver_type == FundsReceiver::Creator {
-                log!("{}", format!(
-                "Successfully transferred amount {:#?} to protocol fee recipient {:#?} for campaign {:#?}",
-                amount, recipient, campaign_id
-            ));
-            } else if receiver_type == FundsReceiver::Referrer {
-                log!(
-                    "{}",
-                    format!(
-                    "Successfully transferred amount {:#?} to referrer {:#?} for campaign {:#?}",
-                    amount, recipient, campaign_id
-                )
-                );
-            }
+            log!(
+                "{}",
+                format!(
+                "Successfully transferred amount {:?} to {:?} {:?} for campaign {:?}",
+                amount, receiver_type, recipient, campaign_id
+            )
+            );
         }
     }
 
@@ -448,7 +439,7 @@ impl Contract {
                 .insert(campaign_id, VersionedCampaign::Current(campaign));
             // NB: keeping Campaign.total_raised_amount and Campaign.net_raised_amount the same (use these as record of total donations to campaign)
             // log event
-            // log_escrow_refund_event(&temp_refund_record);
+            log_escrow_refund_event(&temp_refund_record, &campaign_id);
         }
     }
 }
