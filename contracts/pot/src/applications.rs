@@ -71,6 +71,8 @@ pub struct Application {
     pub updated_at: Option<TimestampMs>,
     /// Notes to be added by Chef when reviewing the application
     pub review_notes: Option<String>,
+    /// users added thorugh social ad their payment account later on
+    pub payment_account: Option<AccountId>,
 }
 
 #[near_bindgen]
@@ -149,6 +151,7 @@ impl Contract {
             submitted_at: env::block_timestamp_ms(),
             updated_at: None,
             review_notes: None,
+            payment_account: None,
         };
         // charge for storage
         let initial_storage_usage = env::storage_usage();
@@ -227,6 +230,7 @@ impl Contract {
             submitted_at: env::block_timestamp_ms(),
             updated_at: Some(env::block_timestamp_ms()),
             review_notes: notes,
+            payment_account: None,
         };
 
         let initial_storage_usage = env::storage_usage();
