@@ -172,9 +172,13 @@ impl Contract {
 
     pub fn unapply(&mut self) {
         let project_id = env::predecessor_account_id();
+        let project_application_id = ProjectId::Project(project_id.clone());
+        project_application_id
+            .validate()
+            .expect("Invalid project_id");
         let application = Application::from(
             self.applications_by_id
-                .get(&project_id)
+                .get(&project_application_id)
                 .expect("Application does not exist for calling project"),
         );
         // verify that application is pending
@@ -188,7 +192,7 @@ impl Contract {
         // get current storage usage
         let initial_storage_usage = env::storage_usage();
         // remove from mappings
-        self.applications_by_id.remove(&project_id);
+        self.applications_by_id.remove(&project_application_id);
         // refund for storage freed
         refund_deposit(initial_storage_usage);
     }
@@ -379,32 +383,5 @@ impl Contract {
         notes: String,
     ) -> Application {
         self.admin_set_application_status(project_id, ApplicationStatus::Blacklisted, notes)
-    }
-
-    /// allow admin to add a user application to the approved applications list
-    pub fn admin_add_applicant_with_social_media(
-        &mut self,
-        social_media_handle: String,
-    ) -> Application {
-        self.assert_admin_or_greater();
-        // verify that the application exists
-        let mut application = Application::from(
-            self.applications_by_id
-                .get(&project_id)
-                .expect("Application does not exist"),
-        );
-        // update application
-        let previous_status = application.status.clone();
-        application.status = ApplicationStatus::Approved;
-        application.updated_at = Some(env::block_timestamp_ms());
-        application.review_notes = Some(format!(
-            "Added social media handle: {}",
-            social_media_handle
-        ));
-        // update mapping
-        self.applications_by_id.insert(&project_id, &application);
-        // insert into approved applications mapping
-        self.approved_application_ids.insert(&project_id);
-        application
     }
 }

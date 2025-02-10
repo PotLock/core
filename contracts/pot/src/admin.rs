@@ -84,33 +84,6 @@ impl Contract {
         refund_deposit(initial_storage_usage);
     }
 
-    // CHEF
-    #[payable]
-    pub fn admin_set_chef(&mut self, chef: AccountId) {
-        self.assert_admin_or_greater();
-        let initial_storage_usage = env::storage_usage();
-        self.chef.set(&chef);
-        log_update_pot_config_event(&self.get_config());
-        refund_deposit(initial_storage_usage);
-    }
-
-    #[payable]
-    pub fn admin_remove_chef(&mut self) {
-        self.assert_admin_or_greater();
-        let initial_storage_usage = env::storage_usage();
-        self.chef.remove();
-        log_update_pot_config_event(&self.get_config());
-        refund_deposit(initial_storage_usage);
-    }
-
-    #[payable]
-    pub fn admin_set_chef_fee_basis_points(&mut self, chef_fee_basis_points: u32) {
-        self.assert_admin_or_greater();
-        assert_valid_chef_fee_basis_points(chef_fee_basis_points);
-        self.chef_fee_basis_points = chef_fee_basis_points;
-        log_update_pot_config_event(&self.get_config());
-    }
-
     #[payable]
     pub fn admin_add_blacklisted_donors(&mut self, donor_ids: Vec<AccountId>) {
         self.assert_admin_or_greater();
@@ -168,7 +141,7 @@ impl Contract {
     pub fn admin_set_max_projects(&mut self, max_projects: u32) {
         self.assert_admin_or_greater();
         assert_valid_max_projects(max_projects);
-        self.max_projects = max_projects;
+        self.max_projects = Some(max_projects);
         log_update_pot_config_event(&self.get_config());
     }
 
@@ -189,61 +162,10 @@ impl Contract {
     }
 
     #[payable]
-    pub fn admin_set_round_timestamps(
-        &mut self,
-        application_start_ms: Option<TimestampMs>,
-        application_end_ms: Option<TimestampMs>,
-        public_round_start_ms: Option<TimestampMs>,
-        public_round_end_ms: Option<TimestampMs>,
-    ) {
-        self.assert_admin_or_greater();
-        self.assert_valid_timestamps(
-            application_start_ms,
-            application_end_ms,
-            public_round_start_ms,
-            public_round_end_ms,
-        );
-        if let Some(application_start_ms) = application_start_ms {
-            self.application_start_ms = application_start_ms;
-        }
-        if let Some(application_end_ms) = application_end_ms {
-            self.application_end_ms = application_end_ms;
-        }
-        if let Some(public_round_start_ms) = public_round_start_ms {
-            self.public_round_start_ms = public_round_start_ms;
-        }
-        if let Some(public_round_end_ms) = public_round_end_ms {
-            self.public_round_end_ms = public_round_end_ms;
-        }
-        log_update_pot_config_event(&self.get_config());
-    }
-
-    #[payable]
     pub fn admin_set_compliance_period_ms(&mut self, compliance_period_ms: TimestampMs) {
         self.assert_admin_or_greater();
         self.compliance_period_ms.set(&compliance_period_ms);
         log_update_pot_config_event(&self.get_config());
-    }
-
-    #[payable]
-    pub fn admin_set_remaining_funds_redistribution_recipient(&mut self, account_id: AccountId) {
-        self.assert_admin_or_greater();
-        self.assert_round_not_started(); // can only be before public round starts
-        let initial_storage_usage = env::storage_usage();
-        self.remaining_funds_redistribution_recipient
-            .set(&account_id);
-        log_update_pot_config_event(&self.get_config());
-        refund_deposit(initial_storage_usage);
-    }
-
-    #[payable]
-    pub fn admin_remove_remaining_funds_redistribution_recipient(&mut self) {
-        self.assert_admin_or_greater();
-        self.assert_round_not_started(); // can only be before public round starts
-        let initial_storage_usage = env::storage_usage();
-        self.remaining_funds_redistribution_recipient.remove();
-        log_update_pot_config_event(&self.get_config());
-        refund_deposit(initial_storage_usage);
     }
 
     #[payable]
@@ -267,12 +189,9 @@ impl Contract {
     }
 
     #[payable]
-    pub fn admin_set_min_matching_pool_donation_amount(
-        &mut self,
-        min_matching_pool_donation_amount: U128,
-    ) {
+    pub fn admin_set_min_treasury_donation_amount(&mut self, min_treasury_donation_amount: U128) {
         self.assert_admin_or_greater();
-        self.min_matching_pool_donation_amount = min_matching_pool_donation_amount.0;
+        self.min_treasury_donation_amount = min_treasury_donation_amount.0;
         log_update_pot_config_event(&self.get_config());
     }
 
@@ -349,26 +268,28 @@ impl Contract {
     }
 
     #[payable]
-    pub fn admin_set_referral_fee_matching_pool_basis_points(
+    pub fn admin_set_referral_fee_treasury_pool_basis_points(
         &mut self,
-        referral_fee_matching_pool_basis_points: u32,
+        referral_fee_treasury_pool_basis_points: u32,
     ) {
         self.assert_admin_or_greater();
         assert_valid_referral_fee_matching_pool_basis_points(
-            referral_fee_matching_pool_basis_points,
+            referral_fee_treasury_pool_basis_points,
         );
-        self.referral_fee_matching_pool_basis_points = referral_fee_matching_pool_basis_points;
+        self.referral_fee_treasury_pool_basis_points = referral_fee_treasury_pool_basis_points;
         log_update_pot_config_event(&self.get_config());
     }
 
     #[payable]
-    pub fn admin_set_referral_fee_public_round_basis_points(
+    pub fn admin_set_referral_fee_spending_pool_basis_points(
         &mut self,
-        referral_fee_public_round_basis_points: u32,
+        referral_fee_spending_pool_basis_points: u32,
     ) {
         self.assert_admin_or_greater();
-        assert_valid_referral_fee_public_round_basis_points(referral_fee_public_round_basis_points);
-        self.referral_fee_public_round_basis_points = referral_fee_public_round_basis_points;
+        assert_valid_referral_fee_public_round_basis_points(
+            referral_fee_spending_pool_basis_points,
+        );
+        self.referral_fee_spending_pool_basis_points = referral_fee_spending_pool_basis_points;
         log_update_pot_config_event(&self.get_config());
     }
 
@@ -459,12 +380,7 @@ impl Contract {
                 self.admins.insert(admin);
             }
         }
-        // set chef to provided ID or remove if not present
-        if let Some(chef) = update_args.chef {
-            self.chef.set(&chef);
-        } else {
-            self.chef.remove();
-        };
+
         if let Some(pot_name) = update_args.pot_name {
             assert_valid_pot_name(&pot_name);
             self.pot_name = pot_name;
@@ -478,7 +394,7 @@ impl Contract {
         }
         if let Some(max_projects) = update_args.max_projects {
             assert_valid_max_projects(max_projects);
-            self.max_projects = max_projects;
+            self.max_projects = Some(max_projects);
         }
         // validate timestamps
         self.assert_valid_timestamps(
@@ -487,18 +403,7 @@ impl Contract {
             update_args.public_round_start_ms,
             update_args.public_round_end_ms,
         );
-        if let Some(application_start_ms) = update_args.application_start_ms {
-            self.application_start_ms = application_start_ms;
-        }
-        if let Some(application_end_ms) = update_args.application_end_ms {
-            self.application_end_ms = application_end_ms;
-        }
-        if let Some(public_round_start_ms) = update_args.public_round_start_ms {
-            self.public_round_start_ms = public_round_start_ms;
-        }
-        if let Some(public_round_end_ms) = update_args.public_round_end_ms {
-            self.public_round_end_ms = public_round_end_ms;
-        }
+
         if let Some(compliance_period_ms) = update_args.compliance_period_ms {
             self.compliance_period_ms.set(&compliance_period_ms);
         }
@@ -512,7 +417,7 @@ impl Contract {
         if let Some(min_matching_pool_donation_amount) =
             update_args.min_matching_pool_donation_amount
         {
-            self.min_matching_pool_donation_amount = min_matching_pool_donation_amount.0;
+            self.min_treasury_donation_amount = min_matching_pool_donation_amount.0;
         }
         if let Some(sybil_wrapper_provider) = update_args.sybil_wrapper_provider {
             sybil_wrapper_provider.validate();
@@ -551,7 +456,7 @@ impl Contract {
             assert_valid_referral_fee_matching_pool_basis_points(
                 referral_fee_matching_pool_basis_points,
             );
-            self.referral_fee_matching_pool_basis_points = referral_fee_matching_pool_basis_points;
+            self.referral_fee_treasury_pool_basis_points = referral_fee_matching_pool_basis_points;
         }
         if let Some(referral_fee_public_round_basis_points) =
             update_args.referral_fee_public_round_basis_points
@@ -559,11 +464,7 @@ impl Contract {
             assert_valid_referral_fee_public_round_basis_points(
                 referral_fee_public_round_basis_points,
             );
-            self.referral_fee_public_round_basis_points = referral_fee_public_round_basis_points;
-        }
-        if let Some(chef_fee_basis_points) = update_args.chef_fee_basis_points {
-            assert_valid_chef_fee_basis_points(chef_fee_basis_points);
-            self.chef_fee_basis_points = chef_fee_basis_points;
+            self.referral_fee_spending_pool_basis_points = referral_fee_public_round_basis_points;
         }
 
         let config = self.get_config();
