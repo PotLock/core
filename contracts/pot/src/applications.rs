@@ -2,7 +2,7 @@ use borsh::de;
 
 use crate::*;
 
-pub type ProjectId = AccountId;
+// pub type ProjectId = AccountId;
 pub type ApplicationId = ProjectId; // Applications are indexed by ProjectId
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, PartialEq, Debug, Clone)]
@@ -13,6 +13,46 @@ pub enum ApplicationStatus {
     Rejected,
     InReview,
     Blacklisted,
+}
+
+#[derive(
+    BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug,
+)]
+#[serde(crate = "near_sdk::serde")]
+pub enum ProjectId {
+    Project(AccountId),
+    Social { platform: String, handle: String },
+}
+
+impl ProjectId {
+    pub fn validate(&self) -> Result<(), &'static str> {
+        match self {
+            ProjectId::Project(_account_id) => {
+                // AccountId validation is handled by NEAR SDK
+                Ok(())
+            }
+            ProjectId::Social { platform, handle } => {
+                if platform.is_empty() {
+                    return Err("Platform cannot be empty");
+                }
+                if handle.is_empty() {
+                    return Err("Handle cannot be empty");
+                }
+                // Add more platform-specific validations
+                match platform.to_lowercase().as_str() {
+                    "twitter" | "github" | "discord" => Ok(()),
+                    _ => Err("Unsupported platform"),
+                }
+            }
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            ApplicationId::Project(account_id) => format!("project:{}", account_id),
+            ApplicationId::Social { platform, handle } => format!("social:{}:{}", platform, handle),
+        }
+    }
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Clone)]
@@ -40,9 +80,15 @@ impl Contract {
         let project_id = env::predecessor_account_id(); // TODO: consider renaming to "applicant_id" to make it less opinionated (e.g. maybe developers are applying, and they are not exactly a "project")
                                                         // chef, admin & owner cannot apply
         assert!(
-            !self.is_chef(Some(&project_id)) && !self.is_owner_or_admin(Some(&project_id)),
-            "Chef, admin & owner cannot apply"
+            !self.is_owner_or_admin(Some(&project_id)),
+            "admin & owner cannot apply"
         );
+        let project_application_id = ProjectId::Project(project_id.clone());
+        project_application_id
+            .validate()
+            .expect("Invalid project_id");
+        self.assert_application_period_open();
+        self.assert_pot_active();
         let deposit = env::attached_deposit();
         if let Some(registry_provider) = self.registry_provider.get() {
             // decompose registry provider
@@ -55,11 +101,11 @@ impl Contract {
                     .then(
                         Self::ext(env::current_account_id())
                             .with_static_gas(XCC_GAS)
-                            .assert_can_apply_callback(project_id.clone(), message, deposit),
+                            .assert_can_apply_callback(project_application_id, message, deposit),
                     ),
             )
         } else {
-            PromiseOrValue::Value(self.handle_apply(project_id, message, deposit))
+            PromiseOrValue::Value(self.handle_apply(project_application_id, message, deposit))
         }
     }
 
@@ -147,6 +193,47 @@ impl Contract {
         refund_deposit(initial_storage_usage);
     }
 
+    #[payable]
+    pub fn admin_add_social_application(
+        &mut self,
+        platform: String,
+        handle: String,
+        message: Option<String>,
+        notes: Option<String>,
+    ) -> Application {
+        self.assert_owner();
+
+        let application_id = ProjectId::Social {
+            platform: platform.clone(),
+            handle: handle.clone(),
+        };
+
+        // Validate application ID
+        application_id.validate().expect("Invalid application ID");
+
+        assert!(
+            self.applications_by_id.get(&application_id).is_none(),
+            "Application already exists"
+        );
+
+        let application = Application {
+            project_id: application_id.clone(),
+            message,
+            status: ApplicationStatus::Approved,
+            submitted_at: env::block_timestamp_ms(),
+            updated_at: Some(env::block_timestamp_ms()),
+            review_notes: notes,
+        };
+
+        let initial_storage_usage = env::storage_usage();
+        self.applications_by_id
+            .insert(&application_id, &application);
+        self.approved_application_ids.insert(&application_id);
+        refund_deposit(initial_storage_usage);
+
+        application
+    }
+
     pub fn get_applications(
         &self,
         from_index: Option<u64>,
@@ -213,13 +300,13 @@ impl Contract {
     }
 
     #[payable]
-    pub fn chef_set_application_status(
+    pub fn admin_set_application_status(
         &mut self,
         project_id: ProjectId,
         status: ApplicationStatus,
         notes: String,
     ) -> Application {
-        self.assert_chef_or_greater();
+        self.assert_admin_or_greater();
         // verify that the application exists
         let mut application = Application::from(
             self.applications_by_id
@@ -250,30 +337,30 @@ impl Contract {
     // TODO: consider removing convenience methods below
 
     #[payable]
-    pub fn chef_mark_application_approved(
+    pub fn admin_mark_application_approved(
         &mut self,
         project_id: ProjectId,
         notes: String,
     ) -> Application {
-        self.chef_set_application_status(project_id, ApplicationStatus::Approved, notes)
+        self.admin_set_application_status(project_id, ApplicationStatus::Approved, notes)
     }
 
     #[payable]
-    pub fn chef_mark_application_rejected(
+    pub fn admin_mark_application_rejected(
         &mut self,
         project_id: ProjectId,
         notes: String,
     ) -> Application {
-        self.chef_set_application_status(project_id, ApplicationStatus::Rejected, notes)
+        self.admin_set_application_status(project_id, ApplicationStatus::Rejected, notes)
     }
 
     #[payable]
-    pub fn chef_mark_application_in_review(
+    pub fn admin_mark_application_in_review(
         &mut self,
         project_id: ProjectId,
         notes: String,
     ) -> Application {
-        self.chef_set_application_status(project_id, ApplicationStatus::InReview, notes)
+        self.admin_set_application_status(project_id, ApplicationStatus::InReview, notes)
     }
 
     #[payable]
@@ -282,15 +369,42 @@ impl Contract {
         project_id: ProjectId,
         notes: String,
     ) -> Application {
-        self.chef_set_application_status(project_id, ApplicationStatus::Pending, notes)
+        self.admin_set_application_status(project_id, ApplicationStatus::Pending, notes)
     }
 
     #[payable]
-    pub fn chef_mark_application_blacklisted(
+    pub fn admin_mark_application_blacklisted(
         &mut self,
         project_id: ProjectId,
         notes: String,
     ) -> Application {
-        self.chef_set_application_status(project_id, ApplicationStatus::Blacklisted, notes)
+        self.admin_set_application_status(project_id, ApplicationStatus::Blacklisted, notes)
+    }
+
+    /// allow admin to add a user application to the approved applications list
+    pub fn admin_add_applicant_with_social_media(
+        &mut self,
+        social_media_handle: String,
+    ) -> Application {
+        self.assert_admin_or_greater();
+        // verify that the application exists
+        let mut application = Application::from(
+            self.applications_by_id
+                .get(&project_id)
+                .expect("Application does not exist"),
+        );
+        // update application
+        let previous_status = application.status.clone();
+        application.status = ApplicationStatus::Approved;
+        application.updated_at = Some(env::block_timestamp_ms());
+        application.review_notes = Some(format!(
+            "Added social media handle: {}",
+            social_media_handle
+        ));
+        // update mapping
+        self.applications_by_id.insert(&project_id, &application);
+        // insert into approved applications mapping
+        self.approved_application_ids.insert(&project_id);
+        application
     }
 }

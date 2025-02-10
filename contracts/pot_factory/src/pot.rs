@@ -33,35 +33,96 @@ pub struct PotExternal {
     deployed_by: AccountId,
     deployed_at_ms: TimestampMs,
 }
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+pub enum GovernanceType {
+    Admin,
+    DAO(AccountId),
+}
 
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+enum ReupPolicy {
+    Fixed {
+        amount: u128,
+        interval: u64,
+    },
+    Threshold {
+        min_balance: u128,
+        refill_amount: u128,
+        interval: u64,
+    },
+    AIControlled {
+        strategy: String,
+    }, // JSON or IPFS link to AI strategy
+    None,
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+pub enum PotStatus {
+    Cooking, // Pot is active
+    Idle,    // Pot is not paused
+    Closed,  // Pot is closed
+}
 /// Arguments that must be provided to deploy a new Pot; these must be kept up-to-date with the Pot contract
+// #[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
+// #[serde(crate = "near_sdk::serde")]
+// pub struct PotArgs {
+//     pub owner: Option<AccountId>,
+//     pub admins: Option<Vec<AccountId>>,
+//     pub chef: Option<AccountId>,
+//     pub pot_name: String,
+//     pub pot_description: String,
+//     pub tags: Option<Vec<String>>,
+//     pub max_projects: u32,
+//     pub application_start_ms: TimestampMs,
+//     pub application_end_ms: TimestampMs,
+//     pub public_round_start_ms: TimestampMs,
+//     pub public_round_end_ms: TimestampMs,
+//     pub min_matching_pool_donation_amount: Option<U128>,
+//     pub cooldown_period_ms: Option<u64>,
+//     pub compliance_period_ms: Option<u64>,
+//     pub allow_remaining_funds_redistribution: bool,
+//     pub remaining_funds_redistribution_recipient: Option<AccountId>,
+//     pub registry_provider: Option<ProviderId>,
+//     pub sybil_wrapper_provider: Option<ProviderId>,
+//     pub custom_sybil_checks: Option<Vec<CustomSybilCheck>>,
+//     pub custom_min_threshold_score: Option<u32>,
+//     pub referral_fee_matching_pool_basis_points: u32,
+//     pub referral_fee_public_round_basis_points: u32,
+//     pub chef_fee_basis_points: u32,
+//     pub protocol_config_provider: Option<ProviderId>,
+//     pub source_metadata: ContractSourceMetadata,
+// }
+
 #[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct PotArgs {
+    // Basic pot configuration
     pub owner: Option<AccountId>,
     pub admins: Option<Vec<AccountId>>,
-    pub chef: Option<AccountId>,
+    // pub chef: Option<AccountId>,
+
+    // Pot metadata
     pub pot_name: String,
     pub pot_description: String,
-    pub tags: Option<Vec<String>>,
-    pub max_projects: u32,
-    pub application_start_ms: TimestampMs,
-    pub application_end_ms: TimestampMs,
-    pub public_round_start_ms: TimestampMs,
-    pub public_round_end_ms: TimestampMs,
-    pub min_matching_pool_donation_amount: Option<U128>,
-    pub cooldown_period_ms: Option<u64>,
-    pub compliance_period_ms: Option<u64>,
-    pub allow_remaining_funds_redistribution: bool,
-    pub remaining_funds_redistribution_recipient: Option<AccountId>,
-    pub registry_provider: Option<ProviderId>,
-    pub sybil_wrapper_provider: Option<ProviderId>,
-    pub custom_sybil_checks: Option<Vec<CustomSybilCheck>>,
-    pub custom_min_threshold_score: Option<u32>,
-    pub referral_fee_matching_pool_basis_points: u32,
-    pub referral_fee_public_round_basis_points: u32,
-    pub chef_fee_basis_points: u32,
+    pub max_projects: Option<u32>, // max number of projects that can be funded, optional.
+    pub pot_operation_rules: String,
+    pub token_address: Option<AccountId>, // token address for the pot, optional.
+    pub governance_type: GovernanceType,  // governance type for the pot, optional.
+    pub reup_policy: ReupPolicy,          // reup policy for the pot, optional.
+    pub applications_open: bool,
+    pub pot_status: PotStatus,
+    // Protocol Fee config
     pub protocol_config_provider: Option<ProviderId>,
+
+    // Fee configuration (these could be updated per round if needed)
+    pub referral_fee_treasury_pool_basis_points: u32,
+    pub referral_fee_public_round_basis_points: u32,
+    // pub chef_fee_basis_points: u32,
+
+    // Contract metadata
     pub source_metadata: ContractSourceMetadata,
 }
 

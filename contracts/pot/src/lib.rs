@@ -99,6 +99,37 @@ pub struct CustomSybilCheck {
     weight: SybilProviderWeight,
 }
 
+/// Governance type enum of admin-based or dao
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+pub enum GovernanceType {
+    Admin,
+    DAO(AccountId),
+}
+
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+enum ReupPolicy {
+    Fixed {
+        amount: u128,
+        interval: u64,
+    },
+    Threshold {
+        min_balance: u128,
+        refill_amount: u128,
+        interval: u64,
+    },
+}
+
+/// Pot status
+#[derive(BorshDeserialize, BorshSerialize, Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(crate = "near_sdk::serde")]
+pub enum PotStatus {
+    Cooking, // Pot is active
+    Idle,    // Pot is not paused
+    Closed,  // Pot is closed
+}
+
 /// Pot Contract (funding round)
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
@@ -110,35 +141,46 @@ pub struct Contract {
     admins: UnorderedSet<AccountId>,
     /// Address (ID) of Pot manager ("chef"). This account is responsible for managing the Pot, e.g. reviewing applications, setting payouts, etc.
     /// Optional because it may be set after deployment.
-    chef: LazyOption<AccountId>,
+    // chef: LazyOption<AccountId>,
 
     // POT CONFIG
     /// User-facing name for this Pot
     pot_name: String,
     /// User-facing description for this Pot
     pot_description: String,
+    /// ipfs hash to core config
+    pot_operation_rules: String,
+    token_address: Option<AccountId>, // Optional associated token
+    applications_open: bool,
+
+    reup_policy: ReupPolicy,
+    last_reup: Option<TimestampMs>,
+
+    pot_status: PotStatus,
+
+    governance_type: GovernanceType,
     /// Tags, e.g. to indicate type of pot
     tags: Vec<String>,
     /// Maximum number of projects that can be approved for the round. Considerations include gas limits for payouts, etc.
-    max_projects: u32,
+    max_projects: Option<u32>,
     /// Base currency for the round
     /// * NB: currently only `"near"` is supported
     base_currency: AccountId,
     /// MS Timestamp when applications can be submitted from
-    application_start_ms: TimestampMs,
-    /// MS Timestamp when applications can be submitted until
-    application_end_ms: TimestampMs,
-    /// MS Timestamp when the public round starts
-    public_round_start_ms: TimestampMs,
-    /// MS Timestamp when the round ends
-    public_round_end_ms: TimestampMs,
+    // application_start_ms: TimestampMs,
+    // /// MS Timestamp when applications can be submitted until
+    // application_end_ms: TimestampMs,
+    // /// MS Timestamp when the public round starts
+    // spending_pool_start_ms: TimestampMs,
+    // /// MS Timestamp when the round ends
+    // spending_pool_end_ms: TimestampMs,
     /// Account ID that deployed this Pot contract (set at deployment, cannot be updated)
     deployed_by: AccountId,
     /// Contract ID + method name of registry provider that should be queried when projects apply to round. Method specified must receive "account_id" and return bool indicating registration status.
     /// * Optional because not all Pots will require registration, and those that do might set after deployment.
     registry_provider: LazyOption<ProviderId>,
     /// Minimum amount that can be donated to the matching pool
-    min_matching_pool_donation_amount: u128,
+    min_treasury_donation_amount: u128,
 
     // SYBIL RESISTANCE
     /// Sybil contract address & method name that will be called to verify humanness. If `None`, no checks will be made.
@@ -149,20 +191,20 @@ pub struct Contract {
     custom_min_threshold_score: LazyOption<u32>,
 
     // FEES
-    /// Basis points (1/100 of a percent) that should be paid to an account that refers a matching pool donor (paid at the point when a matching pool donation comes in)
-    referral_fee_matching_pool_basis_points: u32,
+    /// Basis points (1/100 of a percent) that should be paid to an account that refers a treasury pool donor (paid at the point when donation comes into the treasury pool)
+    referral_fee_treasury_pool_basis_points: u32,
     /// Basis points (1/100 of a percent) that should be paid to an account that refers a public donor (paid at the point when a public donation comes in)
-    referral_fee_public_round_basis_points: u32,
+    referral_fee_spending_pool_basis_points: u32,
     /// Chef's fee for managing the round. Gets taken out of each donation as they come in and are paid out
-    chef_fee_basis_points: u32,
 
     // FUNDS & BALANCES
     /// Total matching pool donations
-    total_matching_pool_donations: u128,
+    total_treasury_pool_donations: u128,
     /// Amount of matching funds available (not yet paid out)
-    matching_pool_balance: u128,
+    treasury_balance: Balance,
+    spending_balance: Balance,
     /// Total public donations
-    total_public_donations: u128,
+    total_spending_pool_donations: u128,
 
     // PAYOUTS
     /// Length of cooldown period (in ms) after which payouts can be set by Chef
@@ -173,14 +215,6 @@ pub struct Contract {
     compliance_period_ms: LazyOption<u64>,
     /// Compliance period starts when payouts are set by Chef
     compliance_end_ms: LazyOption<TimestampMs>,
-    /// Indicates whether matching pool can be redistributed to remaining_funds_redistribution_recipient after compliance period ends. Must be specified at deployment, and CANNOT be changed afterwards.
-    allow_remaining_funds_redistribution: bool,
-    /// Recipient of matching pool redistribution (if enabled). CANNOT be changed after public round has started.
-    remaining_funds_redistribution_recipient: LazyOption<AccountId>,
-    /// Timestamp when redistribution happened
-    remaining_funds_redistributed_at_ms: LazyOption<TimestampMs>,
-    /// Memo for funds redistribution
-    remaining_funds_redistribution_memo: LazyOption<String>,
     /// Indicates whether all projects been paid out (this would be considered the "end-of-lifecycle" for the Pot)
     all_paid_out: bool, // NB: this doesn't mean much and could probably be removed
 
@@ -192,14 +226,17 @@ pub struct Contract {
     /// All donation records
     donations_by_id: UnorderedMap<DonationId, Donation>,
     /// IDs of public round donations (made by donors who are not Patrons, during public round)
-    public_round_donation_ids: UnorderedSet<DonationId>,
+    spending_pool_donation_ids: UnorderedSet<DonationId>,
     /// IDs of matching pool donations (made by Patrons)
-    matching_pool_donation_ids: UnorderedSet<DonationId>,
+    treasury_pool_donation_ids: UnorderedSet<DonationId>,
     /// IDs of donations made to a given project
     donation_ids_by_project_id: LookupMap<ProjectId, UnorderedSet<DonationId>>,
     /// IDs of donations made by a given donor (user)
     donation_ids_by_donor_id: LookupMap<AccountId, UnorderedSet<DonationId>>,
     // payouts
+    current_payout_batch_id: u32,
+    payout_ids_by_batch_id: UnorderedMap<u32, UnorderedSet<PayoutId>>,
+    payout_batch_by_id: UnorderedMap<u32, PayoutBatch>,
     payouts_by_id: UnorderedMap<PayoutId, Payout>, // can iterate over this to get all payouts
     payout_ids_by_recipient_id: LookupMap<ProjectId, UnorderedSet<PayoutId>>,
     /// Challenges to payouts (if any) made during cooldown period
@@ -243,7 +280,8 @@ pub enum StorageKey {
     DonationIdsByDonorIdInner { donor_id: AccountId },
     PayoutsById,
     PayoutIdsByRecipientId,
-    PayoutIdsByRecipientIdInner { recipient_id: AccountId },
+    PayoutIdsByRecipientIdInner { recipient_id: ProjectId },
+    PayoutIdsByBatchIdInner { batch_id: u32 },
     PayoutsChallenges,
     BlacklistedDonors,
 }
@@ -255,23 +293,22 @@ impl Contract {
         // permissioned accounts
         owner: Option<AccountId>, // defaults to signer account if not provided
         admins: Option<Vec<AccountId>>,
-        chef: Option<AccountId>,
 
         // pot config
         pot_name: String,
         pot_description: String,
         tags: Option<Vec<String>>,
-        max_projects: u32,
-        application_start_ms: TimestampMs,
-        application_end_ms: TimestampMs,
-        public_round_start_ms: TimestampMs,
-        public_round_end_ms: TimestampMs,
+        max_projects: Option<u32>,
         registry_provider: Option<ProviderId>,
-        min_matching_pool_donation_amount: Option<U128>,
+        min_treasury_donation_amount: Option<U128>,
         cooldown_period_ms: Option<u64>,
         compliance_period_ms: Option<u64>,
-        allow_remaining_funds_redistribution: bool,
-        remaining_funds_redistribution_recipient: Option<AccountId>,
+        pot_operation_rules: String,
+        token_address: Option<AccountId>,
+        governance_type: GovernanceType,
+        reup_policy: ReupPolicy,
+        applications_open: bool,
+        pot_status: PotStatus,
 
         // sybil resistance
         sybil_wrapper_provider: Option<ProviderId>,
@@ -279,9 +316,8 @@ impl Contract {
         custom_min_threshold_score: Option<u32>,
 
         // fees
-        referral_fee_matching_pool_basis_points: u32, // this could be optional with a default, but better to set explicitly for now
-        referral_fee_public_round_basis_points: u32, // this could be optional with a default, but better to set explicitly for now
-        chef_fee_basis_points: u32,
+        referral_fee_treasury_pool_basis_points: u32, // this could be optional with a default, but better to set explicitly for now
+        referral_fee_spending_pool_basis_points: u32, // this could be optional with a default, but better to set explicitly for now
 
         // other
         protocol_config_provider: Option<ProviderId>,
@@ -301,7 +337,6 @@ impl Contract {
                 },
                 StorageKey::Admins,
             ),
-            chef: LazyOption::new(StorageKey::Chef, chef.as_ref()),
 
             // pot config
             pot_name,
@@ -309,19 +344,20 @@ impl Contract {
             tags: tags.unwrap_or(vec![]),
             max_projects,
             base_currency: AccountId::new_unchecked("near".to_string()),
-            application_start_ms,
-            application_end_ms,
-            public_round_start_ms,
-            public_round_end_ms,
+            pot_operation_rules,
+            pot_status,
+            applications_open,
             deployed_by: env::signer_account_id(),
             registry_provider: LazyOption::new(
                 StorageKey::RegistryProvider,
                 registry_provider.as_ref(),
             ),
-            min_matching_pool_donation_amount: min_matching_pool_donation_amount
-                .unwrap_or(U128(1))
-                .into(), // default to 1 YoctoNEAR
-
+            min_treasury_donation_amount: min_treasury_donation_amount.unwrap_or(U128(1)).into(), // default to 1 YoctoNEAR
+            token_address,
+            governance_type,
+            reup_policy,
+            spending_balance: 0,
+            last_reup: None,
             // sybil resistance
             sybil_wrapper_provider: LazyOption::new(
                 StorageKey::SybilContractId,
@@ -337,14 +373,13 @@ impl Contract {
             ),
 
             // fees
-            referral_fee_matching_pool_basis_points,
-            referral_fee_public_round_basis_points,
-            chef_fee_basis_points,
+            referral_fee_treasury_pool_basis_points,
+            referral_fee_spending_pool_basis_points,
 
             // funds and balances
-            total_matching_pool_donations: 0,
-            matching_pool_balance: 0,
-            total_public_donations: 0,
+            total_treasury_pool_donations: 0,
+            treasury_balance: 0,
+            total_spending_pool_donations: 0,
 
             // payouts
             cooldown_period_ms: cooldown_period_ms.unwrap_or(DEFAULT_COOLDOWN_PERIOD_MS),
@@ -354,27 +389,14 @@ impl Contract {
                 compliance_period_ms.as_ref(),
             ),
             compliance_end_ms: LazyOption::new(StorageKey::ComplianceEndMs, None),
-            allow_remaining_funds_redistribution,
-            remaining_funds_redistribution_recipient: LazyOption::new(
-                StorageKey::MatchingPoolRedistributionRecipient,
-                remaining_funds_redistribution_recipient.as_ref(),
-            ),
-            remaining_funds_redistributed_at_ms: LazyOption::new(
-                StorageKey::MatchingPoolRedistributedAtMs,
-                None,
-            ),
-            remaining_funds_redistribution_memo: LazyOption::new(
-                StorageKey::MatchingPoolRedistributionMemo,
-                None,
-            ),
             all_paid_out: false,
 
             // mappings
             applications_by_id: UnorderedMap::new(StorageKey::ApplicationsById),
             approved_application_ids: UnorderedSet::new(StorageKey::ApprovedApplicationIds),
             donations_by_id: UnorderedMap::new(StorageKey::DonationsById),
-            public_round_donation_ids: UnorderedSet::new(StorageKey::PublicRoundDonationIds),
-            matching_pool_donation_ids: UnorderedSet::new(StorageKey::MatchingPoolDonationIds),
+            spending_pool_donation_ids: UnorderedSet::new(StorageKey::PublicRoundDonationIds),
+            treasury_pool_donation_ids: UnorderedSet::new(StorageKey::MatchingPoolDonationIds),
             donation_ids_by_project_id: LookupMap::new(StorageKey::DonationIdsByProjectId),
             donation_ids_by_donor_id: LookupMap::new(StorageKey::DonationIdsByDonorId),
             payout_ids_by_recipient_id: LookupMap::new(StorageKey::PayoutIdsByRecipientId),
@@ -394,9 +416,64 @@ impl Contract {
         }
     }
 
-    pub fn is_round_active(&self) -> bool {
+    // pub fn is_round_active(&self) -> bool {
+    //     let block_timestamp_ms = env::block_timestamp_ms();
+    //     block_timestamp_ms >= self.spending_pool_start_ms
+    //         && block_timestamp_ms < self.spending_pool_end_ms
+    // }
+    // method to attempt reup based on the set reup policy, if reup is fixed then check the last reup time and if it is time to reup based on the interval then reup,
+    // if reup is threshold then check the balance and if it is below the threshold and interval since last reup has passed then reup.
+    // do reup by taking amount from treasury_balance and adding to spending_balance, sodo checks to assert sufficient balance in treasury_balance.
+    pub fn reup(&mut self) {
         let block_timestamp_ms = env::block_timestamp_ms();
-        block_timestamp_ms >= self.public_round_start_ms
-            && block_timestamp_ms < self.public_round_end_ms
+        match self.reup_policy {
+            ReupPolicy::Fixed { amount, interval } => {
+                if block_timestamp_ms - self.last_reup >= interval {
+                    assert!(
+                        self.treasury_balance >= amount,
+                        "Insufficient balance in treasury"
+                    );
+                    self.treasury_balance = self.treasury_balance.saturating_sub(amount);
+                    self.spending_balance = self.spending_balance.saturating_add(amount);
+                    self.last_reup = Some(block_timestamp_ms);
+                }
+            }
+            ReupPolicy::Threshold {
+                min_balance,
+                refill_amount,
+                interval,
+            } => {
+                // assert treausry less than min_balance and interval since last reup has passed then reup
+                assert!(
+                    self.treasury_balance < min_balance && block_timestamp_ms - self.last_reup >= interval,
+                    "Treasury balance is still above min balance or interval since last reup has not passed"
+
+                );
+                assert!(
+                    self.treasury_balance >= refill_amount,
+                    "Insufficient balance in treasury"
+                );
+                self.treasury_balance = self.treasury_balance.saturating_sub(refill_amount);
+                self.spending_balance = self.spending_balance.saturating_add(refill_amount);
+                self.last_reup = block_timestamp_ms;
+            }
+        }
+    }
+
+    pub fn update_pot_operation_rules(&mut self, new_rules: String) {
+        // Check governance type and permissions
+        match &self.governance_type {
+            GovernanceType::DAO(dao_account) => {
+                require!(
+                    env::predecessor_account_id() == *dao_account,
+                    "Only the DAO can update pot operation rules"
+                );
+                self.pot_operation_rules = new_rules;
+            }
+            GovernanceType::Admin => {
+                self.assert_admin_or_greater();
+                self.pot_operation_rules = new_rules;
+            }
+        }
     }
 }

@@ -39,44 +39,44 @@ impl Contract {
         self.assert_at_least_one_yocto();
     }
 
-    pub(crate) fn is_chef(&self, account_id: Option<&AccountId>) -> bool {
-        if let Some(chef) = self.chef.get() {
-            account_id.unwrap_or(&env::predecessor_account_id()) == &chef
-        } else {
-            false
-        }
-    }
+    // pub(crate) fn is_chef(&self, account_id: Option<&AccountId>) -> bool {
+    //     if let Some(chef) = self.chef.get() {
+    //         account_id.unwrap_or(&env::predecessor_account_id()) == &chef
+    //     } else {
+    //         false
+    //     }
+    // }
 
     /// Asserts that caller is, at minimum, a chef (admin or owner also allowed)
     pub(crate) fn assert_chef_or_greater(&self) {
         assert!(
-            self.is_chef(None) || self.is_admin(None) || self.is_owner(None),
+            self.is_admin(None) || self.is_owner(None),
             "Only chef, admin or owner can call this method"
         );
         // require caller to attach at least one yoctoNEAR for security purposes
         self.assert_at_least_one_yocto();
     }
 
-    pub(crate) fn assert_round_not_started(&self) {
-        assert!(
-            env::block_timestamp_ms() < self.public_round_start_ms,
-            "Round has started"
-        );
-    }
+    // pub(crate) fn assert_round_not_started(&self) {
+    //     assert!(
+    //         env::block_timestamp_ms() < self.public_round_start_ms,
+    //         "Round has started"
+    //     );
+    // }
 
-    pub(crate) fn assert_round_closed(&self) {
-        assert!(
-            env::block_timestamp_ms() >= self.public_round_end_ms,
-            "Round is still open"
-        );
-    }
+    // pub(crate) fn assert_round_closed(&self) {
+    //     assert!(
+    //         env::block_timestamp_ms() >= self.public_round_end_ms,
+    //         "Round is still open"
+    //     );
+    // }
 
-    pub(crate) fn assert_round_not_closed(&self) {
-        assert!(
-            env::block_timestamp_ms() < self.public_round_end_ms,
-            "Round is closed"
-        );
-    }
+    // pub(crate) fn assert_round_not_closed(&self) {
+    //     assert!(
+    //         env::block_timestamp_ms() < self.public_round_end_ms,
+    //         "Round is closed"
+    //     );
+    // }
 
     pub(crate) fn assert_approved_application(&self, project_id: &ProjectId) {
         assert!(
@@ -125,27 +125,31 @@ impl Contract {
         }
     }
 
-    pub(crate) fn is_application_period_open(&self) -> bool {
-        let block_timestamp_ms = env::block_timestamp_ms();
-        block_timestamp_ms >= self.application_start_ms
-            && block_timestamp_ms < self.application_end_ms
+    pub(crate) fn is_application_open(&self) -> bool {
+        self.applications_open
     }
 
     pub(crate) fn assert_application_period_open(&self) {
-        assert!(
-            self.is_application_period_open(),
-            "Application period is not open"
-        );
+        assert!(self.is_application_open(), "Application period is not open");
     }
 
-    pub(crate) fn assert_round_active(&self) {
-        assert!(self.is_round_active(), "Public round is not active");
-    }
+    // pub(crate) fn assert_round_active(&self) {
+    //     assert!(self.is_round_active(), "Public round is not active");
+    // }
 
     pub(crate) fn assert_max_projects_not_reached(&self) {
         assert!(
             self.approved_application_ids.len() < self.max_projects.into(),
             "Max projects reached"
         );
+    }
+
+    pub(crate) fn is_pot_active(&self) -> bool {
+        self.pot_status == PotStatus::Cooking
+    }
+
+    // assert that the pot status is active
+    pub(crate) fn assert_pot_active(&self) {
+        assert!(self.is_pot_active(), "Pot is not active");
     }
 }
