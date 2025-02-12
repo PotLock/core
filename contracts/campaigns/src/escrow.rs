@@ -16,6 +16,8 @@ impl Contract {
     /// * Process (aka move out of escrow) a batch of escrowed donations for a campaign
     /// * Can be called by anyone willing to pay the gas (max gas to avoid hitting gas limits)
     /// * Will return void without panicking if min_amount has not been reached
+    
+    #[payable]
     pub fn process_escrowed_donations_batch(&mut self, campaign_id: CampaignId) {
         assert!(
             env::prepaid_gas() >= Gas::from_tgas(MAX_TGAS),
@@ -314,6 +316,7 @@ impl Contract {
         }
     }
 
+    #[payable]
     pub fn process_refunds_batch(&mut self, campaign_id: CampaignId) {
         // OBJECTIVES:
         // Donors must always be able to get their money out if campaign has ended and minimum amount has not been reached, and they have not been refunded yet
@@ -363,7 +366,7 @@ impl Contract {
             // temporarily remove donation record to check how much storage cost is (donation won't actually be deleted on refund)
             self.internal_remove_donation_record(&donation);
             let storage_after = env::storage_usage();
-            refund_amount -= Balance::from(storage_after - storage_before)
+            refund_amount -= Balance::from(storage_before - storage_after)
                 * env::storage_byte_cost().as_yoctonear();
             // add donation record back (as an escrowed donation)
             self.internal_insert_donation_record(&donation, true);
@@ -441,5 +444,37 @@ impl Contract {
             // log event
             log_escrow_refund_event(&temp_refund_record, &campaign_id);
         }
+    }
+
+    /// Returns true if there are escrowed donations to process and campaign has met its minimum amount
+    pub fn has_escrowed_donations_to_process(&self, campaign_id: CampaignId) -> bool {
+        if let Some(campaign) = self.campaigns_by_id.get(&campaign_id) {
+            let campaign = Campaign::from(campaign.clone());
+            let min_amount = campaign.min_amount.unwrap_or(u128::MAX);
+            if campaign.total_raised_amount >= min_amount {
+                return self.escrowed_donation_ids_by_campaign_id
+                    .get(&campaign_id)
+                    .map(|set| !set.is_empty())
+                    .unwrap_or(false);
+            }
+        }
+        false
+    }
+
+    /// Returns true if refunds can be processed (campaign ended, below min amount, and has escrowed donations)
+    pub fn can_process_refunds(&self, campaign_id: CampaignId) -> bool {
+        if let Some(campaign) = self.campaigns_by_id.get(&campaign_id) {
+            let campaign = Campaign::from(campaign.clone());
+            let current_time = env::block_timestamp_ms();
+            let has_ended = campaign.end_ms.unwrap_or(u64::MAX) < current_time;
+            let below_min = campaign.total_raised_amount < campaign.min_amount.unwrap_or(u128::MAX);
+            let has_escrowed = self.escrowed_donation_ids_by_campaign_id
+                .get(&campaign_id)
+                .map(|set| !set.is_empty())
+                .unwrap_or(false);
+            
+            return has_ended && below_min && has_escrowed;
+        }
+        false
     }
 }

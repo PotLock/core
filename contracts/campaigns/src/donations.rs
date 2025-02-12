@@ -481,7 +481,7 @@ impl Contract {
         from_index: Option<u128>,
         limit: Option<u64>,
     ) -> u32 {
-        let start_index: u128 = from_index.unwrap_or_default();
+        // let start_index: u128 = from_index.unwrap_or_default();
         // TODO: ADD BELOW BACK IN
         // assert!(
         //     (self.donations_by_id.len() as u128) >= start_index,
