@@ -16,7 +16,7 @@ impl Contract {
     /// * Process (aka move out of escrow) a batch of escrowed donations for a campaign
     /// * Can be called by anyone willing to pay the gas (max gas to avoid hitting gas limits)
     /// * Will return void without panicking if min_amount has not been reached
-    
+
     #[payable]
     pub fn process_escrowed_donations_batch(&mut self, campaign_id: CampaignId) {
         assert!(
@@ -179,15 +179,28 @@ impl Contract {
                 "Successfully transferred amount {:#?} to recipient {:#?} for donations {:#?} in campaign {:#?}",
                 amount, recipient, donation_ids, campaign_id
             ));
+            let mut campaign = Campaign::from(
+                self.campaigns_by_id
+                    .get(&campaign_id)
+                    .expect("Campaign not found")
+                    .clone(),
+            );
+
+            // Reduce escrow balance by the transferred amount
+            campaign.escrow_balance -= amount;
+
+            // Save updated campaign
+            self.campaigns_by_id
+                .insert(campaign_id, VersionedCampaign::Current(campaign.clone()));
             // log event
             log_escrow_process_event(&donation_ids);
             // send fees
-            let v_campaign = self
-                .campaigns_by_id
-                .get(&campaign_id)
-                .expect("Campaign not found")
-                .clone();
-            let campaign = Campaign::from(v_campaign);
+            // let v_campaign = self
+            //     .campaigns_by_id
+            //     .get(&campaign_id)
+            //     .expect("Campaign not found")
+            //     .clone();
+            // let campaign = Campaign::from(v_campaign);
             if protocol_fee > 0 {
                 log!(
                     "{}",
@@ -309,9 +322,9 @@ impl Contract {
             log!(
                 "{}",
                 format!(
-                "Successfully transferred amount {:?} to {:?} {:?} for campaign {:?}",
-                amount, receiver_type, recipient, campaign_id
-            )
+                    "Successfully transferred amount {:?} to {:?} {:?} for campaign {:?}",
+                    amount, receiver_type, recipient, campaign_id
+                )
             );
         }
     }
@@ -400,7 +413,7 @@ impl Contract {
     }
 
     /// Verifies whether refund was successful and updates escrowed_donation_ids and Donation.returned accordingly for each donation refunded for this donor
-    #[private] // Public - but only callable by env::current_account_id()
+    #[private]
     pub fn transfer_refund_callback(
         &mut self,
         donor_id: AccountId,
@@ -452,7 +465,8 @@ impl Contract {
             let campaign = Campaign::from(campaign.clone());
             let min_amount = campaign.min_amount.unwrap_or(u128::MAX);
             if campaign.total_raised_amount >= min_amount {
-                return self.escrowed_donation_ids_by_campaign_id
+                return self
+                    .escrowed_donation_ids_by_campaign_id
                     .get(&campaign_id)
                     .map(|set| !set.is_empty())
                     .unwrap_or(false);
@@ -468,11 +482,12 @@ impl Contract {
             let current_time = env::block_timestamp_ms();
             let has_ended = campaign.end_ms.unwrap_or(u64::MAX) < current_time;
             let below_min = campaign.total_raised_amount < campaign.min_amount.unwrap_or(u128::MAX);
-            let has_escrowed = self.escrowed_donation_ids_by_campaign_id
+            let has_escrowed = self
+                .escrowed_donation_ids_by_campaign_id
                 .get(&campaign_id)
                 .map(|set| !set.is_empty())
                 .unwrap_or(false);
-            
+
             return has_ended && below_min && has_escrowed;
         }
         false

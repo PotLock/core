@@ -315,7 +315,7 @@ impl Contract {
             }
 
             if let Some(returned_donations) = self.returned_donation_ids_by_campaign_id.get_mut(&donation.campaign_id) {
-                returned_donations.insert(donation.id);
+                returned_donations.remove(&donation.id);
                 returned_donations.flush();
             }
         } else {

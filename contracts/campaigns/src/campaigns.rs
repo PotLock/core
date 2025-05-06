@@ -110,14 +110,6 @@ impl Contract {
             start_ms >= env::block_timestamp_ms(),
             "start_ms must be in the future"
         );
-        env::log_str(
-            format!(
-                "mesage the timer, {} : {}",
-                start_ms,
-                env::block_timestamp_ms()
-            )
-            .as_str(),
-        );
         assert!(
             end_ms.unwrap_or(u64::MAX) > start_ms,
             "end_ms must be after start_ms"
@@ -274,12 +266,12 @@ impl Contract {
         if let Some(end_ms) = end_ms {
             assert!(campaign.start_ms < end_ms, "end_ms must be after start_ms");
             assert!(
-                campaign.net_raised_amount <= campaign.max_amount.unwrap_or(u128::MAX),
+                campaign.net_raised_amount < campaign.max_amount.unwrap_or(u128::MAX),
                 "Cannot edit end_ms after max_amount has been reached"
             );
             assert!(
                 campaign.min_amount.is_none()
-                    || campaign.net_raised_amount <= campaign.min_amount.unwrap(),
+                    || campaign.net_raised_amount < campaign.min_amount.unwrap(),
                 "Cannot edit end_ms after min_amount has been reached"
             );
             campaign.end_ms = Some(end_ms);
@@ -287,7 +279,7 @@ impl Contract {
         // Owner can change target_amount until max_amount or end_ms is reached
         if let Some(target_amount) = target_amount {
             assert!(
-                campaign.net_raised_amount <= campaign.max_amount.unwrap_or(u128::MAX),
+                campaign.net_raised_amount < campaign.max_amount.unwrap_or(u128::MAX),
                 "Cannot edit target_amount after max_amount has been reached"
             );
             assert!(
@@ -299,7 +291,7 @@ impl Contract {
         // Owner can change max_amount until it is reached, or until end_ms is reached (whichever comes first)
         if let Some(max_amount) = max_amount {
             assert!(
-                campaign.net_raised_amount <= campaign.max_amount.unwrap_or(u128::MAX),
+                campaign.net_raised_amount < campaign.max_amount.unwrap_or(u128::MAX),
                 "Cannot edit max_amount after it has been reached"
             );
             assert!(
@@ -364,13 +356,45 @@ impl Contract {
         );
         let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
         assert_ne!(limit, 0, "Cannot provide limit of 0.");
-        self.campaigns_by_id
+
+        // Collect all campaigns into a vector
+        let mut campaigns: Vec<(CampaignId, Campaign)> = self
+            .campaigns_by_id
             .iter()
+            .map(|(id, v)| (*id, Campaign::from(v.clone())))
+            .collect();
+
+        // Sort campaigns by created_ms in descending order
+        campaigns.sort_by(|a, b| b.1.created_ms.cmp(&a.1.created_ms));
+
+        // Apply from_index and limit
+        campaigns
+            .into_iter()
             .skip(start_index as usize)
             .take(limit)
-            .map(|(id, v)| format_campaign(&id, &Campaign::from(v.clone())))
+            .map(|(id, campaign)| format_campaign(&id, &campaign))
             .collect()
     }
+
+    // pub fn get_campaigns(
+    //     &self,
+    //     from_index: Option<u128>,
+    //     limit: Option<u128>,
+    // ) -> Vec<CampaignExternal> {
+    //     let start_index: u128 = from_index.unwrap_or_default();
+    //     assert!(
+    //         (self.campaigns_by_id.len() as u128) >= start_index,
+    //         "Out of bounds, please use a smaller from_index."
+    //     );
+    //     let limit = limit.map(|v| v as usize).unwrap_or(usize::MAX);
+    //     assert_ne!(limit, 0, "Cannot provide limit of 0.");
+    //     self.campaigns_by_id
+    //         .iter()
+    //         .skip(start_index as usize)
+    //         .take(limit)
+    //         .map(|(id, v)| format_campaign(&id, &Campaign::from(v.clone())))
+    //         .collect()
+    // }
 
     fn take_limit(
         &self,
