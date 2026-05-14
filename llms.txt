@@ -1,0 +1,52 @@
+# PotLock Core Contracts
+
+> NEAR smart contracts for the PotLock open funding stack. Use this file as a compact map for AI coding agents before reading the full repository.
+
+## Repository Overview
+
+- [README](README.md): project overview, prerequisites, install commands, build commands, test caveats, and links.
+- [Contributing](CONTRIBUTING.md): issue and pull request process.
+- [Contracts README](contracts/README.md): contract list, testing status, and known issues.
+- [PotLock Contracts Overview](https://docs.potlock.io/contracts/contracts-overview): hosted documentation for deployed contracts and architecture.
+
+## Contract Source Directories
+
+- [Donation](contracts/donation): donation contract sources, build script, deploy script, and README.
+- [Lists](contracts/lists): list and registration contract sources, build script, deploy script, and README.
+- [Pot](contracts/pot): configurable funding round contract sources, build script, deploy script, and README.
+- [Pot Factory](contracts/pot_factory): factory contract sources, build script, deploy script, and README.
+- [Registry](contracts/registry): project registry contract sources, build script, deploy script, and README.
+- [Sybil](contracts/sybil): sybil provider and stamp aggregation contract sources, build script, deploy script, and README.
+- [Sybil Provider Simulator](contracts/sybil_provider_simulator): local simulator contract sources and scripts.
+
+## Setup
+
+```bash
+cd contracts
+yarn install
+```
+
+## Build Commands
+
+Run commands from `contracts/`:
+
+```bash
+yarn build:donation
+yarn build:lists
+yarn build:pot
+yarn build:potfactory
+yarn build:registry
+yarn build:sybil
+yarn build:sybilprovider
+```
+
+## Testing Notes
+
+The existing near-api-js integration tests in `contracts/test` are documented as legacy and not actively maintained. Before relying on test output, read [contracts/README.md](contracts/README.md).
+
+## Agent Guidance
+
+- Prefer small documentation and reproducibility fixes before changing contract behavior.
+- Do not modify generated `out/main.wasm` files unless the change intentionally rebuilds a contract.
+- For contract behavior changes, inspect the relevant Rust source and README together.
+- Keep security-sensitive work scoped to public code review unless an explicit bounty scope authorizes more.

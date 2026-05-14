@@ -1,90 +1,78 @@
 # PotLock Core Contracts
-Welcome to the repository for the core smart contracts of the [PotLock Core] project on the NEAR blockchain. This repository contains the foundational smart contracts that power various functionalities within our decentralized application ecosystem.
 
-## Table of Contents
+PotLock Core contains the NEAR smart contracts that power the PotLock open funding stack. The contracts provide primitives for public goods funding flows such as donations, project registries, funding rounds, sybil checks, and pot deployment.
 
-- [PotLock Core Contracts](#potlock-core-contracts)
-  - [Table of Contents](#table-of-contents)
-  - [Getting Started](#getting-started)
-    - [Prerequisites](#prerequisites)
-- [Project Name - Core Smart Contracts](#project-name---core-smart-contracts)
-  - [Table of Contents](#table-of-contents-1)
-  - [Overview](#overview)
-  - [Getting Started](#getting-started-1)
-    - [Prerequisites](#prerequisites-1)
-    - [Installation](#installation)
-  - [Smart Contracts](#smart-contracts)
-  - [Usage](#usage)
-  - [Contributing](#contributing)
-  - [License](#license)
-  - [Contact](#contact)
+## Contracts
 
+The contract sources live in [`contracts/`](contracts):
 
-## Getting Started
+- [`donation`](contracts/donation): donate NEAR or fungible tokens to accounts.
+- [`lists`](contracts/lists): manage lists and registrations.
+- [`pot`](contracts/pot): manage a configurable funding round.
+- [`pot_factory`](contracts/pot_factory): deploy and track Pot contracts.
+- [`registry`](contracts/registry): register projects that can apply to funding rounds.
+- [`sybil`](contracts/sybil): aggregate sybil resistance providers and human verification stamps.
+- [`sybil_provider_simulator`](contracts/sybil_provider_simulator): local simulator for third-party sybil providers.
 
-### Prerequisites
+For higher-level contract documentation, start with the [PotLock contracts overview](https://docs.potlock.io/contracts/contracts-overview).
 
-- [NEAR CLI](https://docs.near.org/docs/tools/near-cli) installed.
-- NEAR TestNet account. [Create one here](https://wallet.testnet.near.org/).
+## Prerequisites
 
+- [Rust](https://www.rust-lang.org/tools/install)
+- [Node.js](https://nodejs.org/)
+- [Yarn](https://yarnpkg.com/)
+- [NEAR CLI](https://docs.near.org/tools/near-cli)
+- A NEAR testnet account for deployment workflows
 
-# Project Name - Core Smart Contracts
+## Install
 
-Welcome to the repository for the core smart contracts of the [Project Name] project on the NEAR blockchain. This repository contains the foundational smart contracts that power various functionalities within our decentralized application ecosystem.
+```bash
+cd contracts
+yarn install
+```
 
-## Table of Contents
+## Build
 
-- [PotLock Core Contracts](#potlock-core-contracts)
-  - [Table of Contents](#table-of-contents)
-  - [Getting Started](#getting-started)
-    - [Prerequisites](#prerequisites)
-- [Project Name - Core Smart Contracts](#project-name---core-smart-contracts)
-  - [Table of Contents](#table-of-contents-1)
-  - [Overview](#overview)
-  - [Getting Started](#getting-started-1)
-    - [Prerequisites](#prerequisites-1)
-    - [Installation](#installation)
-  - [Smart Contracts](#smart-contracts)
-  - [Usage](#usage)
-  - [Contributing](#contributing)
-  - [License](#license)
-  - [Contact](#contact)
+Build one contract at a time from the `contracts` directory:
 
-## Overview
+```bash
+yarn build:donation
+yarn build:lists
+yarn build:pot
+yarn build:potfactory
+yarn build:registry
+yarn build:sybil
+yarn build:sybilprovider
+```
 
-[PotLock Core] is a set of 6 contracts. For an overview of the contracts check out the docs at https://docs.potlock.io/contracts/contracts-overview.
+Each build script enters the corresponding contract directory and runs its local `scripts/build.sh`.
 
-For detailed documentation on each contract, [start here](contracts)
+## Tests
 
-## Getting Started
+The repository includes legacy near-api-js integration tests in [`contracts/test`](contracts/test). These tests are no longer maintained, but the existing commands are:
 
-### Prerequisites
+```bash
+cd contracts
+yarn test:all
+```
 
-- [NEAR CLI](https://docs.near.org/docs/tools/near-cli) installed.
-- NEAR TestNet account. [Create one here](https://wallet.testnet.near.org/).
+See [`contracts/README.md`](contracts/README.md) for the current testing caveats and known issues.
 
-### Installation
+## AI Agent Entry Points
 
+Machine-readable navigation for coding agents is available in [`llms.txt`](llms.txt). It points agents to the contract overview, build commands, test caveats, and the most relevant source directories.
 
-## Smart Contracts
-
-For more info on Smart Contracts, please visit [/contracts directory](contracts).
-
-## Usage
-
-To be written
-  
 ## Contributing
 
-We welcome contributions from the community! To contribute to our core smart contracts, please follow the guidelines outlined in [CONTRIBUTING.md](CONTRIBUTING.md).
+Contributions are welcome. Please read [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening an issue or pull request.
 
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
 
-## Contact
+## Links
 
-- For questions and discussions, join us on [Telegram](https://NEAReFi.org/telegram).
-- Follow us on [Twitter](https://twitter.com/PotLock_).
-- Visit our website: [https://PotLock.io](https://PotLock.io).
-```
+- Website: [potlock.io](https://potlock.io)
+- Docs: [docs.potlock.io](https://docs.potlock.io)
+- Telegram: [NEAReFi.org/telegram](https://NEAReFi.org/telegram)
+- Twitter: [@PotLock_](https://twitter.com/PotLock_)
